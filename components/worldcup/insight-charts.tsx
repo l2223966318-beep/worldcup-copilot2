@@ -17,8 +17,8 @@ import {
   XAxis,
   YAxis
 } from "recharts";
+import type { ReactNode } from "react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { MatchData } from "@/data/matches";
 
 export function InsightCharts({ match }: { match: MatchData }) {
@@ -123,20 +123,18 @@ function ChartCard({
   title: string;
   operation: string;
   quote: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{title}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 className="text-lg font-semibold text-slate-950">{title}</h3>
+      <div className="mt-4 space-y-4">
         {children}
-        <div className="rounded-2xl border border-emerald-300/20 bg-emerald-300/[0.08] p-4 text-sm leading-7 text-emerald-50">
-          <div><span className="font-semibold text-emerald-100">运营解释：</span>{operation}</div>
-          <div className="mt-2"><span className="font-semibold text-amber-100">可复制口播金句：</span>{quote}</div>
+        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm leading-7 text-slate-700">
+          <div><span className="font-semibold text-emerald-800">运营解释：</span>{operation}</div>
+          <div className="mt-2"><span className="font-semibold text-amber-700">可复制口播金句：</span>{quote}</div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

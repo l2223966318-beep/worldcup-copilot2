@@ -2,60 +2,51 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, Search, Trophy, UserRound } from "lucide-react";
+import { ChevronDown, Home, Search } from "lucide-react";
 
+import { getCurrentProject } from "@/lib/project-api";
 import { cn } from "@/lib/utils";
 
 const mobileNav = [
   { href: "/", label: "首页" },
-  { href: "/match-input", label: "赛事" },
-  { href: "/topic-engine", label: "选题" },
-  { href: "/insights", label: "洞察" },
-  { href: "/workshop", label: "工坊" },
-  { href: "/report", label: "报告" }
+  { href: "/history", label: "历史" },
+  { href: "/settings", label: "设置" }
 ];
 
 export function Header() {
   const pathname = usePathname();
+  const project = getCurrentProject();
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/10 bg-[#082033]/80 backdrop-blur-2xl lg:hidden">
-      <div className="flex min-h-20 items-center justify-between gap-4 px-4">
+    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <div className="flex min-h-16 items-center justify-between gap-4 px-4 lg:px-8">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-300/30 bg-emerald-300/10">
-            <Trophy className="h-5 w-5 text-emerald-100" />
-          </div>
-          <div>
-            <div className="font-semibold">WorldCup Copilot</div>
-            <div className="text-xs text-slate-300">赛事热点拆解与分发工作台</div>
-          </div>
+          <Link href="/" className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white lg:hidden">
+            <Home className="h-5 w-5" />
+          </Link>
+          <button className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm font-medium text-slate-900">
+            <span className="text-slate-500">当前项目：</span>
+            <span>{project.name}</span>
+            <ChevronDown className="h-4 w-4 text-slate-400" />
+          </button>
         </div>
 
-        <div className="flex flex-1 items-center justify-end gap-4">
-          <div className="hidden w-full max-w-[360px] items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/30 px-4 py-3 text-sm text-slate-300 md:flex">
-            <Search className="h-4 w-4" />
-            <span>搜索赛事、球队、球员、选题</span>
-          </div>
-          <button className="relative hidden h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-slate-950/30 text-slate-200 transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-300/30 hover:text-white sm:flex">
-            <Bell className="h-5 w-5" />
-            <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,.8)]" />
-          </button>
-          <div className="hidden h-11 w-11 items-center justify-center rounded-full border border-white/10 bg-gradient-to-br from-slate-200 to-emerald-100 text-slate-950 sm:flex">
-            <UserRound className="h-5 w-5" />
-          </div>
+        <div className="hidden w-full max-w-[420px] items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-500 md:flex">
+          <Search className="h-4 w-4" />
+          <span>搜索比赛、球队、球员</span>
         </div>
       </div>
 
-      <nav className="flex gap-2 overflow-x-auto border-t border-white/10 px-4 py-2">
+      <nav className="flex gap-2 overflow-x-auto border-t border-slate-100 px-4 py-2 lg:hidden">
         {mobileNav.map((item) => (
           <Link
             key={item.href}
             href={item.href}
             className={cn(
-              "rounded-xl px-3 py-1.5 text-sm text-slate-300",
+              "rounded-xl px-3 py-1.5 text-sm font-medium text-slate-500",
               pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href))
-                ? "bg-emerald-300/15 text-emerald-50"
-                : "hover:bg-white/10 hover:text-white"
+                ? "bg-blue-50 text-blue-700"
+                : "hover:bg-slate-100 hover:text-slate-900"
             )}
           >
             {item.label}
