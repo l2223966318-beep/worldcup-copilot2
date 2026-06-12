@@ -35,16 +35,8 @@
   }
 
   body {
-    @apply min-h-screen bg-background text-foreground antialiased;
-    background:
-      radial-gradient(circle at 16% 10%, rgba(34, 197, 94, 0.18), transparent 29rem),
-      radial-gradient(circle at 82% 12%, rgba(245, 158, 11, 0.16), transparent 31rem),
-      radial-gradient(circle at 72% 88%, rgba(14, 165, 233, 0.12), transparent 34rem),
-      linear-gradient(rgba(255, 255, 255, 0.046) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.046) 1px, transparent 1px),
-      linear-gradient(135deg, #09203a 0%, #0c2e42 45%, #102414 100%);
-    background-attachment: fixed;
-    background-size: auto, auto, auto, 46px 46px, 46px 46px, auto;
+    @apply min-h-screen text-slate-950 antialiased;
+    background: #f6f7fb;
   }
 
   ::selection {
