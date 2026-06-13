@@ -16,7 +16,8 @@ import type {
 } from "@/lib/sports/types";
 
 const WORLD_CUP_LEAGUE = 1;
-const WORLD_CUP_SEASON = 2026;
+const DEFAULT_WORLD_CUP_SEASON = 2022;
+const WORLD_CUP_SEASON = getConfiguredWorldCupSeason();
 const CACHE_TTL_MS = 60_000;
 
 type CacheEntry<T> = {
@@ -136,4 +137,9 @@ function fallbackList(message?: string): WorldCupPayload<WorldCupMatch[]> {
 
 function getTodayDate() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function getConfiguredWorldCupSeason() {
+  const season = Number(process.env.API_FOOTBALL_SEASON);
+  return Number.isInteger(season) && season > 0 ? season : DEFAULT_WORLD_CUP_SEASON;
 }
