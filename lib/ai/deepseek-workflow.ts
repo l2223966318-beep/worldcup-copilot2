@@ -29,6 +29,7 @@ type DeepSeekWorkflowResponse = {
 };
 
 export type MatchWorkflowEnhancement = {
+  workflowVersion: "platform-content-v1";
   sourceStatus: "live" | "fallback" | "error";
   model?: string;
   message?: string;
@@ -128,6 +129,7 @@ export async function enhanceMatchWorkflowWithDeepSeek(input: {
 
   if (!result.ok) {
     return {
+      workflowVersion: "platform-content-v1",
       sourceStatus: result.message.includes("DEEPSEEK_API_KEY") ? "fallback" : "error",
       message: result.message,
       conclusions: [],
@@ -139,6 +141,7 @@ export async function enhanceMatchWorkflowWithDeepSeek(input: {
   const fallbackContent = generatePlatformContent(match, topics[0] ?? baselineTopics[0]);
 
   return {
+    workflowVersion: "platform-content-v1",
     sourceStatus: "live",
     model: result.model,
     conclusions: normalizeConclusions(result.data.conclusions),

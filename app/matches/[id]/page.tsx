@@ -44,6 +44,7 @@ type OpportunityScores = {
 };
 
 type AiWorkflowEnhancement = {
+  workflowVersion?: "platform-content-v1";
   sourceStatus: "live" | "fallback" | "error";
   model?: string;
   message?: string;
