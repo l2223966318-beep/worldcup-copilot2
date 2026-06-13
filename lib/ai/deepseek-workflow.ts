@@ -51,81 +51,84 @@ export async function enhanceMatchWorkflowWithDeepSeek(input: {
   baselineTopics: TopicIdea[];
 }): Promise<MatchWorkflowEnhancement> {
   const { match, baselineTopics } = input;
-  const result = await generateDeepSeekJson<DeepSeekWorkflowResponse>([
-    {
-      role: "system",
-      content:
-        "你是体育赛事内容运营总监。你只输出严格 JSON，不要 Markdown。基于真实比赛数据给出可执行的运营结论、选题、平台策略和平台内容预览。不能编造伤病、采访、内幕、社媒热搜或未提供的事实。涉及不确定信息必须使用“需核实”“建议补充来源”。"
-    },
-    {
-      role: "user",
-      content: JSON.stringify({
-        task:
-          "增强 WorldCup Copilot 单场比赛工作流。输出 conclusions 3 条、topics 3 条、platformStrategy 和 platformContent。topics 与 platformContent 必须贴合当前比赛，不要套用梅西/姆巴佩等无关样例。",
-        outputShape: {
-          conclusions: [{ title: "为什么值得做", body: "80字以内", featured: false }],
-          topics: [
-            {
-              title: "选题标题",
-              coreAngle: "核心角度",
-              category: "战术复盘/球员叙事/数据解读/历史对照/争议讨论/情绪共鸣/冷知识科普/平台热点",
-              recommendation: "主推/次推/观察/谨慎发布",
-              newsValue: 0,
-              spreadPotential: 0,
-              platformFit: 0,
-              bilibiliFit: 0,
-              xiaohongshuFit: 0,
-              weiboFit: 0,
-              shortVideoFit: 0,
-              recommendedFormat: "推荐内容形式",
-              difficulty: "低/中/高",
-              productionCost: "低/中/高",
-              riskLevel: "低/中/高",
-              scoreReason: "评分理由",
-              businessExplanation: "为什么推荐这个选题",
-              reason: "数据依据",
-              sampleTitles: ["示例标题1", "示例标题2"]
+  const result = await generateDeepSeekJson<DeepSeekWorkflowResponse>(
+    [
+      {
+        role: "system",
+        content:
+          "你是体育赛事内容运营总监。你只输出严格 JSON，不要 Markdown。基于真实比赛数据给出可执行的运营结论、选题、平台策略和平台内容预览。不能编造伤病、采访、内幕、社媒热搜或未提供的事实。涉及不确定信息必须使用“需核实”“建议补充来源”。"
+      },
+      {
+        role: "user",
+        content: JSON.stringify({
+          task:
+            "增强 WorldCup Copilot 单场比赛工作流。输出 conclusions 3 条、topics 3 条、platformStrategy 和 platformContent。topics 与 platformContent 必须贴合当前比赛，不要套用梅西/姆巴佩等无关样例。",
+          outputShape: {
+            conclusions: [{ title: "为什么值得做", body: "80字以内", featured: false }],
+            topics: [
+              {
+                title: "选题标题",
+                coreAngle: "核心角度",
+                category: "战术复盘/球员叙事/数据解读/历史对照/争议讨论/情绪共鸣/冷知识科普/平台热点",
+                recommendation: "主推/次推/观察/谨慎发布",
+                newsValue: 0,
+                spreadPotential: 0,
+                platformFit: 0,
+                bilibiliFit: 0,
+                xiaohongshuFit: 0,
+                weiboFit: 0,
+                shortVideoFit: 0,
+                recommendedFormat: "推荐内容形式",
+                difficulty: "低/中/高",
+                productionCost: "低/中/高",
+                riskLevel: "低/中/高",
+                scoreReason: "评分理由",
+                businessExplanation: "为什么推荐这个选题",
+                reason: "数据依据",
+                sampleTitles: ["示例标题1", "示例标题2"]
+              }
+            ],
+            platformStrategy: {
+              bilibili: "B站打法",
+              weibo: "微博打法",
+              xiaohongshu: "小红书打法",
+              article: "公众号打法"
+            },
+            platformContent: {
+              bilibili: {
+                titles: ["视频标题1", "视频标题2"],
+                coverCopy: "封面文案",
+                openingScript: "开头 15 秒口播",
+                outline: ["00:00 结构段落"],
+                danmakuPoints: ["弹幕互动问题"]
+              },
+              weibo: {
+                hashtags: ["#话题#"],
+                fiveMinuteComment: "赛后 5 分钟快评",
+                debateQuestion: "讨论钩子",
+                riskTip: "风险提示"
+              },
+              xiaohongshu: {
+                coverTitle: "首图标题",
+                cardTitles: ["第1页", "第2页", "第3页", "第4页", "第5页"],
+                cards: [{ title: "页标题", body: "正文" }],
+                collectReason: "收藏理由"
+              },
+              article: {
+                title: "公众号标题",
+                intro: "导语",
+                fullOutline: ["完整文章大纲"],
+                ending: "结尾观点"
+              }
             }
-          ],
-          platformStrategy: {
-            bilibili: "B站打法",
-            weibo: "微博打法",
-            xiaohongshu: "小红书打法",
-            article: "公众号打法"
           },
-          platformContent: {
-            bilibili: {
-              titles: ["视频标题1", "视频标题2"],
-              coverCopy: "封面文案",
-              openingScript: "开头 15 秒口播",
-              outline: ["00:00 结构段落"],
-              danmakuPoints: ["弹幕互动问题"]
-            },
-            weibo: {
-              hashtags: ["#话题#"],
-              fiveMinuteComment: "赛后 5 分钟快评",
-              debateQuestion: "讨论钩子",
-              riskTip: "风险提示"
-            },
-            xiaohongshu: {
-              coverTitle: "首图标题",
-              cardTitles: ["第1页", "第2页", "第3页", "第4页", "第5页"],
-              cards: [{ title: "页标题", body: "正文" }],
-              collectReason: "收藏理由"
-            },
-            article: {
-              title: "公众号标题",
-              intro: "导语",
-              fullOutline: ["完整文章大纲"],
-              ending: "结尾观点"
-            }
-          }
-        },
-        match,
-        baselineTopics
-      })
-    }
-  ]);
+          match,
+          baselineTopics
+        })
+      }
+    ],
+    { timeoutMs: 45_000 }
+  );
 
   if (!result.ok) {
     return {
