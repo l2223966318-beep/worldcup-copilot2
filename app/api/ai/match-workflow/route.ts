@@ -16,6 +16,7 @@ export async function POST(request: Request) {
     if (!body.match || !Array.isArray(body.baselineTopics)) {
       return NextResponse.json(
         {
+          workflowVersion: "platform-content-v1",
           sourceStatus: "error",
           conclusions: [],
           topics: [],
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
     const message = error instanceof Error ? error.message : "Unknown AI workflow error.";
     return NextResponse.json(
       {
+        workflowVersion: "platform-content-v1",
         sourceStatus: "error",
         conclusions: [],
         topics: [],
