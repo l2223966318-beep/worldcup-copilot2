@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, CircleDot, Flame, ShieldAlert, Sparkles, Trophy } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { ArrowRight, CheckCircle2, CircleDot, Flame, Search, ShieldAlert, Sparkles, Trophy } from "lucide-react";
 
+import type { HotItem, HotSearchPayload } from "@/lib/hot/types";
 import { useWorldCupQuery } from "@/lib/sports/client";
 import type { SourceStatus, WorldCupMatch } from "@/lib/sports/types";
 import { getSportTheme, sportThemes, type SportTheme } from "@/lib/sport-theme";
@@ -14,6 +16,42 @@ export default function DashboardPage() {
   const priorityMatches = matches.filter((item) => getPriority(item) === "S" || getPriority(item) === "A");
   const watchMatches = matches.filter((item) => getPriority(item) === "B");
   const firstMatchHref = matches[0] ? `/matches/${matches[0].id}` : "/matches/argentina-france-2022-final";
+  const [hotQuery, setHotQuery] = useState("美国队 乌龙球 世界杯");
+  const [hotPayload, setHotPayload] = useState<HotSearchPayload>();
+  const [hotLoading, setHotLoading] = useState(false);
+  const [hotError, setHotError] = useState("");
+  const [copiedHotId, setCopiedHotId] = useState("");
+
+  const runHotSearch = useCallback(async (query: string) => {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    setHotLoading(true);
+    setHotError("");
+    try {
+      const response = await fetch(`/api/hot/search?q=${encodeURIComponent(trimmed)}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`热点接口请求失败：${response.status}`);
+      const result = (await response.json()) as HotSearchPayload;
+      setHotPayload(result);
+    } catch (requestError) {
+      setHotError(requestError instanceof Error ? requestError.message : "热点接口请求失败");
+    } finally {
+      setHotLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search).get("q");
+    if (!query) return;
+    setHotQuery(query);
+    void runHotSearch(query);
+  }, [runHotSearch]);
+
+  async function copyHotTopic(item: HotItem) {
+    const text = `热点信号：${item.title}\n来源：${item.platform} / ${item.source}\n选题角度：${buildHotTopicAngle(item)}`;
+    await navigator.clipboard.writeText(text);
+    setCopiedHotId(item.id);
+    window.setTimeout(() => setCopiedHotId(""), 1400);
+  }
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-8 pb-16">
@@ -76,6 +114,83 @@ export default function DashboardPage() {
             </div>
           </div>
         ))}
+      </section>
+
+      <section id="hot-search" className="rounded-[34px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
+        <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+          <div>
+            <SectionTitle
+              eyebrow="HOT SIGNALS"
+              title="热点信息源搜索"
+              description="接入榜眼数据、Tavily 和今日热榜公共源，把场上事件、社媒热词和全网讨论纳入选题判断。"
+            />
+            <form
+              className="mt-6 flex overflow-hidden rounded-full border bg-slate-50 p-1"
+              style={{ borderColor: theme.border }}
+              onSubmit={(event) => {
+                event.preventDefault();
+                void runHotSearch(hotQuery);
+              }}
+            >
+              <div className="flex min-w-0 flex-1 items-center gap-2 px-4">
+                <Search className="h-4 w-4 text-slate-400" />
+                <input
+                  value={hotQuery}
+                  onChange={(event) => setHotQuery(event.target.value)}
+                  className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-800 outline-none placeholder:text-slate-400"
+                  placeholder="例如：美国队乌龙球、球衣被扯破、VAR争议"
+                  aria-label="搜索热点事件"
+                />
+              </div>
+              <button
+                type="submit"
+                className="inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ backgroundColor: theme.primary }}
+                disabled={hotLoading}
+              >
+                {hotLoading ? "搜索中" : "搜索热点"}
+              </button>
+            </form>
+            <div className="mt-4 rounded-2xl p-4 text-sm leading-6" style={{ backgroundColor: theme.background, color: theme.mutedText }}>
+              业务用法：把“乌龙球、球衣被扯破、VAR争议、伤退传闻”等热点信号作为选题来源，再结合比赛数据生成内容角度。
+            </div>
+            {hotPayload ? (
+              <div className="mt-3 text-xs font-semibold text-slate-500">
+                来源状态：{hotStatusLabel(hotPayload.sourceStatus)} · 最后更新：{formatDate(hotPayload.lastUpdated)}
+              </div>
+            ) : null}
+            {hotError ? <div className="mt-3 text-sm font-semibold text-red-600">{hotError}</div> : null}
+          </div>
+
+          <div className="grid gap-4">
+            {hotPayload?.data?.length ? (
+              hotPayload.data.slice(0, 6).map((item) => (
+                <HotSignalCard
+                  key={item.id}
+                  item={item}
+                  theme={theme}
+                  copied={copiedHotId === item.id}
+                  onCopy={() => void copyHotTopic(item)}
+                />
+              ))
+            ) : (
+              <div className="rounded-[26px] border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
+                <div className="text-lg font-semibold text-slate-950">输入关键词后查看热点信号</div>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  示例：美国队乌龙球、韩国球员球衣被扯破、世界杯 VAR 争议。
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void runHotSearch(hotQuery)}
+                  className="mt-5 inline-flex h-11 items-center justify-center rounded-full px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                  style={{ backgroundColor: theme.primary }}
+                >
+                  用示例关键词搜索
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </section>
 
       <section id="opportunity-pool">
@@ -246,6 +361,66 @@ function DecisionCard({ icon: Icon, title, value, body, theme }: { icon: typeof 
   );
 }
 
+function HotSignalCard({
+  item,
+  theme,
+  copied,
+  onCopy
+}: {
+  item: HotItem;
+  theme: SportTheme;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <article className="rounded-[26px] border bg-slate-50 p-5 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_18px_50px_rgba(15,23,42,0.08)]" style={{ borderColor: theme.border }}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded-full px-3 py-1 text-xs font-black text-white" style={{ backgroundColor: theme.primary }}>
+          {item.relevance}
+        </span>
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">{item.platform}</span>
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">{item.source}</span>
+        {item.heat ? <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">{item.heat}</span> : null}
+      </div>
+      <h3 className="mt-4 text-xl font-black leading-tight text-slate-950">{item.title}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-600">{item.summary}</p>
+      <div className="mt-4 rounded-2xl bg-white p-4 text-sm leading-6 text-slate-700 ring-1 ring-slate-200">
+        <span className="font-semibold" style={{ color: theme.secondary }}>可转化选题：</span>
+        {buildHotTopicAngle(item)}
+      </div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {item.tags.length ? item.tags.map((tag) => (
+            <span key={tag} className="rounded-full px-3 py-1 text-xs font-semibold" style={{ backgroundColor: theme.background, color: theme.secondary }}>
+              {tag}
+            </span>
+          )) : <span className="text-xs font-semibold text-slate-400">等待更多标签</span>}
+        </div>
+        <div className="flex gap-2">
+          {item.url ? (
+            <a
+              href={item.url}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-10 items-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5"
+            >
+              查看来源
+            </a>
+          ) : null}
+          <button
+            type="button"
+            onClick={onCopy}
+            className="inline-flex h-10 items-center rounded-full px-4 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+            style={{ backgroundColor: theme.primary }}
+          >
+            {copied ? "已复制" : "复制为选题素材"}
+          </button>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function getPriority(match: WorldCupMatch) {
   if (match.status === "live") return "S";
   if (match.status === "finished") return "A";
@@ -266,6 +441,33 @@ function sourceLabel(status: SourceStatus) {
     error: "请求失败"
   };
   return labels[status];
+}
+
+function hotStatusLabel(status: HotSearchPayload["sourceStatus"]) {
+  const labels: Record<HotSearchPayload["sourceStatus"], string> = {
+    live: "真实热点源",
+    partial: "部分热点源可用",
+    cache: "缓存热点",
+    fallback: "示例热点",
+    error: "请求失败"
+  };
+  return labels[status];
+}
+
+function buildHotTopicAngle(item: HotItem) {
+  if (item.tags.includes("乌龙球")) {
+    return "从“关键失误如何改变比赛走势”切入，结合比分节点、球队心态和社媒讨论做赛后复盘。";
+  }
+  if (item.tags.includes("球衣被扯破")) {
+    return "从“高对抗瞬间为什么会成为传播点”切入，适合做短视频拆解和微博讨论钩子。";
+  }
+  if (item.tags.includes("争议判罚") || item.tags.includes("VAR")) {
+    return "从“判罚争议如何影响观众情绪”切入，注意用需核实和规则解释降低风险。";
+  }
+  if (item.tags.includes("伤病需核实")) {
+    return "从“阵容变化对比赛策略的影响”切入，避免确认伤情，建议补充来源并人工确认。";
+  }
+  return "从热点讨论反推内容角度，优先判断它能否支撑人物叙事、战术复盘或平台话题承接。";
 }
 
 function formatDate(value: string) {
