@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { FormEvent, useState } from "react";
 import { Clock3, Search, Settings, Trophy } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -10,6 +11,15 @@ const workflow = ["今日比赛池", "单场分析", "平台内容", "风险审�
 
 export function Header() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+
+  function handleSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const query = searchQuery.trim();
+    if (!query) return;
+    router.push(`/?q=${encodeURIComponent(query)}#hot-search`);
+  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
@@ -41,10 +51,19 @@ export function Header() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <div className="hidden w-[300px] items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-500 lg:flex">
+          <form
+            onSubmit={handleSearch}
+            className="hidden w-[320px] items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-500 transition focus-within:border-emerald-300 focus-within:bg-white lg:flex"
+          >
             <Search className="h-4 w-4" />
-            <span>搜索比赛、球队、球员</span>
-          </div>
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="min-w-0 flex-1 bg-transparent text-slate-700 outline-none placeholder:text-slate-400"
+              placeholder="搜索比赛、球队、热点事件"
+              aria-label="搜索比赛、球队、热点事件"
+            />
+          </form>
           <Link
             href="/history"
             className={cn(
