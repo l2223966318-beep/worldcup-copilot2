@@ -9,11 +9,12 @@ import { localizeCompetitionName, localizeMatchStatus, localizeRoundName, locali
 import { filterMatchesByQuery, queryLooksLikeMatchSearch } from "@/lib/services/matchSearchService";
 import { useWorldCupQuery } from "@/lib/sports/client";
 import type { SourceStatus, WorldCupMatch } from "@/lib/sports/types";
-import { getSportTheme, sportThemes, type SportTheme } from "@/lib/sport-theme";
+import { getSportTheme, sportThemes, type SportTheme, type SportType } from "@/lib/sport-theme";
 import { formatBeijingDateTime, getBeijingDateKeyFromValue } from "@/lib/time/beijingTime";
 
 export default function DashboardPage() {
-  const theme = getSportTheme("football");
+  const [sportType, setSportType] = useState<SportType>("football");
+  const theme = getSportTheme(sportType);
   const { payload, loading, error } = useWorldCupQuery<WorldCupMatch[]>("/api/worldcup/fixtures/today", 20_000);
   const { payload: allPayload, loading: allLoading } = useWorldCupQuery<WorldCupMatch[]>("/api/worldcup/fixtures", 30_000);
   const [matchSearchQuery, setMatchSearchQuery] = useState("");
@@ -34,6 +35,17 @@ export default function DashboardPage() {
   const watchMatches = filteredMatches.filter((item) => getPriority(item) === "B");
   const firstMatchHref = filteredMatches[0] ? `/matches/${filteredMatches[0].id}` : "/matches/argentina-france-2022-final";
   const [highlightedMatch, setHighlightedMatch] = useState<WorldCupMatch | null>(null);
+
+  useEffect(() => {
+    setSportType(readSavedSportType());
+  }, []);
+
+  function selectSportTheme(nextSportType: SportType) {
+    setSportType(nextSportType);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("worldcup.sportType", nextSportType);
+    }
+  }
 
   const applyGlobalSearch = useCallback((query: string) => {
     const trimmed = query.trim();
@@ -60,7 +72,8 @@ export default function DashboardPage() {
   }, [applyGlobalSearch]);
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-8 pb-16">
+    <div className="relative mx-auto flex max-w-7xl flex-col gap-8 pb-16">
+      <ThemeSideSelector active={sportType} onChange={selectSportTheme} />
       <section className={`relative overflow-hidden rounded-[40px] border bg-gradient-to-br ${theme.gradient} p-7 shadow-[0_28px_90px_rgba(15,23,42,0.08)] lg:p-10`} style={{ borderColor: theme.border }}>
         <HeroPattern theme={theme} />
         <div className="relative z-10 grid gap-8 lg:grid-cols-[1fr_380px] lg:items-end">
@@ -106,20 +119,6 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-3">
-        {Object.values(sportThemes).map((item) => (
-          <div key={item.sportType} className={`rounded-[28px] border bg-gradient-to-br ${item.gradient} p-5 shadow-sm`} style={{ borderColor: item.border }}>
-            <div className="text-lg font-semibold" style={{ color: item.strongText }}>{item.name}主题</div>
-            <p className="mt-2 text-sm leading-6" style={{ color: item.mutedText }}>{item.pattern}</p>
-            <div className="mt-4 flex gap-2">
-              {[item.primary, item.secondary, item.accent].map((color) => (
-                <span key={color} className="h-8 w-8 rounded-full ring-4 ring-white" style={{ backgroundColor: color }} />
-              ))}
-            </div>
-          </div>
-        ))}
       </section>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(340px,3fr)]">
@@ -280,6 +279,46 @@ function HeroMetric({ label, value, theme }: { label: string; value: number; the
   );
 }
 
+function ThemeSideSelector({
+  active,
+  onChange
+}: {
+  active: SportType;
+  onChange: (sportType: SportType) => void;
+}) {
+  return (
+    <div className="fixed bottom-5 left-4 z-40 rounded-[22px] border border-slate-200 bg-white/92 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.12)] backdrop-blur lg:bottom-auto lg:top-28">
+      <div className="px-2 pb-2 text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">主题</div>
+      <div className="flex gap-2 lg:flex-col">
+        {(Object.keys(sportThemes) as SportType[]).map((sportType) => {
+          const item = sportThemes[sportType];
+          const selected = active === sportType;
+          return (
+            <button
+              key={sportType}
+              type="button"
+              onClick={() => onChange(sportType)}
+              className={`group flex h-11 items-center gap-2 rounded-2xl px-3 text-left text-xs font-semibold transition hover:-translate-y-0.5 ${
+                selected ? "text-white shadow-md" : "bg-slate-50 text-slate-700 ring-1 ring-slate-200 hover:bg-white"
+              }`}
+              style={selected ? { backgroundColor: item.primary, boxShadow: `0 12px 28px ${item.heroGlow}` } : undefined}
+              aria-pressed={selected}
+              title={`${item.name}主题`}
+            >
+              <span className="flex -space-x-1">
+                {[item.primary, item.secondary, item.accent].map((color) => (
+                  <span key={color} className="h-4 w-4 rounded-full border border-white" style={{ backgroundColor: color }} />
+                ))}
+              </span>
+              <span>{item.name}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function OpportunityMatchCard({
   match,
   theme,
@@ -399,4 +438,10 @@ function formatDate(value: string) {
     hour: "2-digit",
     minute: "2-digit"
   });
+}
+
+function readSavedSportType(): SportType {
+  if (typeof window === "undefined") return "football";
+  const saved = window.localStorage.getItem("worldcup.sportType");
+  return saved === "basketball" || saved === "swimming" || saved === "football" ? saved : "football";
 }
