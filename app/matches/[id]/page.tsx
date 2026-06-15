@@ -32,6 +32,7 @@ import { worldCupMatchToMatchData } from "@/lib/sports/adapters";
 import { useWorldCupQuery } from "@/lib/sports/client";
 import type { SourceStatus, WorldCupMatch, WorldCupPayload } from "@/lib/sports/types";
 import { getMatchSportType, getSportTheme, type SportTheme } from "@/lib/sport-theme";
+import { formatBeijingDateTime } from "@/lib/time/beijingTime";
 import type { AnalysisResult, MatchContext, PlatformDraft, WorkflowTopic } from "@/types/workflow";
 
 const platformLabels = {
@@ -1083,13 +1084,11 @@ function sourceProviderTag(provider: WorldCupMatch["source"]["provider"]) {
 }
 
 function formatSourceDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("zh-CN", {
+  return formatBeijingDateTime(value, {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit"
-  }).format(date);
+  });
 }

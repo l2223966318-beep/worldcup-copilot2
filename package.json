@@ -12,7 +12,8 @@
     "test:workflow": "node scripts/test-workflow-services.mjs",
     "test:match-search": "node scripts/test-match-search.mjs",
     "test:football-names": "node scripts/test-football-names.mjs",
-    "test:static-status": "node scripts/test-static-fixture-status.mjs"
+    "test:static-status": "node scripts/test-static-fixture-status.mjs",
+    "test:time": "node scripts/test-beijing-time.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.0",

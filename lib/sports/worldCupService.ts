@@ -21,6 +21,7 @@ import {
   getFreeWorldCup2026Standings,
   getFreeWorldCup2026Today
 } from "@/lib/sports/worldCup2026FreeClient";
+import { getBeijingDateKey } from "@/lib/time/beijingTime";
 
 const WORLD_CUP_LEAGUE = 1;
 const DEFAULT_WORLD_CUP_SEASON = 2026;
@@ -169,7 +170,7 @@ function fallbackList(message?: string): WorldCupPayload<WorldCupMatch[]> {
 }
 
 function getTodayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return getBeijingDateKey();
 }
 
 function getConfiguredWorldCupSeason() {

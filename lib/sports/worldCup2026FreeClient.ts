@@ -1,6 +1,7 @@
 import { createPayload } from "@/lib/sports/normalizers";
 import { inferStaticFixtureStatus } from "@/lib/sports/staticFixtureStatus";
 import type { MatchEvent, MatchStatistic, WorldCupMatch, WorldCupPayload } from "@/lib/sports/types";
+import { getBeijingDateKey, getBeijingDateKeyFromValue } from "@/lib/time/beijingTime";
 
 const WORLD_CUP_2026_LEAGUE = 1;
 const WORLD_CUP_2026_SEASON = 2026;
@@ -334,12 +335,11 @@ function localDateToIso(value?: string) {
 }
 
 function normalizeDateKey(value: string) {
-  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  return match ? `${match[1]}-${match[2]}-${match[3]}` : value.slice(0, 10);
+  return getBeijingDateKeyFromValue(value);
 }
 
 function getTodayDate() {
-  return new Date().toISOString().slice(0, 10);
+  return getBeijingDateKey();
 }
 
 function parseNullableNumber(value?: string) {

@@ -10,6 +10,7 @@ import { filterMatchesByQuery, queryLooksLikeMatchSearch } from "@/lib/services/
 import { useWorldCupQuery } from "@/lib/sports/client";
 import type { SourceStatus, WorldCupMatch } from "@/lib/sports/types";
 import { getSportTheme, sportThemes, type SportTheme } from "@/lib/sport-theme";
+import { formatBeijingDateTime, getBeijingDateKeyFromValue } from "@/lib/time/beijingTime";
 
 export default function DashboardPage() {
   const theme = getSportTheme("football");
@@ -24,7 +25,7 @@ export default function DashboardPage() {
   const queryFilteredMatches = filterMatchesByQuery(matches, matchSearchQuery);
   const filteredMatches = queryFilteredMatches.filter((item) => {
     const statusOk = statusFilter === "all" || item.status === statusFilter;
-    const dateOk = !dateFilter || item.kickoffTime.slice(0, 10) === dateFilter;
+    const dateOk = !dateFilter || getBeijingDateKeyFromValue(item.kickoffTime) === dateFilter;
     const competitionOk = competitionFilter === "all" || item.competition === competitionFilter;
     return statusOk && dateOk && competitionOk;
   });
@@ -566,10 +567,10 @@ function buildHotTopicAngle(item: HotItem) {
 }
 
 function formatDate(value: string) {
-  return new Intl.DateTimeFormat("zh-CN", {
+  return formatBeijingDateTime(value, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit"
-  }).format(new Date(value));
+  });
 }
