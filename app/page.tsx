@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, CheckCircle2, CircleDot, Flame, Search, ShieldAlert, Sparkles, Trophy } from "lucide-react";
 
 import type { HotItem, HotSearchPayload } from "@/lib/hot/types";
+import { localizeCompetitionName, localizeMatchStatus, localizeRoundName, localizeTeamName } from "@/lib/services/footballNames";
+import { filterMatchesByQuery, queryLooksLikeMatchSearch } from "@/lib/services/matchSearchService";
 import { useWorldCupQuery } from "@/lib/sports/client";
 import type { SourceStatus, WorldCupMatch } from "@/lib/sports/types";
 import { getSportTheme, sportThemes, type SportTheme } from "@/lib/sport-theme";
@@ -12,11 +14,15 @@ import { getSportTheme, sportThemes, type SportTheme } from "@/lib/sport-theme";
 export default function DashboardPage() {
   const theme = getSportTheme("football");
   const { payload, loading, error } = useWorldCupQuery<WorldCupMatch[]>("/api/worldcup/fixtures/today", 60_000);
-  const matches = payload?.data ?? [];
+  const { payload: allPayload, loading: allLoading } = useWorldCupQuery<WorldCupMatch[]>("/api/worldcup/fixtures", 120_000);
+  const [matchSearchQuery, setMatchSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
   const [competitionFilter, setCompetitionFilter] = useState("all");
-  const filteredMatches = matches.filter((item) => {
+  const useFullFixturePool = Boolean(matchSearchQuery.trim() || dateFilter || statusFilter !== "all" || competitionFilter !== "all");
+  const matches = useFullFixturePool ? allPayload?.data ?? [] : payload?.data ?? [];
+  const queryFilteredMatches = filterMatchesByQuery(matches, matchSearchQuery);
+  const filteredMatches = queryFilteredMatches.filter((item) => {
     const statusOk = statusFilter === "all" || item.status === statusFilter;
     const dateOk = !dateFilter || item.kickoffTime.slice(0, 10) === dateFilter;
     const competitionOk = competitionFilter === "all" || item.competition === competitionFilter;
@@ -53,6 +59,7 @@ export default function DashboardPage() {
     const query = new URLSearchParams(window.location.search).get("q");
     if (!query) return;
     setHotQuery(query);
+    if (queryLooksLikeMatchSearch(query)) setMatchSearchQuery(query);
     void runHotSearch(query);
   }, [runHotSearch]);
 
@@ -206,14 +213,23 @@ export default function DashboardPage() {
       <section id="opportunity-pool">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <SectionTitle eyebrow="TODAY OPPORTUNITIES" title="今日赛事内容机会池" description="数据来自内部服务端接口，API-Football 不会暴露给浏览器。" />
-          <SourceBadge status={payload?.sourceStatus ?? "fallback"} lastUpdated={payload?.lastUpdated} loading={loading} error={error} />
+          <SourceBadge status={(useFullFixturePool ? allPayload?.sourceStatus : payload?.sourceStatus) ?? "fallback"} lastUpdated={(useFullFixturePool ? allPayload?.lastUpdated : payload?.lastUpdated)} loading={loading || (useFullFixturePool && allLoading)} error={error} />
         </div>
-        <div className="mt-5 grid gap-3 rounded-[24px] border border-slate-200 bg-white p-4 md:grid-cols-3">
+        <div className="mt-5 grid gap-3 rounded-[24px] border border-slate-200 bg-white p-4 md:grid-cols-4">
+          <label className="block">
+            <span className="text-xs font-semibold text-slate-500">搜索比赛 / 球队</span>
+            <input
+              value={matchSearchQuery}
+              onChange={(event) => setMatchSearchQuery(event.target.value)}
+              placeholder="例如：日本、Japan、美国"
+              className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none"
+            />
+          </label>
           <label className="block">
             <span className="text-xs font-semibold text-slate-500">赛事</span>
             <select value={competitionFilter} onChange={(event) => setCompetitionFilter(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none">
               <option value="all">全部赛事</option>
-              {competitions.map((item) => <option key={item} value={item}>{item}</option>)}
+              {competitions.map((item) => <option key={item} value={item}>{localizeCompetitionName(item)}</option>)}
             </select>
           </label>
           <label className="block">
@@ -237,7 +253,7 @@ export default function DashboardPage() {
             ))
           ) : (
             <div className="rounded-[30px] border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
-              当前筛选条件下没有比赛。可清空筛选，或继续使用经典样例完整演示。
+              当前筛选条件下没有比赛。可清空搜索、日期、状态筛选，或继续使用经典样例完整演示。
             </div>
           )}
         </div>
@@ -326,6 +342,10 @@ function HeroMetric({ label, value, theme }: { label: string; value: number; the
 function OpportunityMatchCard({ match, theme, sourceStatus }: { match: WorldCupMatch; theme: SportTheme; sourceStatus: SourceStatus }) {
   const priority = getPriority(match);
   const risk = match.status === "live" ? "中" : "低";
+  const homeTeam = localizeTeamName(match.homeTeam.name);
+  const awayTeam = localizeTeamName(match.awayTeam.name);
+  const round = localizeRoundName(match.round || "世界杯比赛");
+  const statusText = localizeMatchStatus(match.statusText);
 
   return (
     <article className="grid gap-5 rounded-[30px] border bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)] transition hover:-translate-y-1 hover:shadow-[0_28px_80px_rgba(15,23,42,0.1)] lg:grid-cols-[90px_1fr_220px]" style={{ borderColor: theme.border }}>
@@ -338,13 +358,13 @@ function OpportunityMatchCard({ match, theme, sourceStatus }: { match: WorldCupM
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-3xl font-semibold tracking-tight text-slate-950">
-            {match.homeTeam.name} <span style={{ color: theme.primary }}>{match.score.display}</span> {match.awayTeam.name}
+            {homeTeam} <span style={{ color: theme.primary }}>{match.score.display}</span> {awayTeam}
           </h3>
-          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{match.statusText}</span>
+          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{statusText}</span>
           <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">风险：{risk}</span>
           <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">数据：{sourceLabel(sourceStatus)}</span>
         </div>
-        <p className="mt-3 text-sm leading-6 text-slate-600">推荐内容主线：{match.round || "世界杯比赛"}，适合从赛果、球员叙事和数据反差中寻找内容角度。</p>
+        <p className="mt-3 text-sm leading-6 text-slate-600">推荐内容主线：{round}，适合从赛果、球员叙事和数据反差中寻找内容角度。</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {["B站", "微博", "赛后复盘", "数据解读", match.venue.city ?? match.venue.name ?? "世界杯"].map((direction) => (
             <span key={direction} className="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">

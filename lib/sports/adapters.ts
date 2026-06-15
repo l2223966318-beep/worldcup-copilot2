@@ -1,29 +1,34 @@
 import type { MatchData, MatchEvent, TeamStats } from "@/data/matches";
+import { localizeCompetitionName, localizeMatchStatus, localizeRoundName, localizeTeamName } from "@/lib/services/footballNames";
 import type { MatchStatistic, WorldCupMatch } from "@/lib/sports/types";
 
 export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
   const homeStats = statisticsToTeamStats(match.statistics, match.homeTeam.name);
   const awayStats = statisticsToTeamStats(match.statistics, match.awayTeam.name);
+  const homeTeam = localizeTeamName(match.homeTeam.name);
+  const awayTeam = localizeTeamName(match.awayTeam.name);
+  const competition = localizeCompetitionName(match.competition);
+  const round = localizeRoundName(match.round);
 
   return {
     id: match.id,
     isExample: match.source.provider === "mock",
-    name: `${match.competition}：${match.homeTeam.name} vs ${match.awayTeam.name}`,
-    stage: match.round,
+    name: `${competition}：${homeTeam} vs ${awayTeam}`,
+    stage: round,
     time: match.kickoffTime,
-    teamA: match.homeTeam.name,
-    teamB: match.awayTeam.name,
+    teamA: homeTeam,
+    teamB: awayTeam,
     score: match.score.home !== null && match.score.away !== null ? `${match.score.home}-${match.score.away}` : "vs",
     penaltyScore: match.score.penalty,
-    summary: `${match.homeTeam.name} vs ${match.awayTeam.name}，状态：${match.statusText}。当前数据来自${sourceProviderName(match.source.provider)}，适合用于赛后内容角度、平台分发和风险审稿。`,
+    summary: `${homeTeam} vs ${awayTeam}，状态：${localizeMatchStatus(match.statusText)}。当前数据来自${sourceProviderName(match.source.provider)}，适合用于赛后内容角度、平台分发和风险审稿。`,
     stats: {
       teamA: homeStats,
       teamB: awayStats
     },
     keyPlayers: [
       {
-        name: match.homeTeam.name,
-        team: match.homeTeam.name,
+        name: homeTeam,
+        team: homeTeam,
         role: "球队",
         goals: match.score.home ?? 0,
         assists: 0,
@@ -33,8 +38,8 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
         rating: 7.6
       },
       {
-        name: match.awayTeam.name,
-        team: match.awayTeam.name,
+        name: awayTeam,
+        team: awayTeam,
         role: "球队",
         goals: match.score.away ?? 0,
         assists: 0,
@@ -54,7 +59,7 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
       : [
           {
             minute: "-",
-            team: match.homeTeam.name,
+            team: homeTeam,
             type: "终场",
             description: "当前接口暂未返回事件数据，可先基于比分、状态和技术统计进行内容判断。"
           }
@@ -62,8 +67,8 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
     historicalMeetings: [
       {
         year: String(match.season),
-        match: match.round,
-        score: `${match.homeTeam.name} ${match.score.display} ${match.awayTeam.name}`,
+        match: round,
+        score: `${homeTeam} ${match.score.display} ${awayTeam}`,
         note: match.venue.name ? `比赛场馆：${match.venue.name}` : "真实赛程数据。"
       }
     ]
