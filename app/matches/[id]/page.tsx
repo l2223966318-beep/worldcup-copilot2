@@ -26,6 +26,7 @@ import { analyzeMatch, getMatchDetail } from "@/lib/project-api";
 import { createRuleBasedAnalysis } from "@/lib/services/analysisService";
 import { createPlatformDraft } from "@/lib/services/contentService";
 import { createContentPackage, createPackageMarkdown, createPackageText } from "@/lib/services/exportService";
+import { localizeMatchStatus, localizeRoundName, localizeTeamName } from "@/lib/services/footballNames";
 import { writeReviewDraft, writeWorkflowState } from "@/lib/services/workflowStore";
 import { worldCupMatchToMatchData } from "@/lib/sports/adapters";
 import { useWorldCupQuery } from "@/lib/sports/client";
@@ -466,11 +467,11 @@ function MatchHero({
   loading?: boolean;
   error?: string;
 }) {
-  const homeTeam = sourceMatch?.homeTeam.name ?? match.teamA;
-  const awayTeam = sourceMatch?.awayTeam.name ?? match.teamB;
+  const homeTeam = sourceMatch ? localizeTeamName(sourceMatch.homeTeam.name) : match.teamA;
+  const awayTeam = sourceMatch ? localizeTeamName(sourceMatch.awayTeam.name) : match.teamB;
   const score = sourceMatch?.score.display ?? match.score;
-  const round = sourceMatch?.round ?? match.stage;
-  const statusText = sourceMatch?.statusText ?? (match.isExample ? "经典样例" : "真实数据");
+  const round = sourceMatch ? localizeRoundName(sourceMatch.round) : match.stage;
+  const statusText = sourceMatch ? localizeMatchStatus(sourceMatch.statusText) : (match.isExample ? "经典样例" : "真实数据");
   const kickoffTime = sourceMatch?.kickoffTime ?? match.time;
   const venue = [sourceMatch?.venue.name, sourceMatch?.venue.city].filter(Boolean).join("｜");
   const dataTag = sourceMatch ? sourceProviderTag(sourceMatch.source.provider) : match.isExample ? "经典样例" : "运营数据";
