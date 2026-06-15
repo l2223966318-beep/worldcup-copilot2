@@ -2,7 +2,7 @@ const DEFAULT_BASE_URL = "https://api.tavily.com";
 
 export async function fetchTavilySearch(query: string, overrideApiKey?: string) {
   const apiKey = overrideApiKey || process.env.TAVILY_API_KEY;
-  if (!apiKey) return { ok: false as const, reason: "TAVILY_API_KEY is not configured." };
+  if (!apiKey) return { ok: false as const, reason: "全网搜索密钥未配置。" };
 
   const baseUrl = (process.env.TAVILY_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, "");
   const response = await fetchWithTimeout(`${baseUrl}/search`, {
@@ -20,7 +20,7 @@ export async function fetchTavilySearch(query: string, overrideApiKey?: string) 
   });
 
   if (!response.ok) {
-    throw new Error(`Tavily request failed: ${response.status}`);
+    throw new Error(`全网搜索请求失败：${response.status}`);
   }
 
   return { ok: true as const, payload: await response.json() };

@@ -34,7 +34,7 @@ export type HotTopic = {
   summary?: string;
   heat?: string | number;
   platform?: string;
-  source: "今日热榜" | "Tavily" | "AI筛选";
+  source: "今日热榜" | "全网搜索" | "AI筛选";
   category?: "世界杯" | "体育" | "娱乐" | "社会" | "科技" | "泛热点";
   relevanceScore?: number;
   leverageValue?: "高价值" | "可尝试" | "低相关";

@@ -31,7 +31,7 @@ export function normalizeDailyHotPayload(payload: unknown, context: HotSearchCon
       title,
       summary,
       url,
-      source: context.source ?? "dailyhot",
+      source: context.source ?? "今日热榜",
       platform,
       rank,
       heat,
@@ -56,7 +56,7 @@ export function normalizeTavilyPayload(payload: unknown, context: HotSearchConte
       title,
       summary,
       url,
-      source: "tavily",
+      source: "全网搜索",
       platform: "全网搜索",
       rank: index + 1,
       relevance: Math.max(1, Math.round((apiScore ?? 0.55) * 100)),
@@ -83,7 +83,7 @@ export function normalizeTopHubDataPayload(payload: unknown, context: HotSearchC
       title,
       summary,
       url,
-      source: "tophubdata",
+      source: "榜眼数据",
       platform,
       rank,
       heat,
@@ -123,9 +123,9 @@ export function mergeHotItems(items: HotItem[]): HotItem[] {
 }
 
 function sourcePriority(source: string) {
-  if (/tophubdata|dailyhot/i.test(source)) return 3;
-  if (/tavily/i.test(source)) return 2;
-  if (/fallback|ai/i.test(source)) return 1;
+  if (/tophubdata|dailyhot|榜眼数据|今日热榜/i.test(source)) return 3;
+  if (/tavily|全网搜索/i.test(source)) return 2;
+  if (/fallback|ai|AI筛选|演示数据/i.test(source)) return 1;
   return 0;
 }
 

@@ -50,12 +50,12 @@ export async function searchHotSignals(query: string, options: HotSearchOptions 
       const normalized = normalizeTavilyPayload(tavilyResult.value.payload, { query: normalizedQuery });
       items.push(...normalized);
       liveSourceCount += normalized.length ? 1 : 0;
-      if (!normalized.length) failures.push("Tavily 没有返回匹配结果");
+      if (!normalized.length) failures.push("全网搜索没有返回匹配结果");
     } catch (error) {
-      failures.push(readErrorMessage(error, "Tavily 返回格式暂不兼容"));
+      failures.push(readErrorMessage(error, "全网搜索返回格式暂不兼容"));
     }
   } else {
-    failures.push(readFailure(tavilyResult, "Tavily 未返回可用结果"));
+    failures.push(readFailure(tavilyResult, "全网搜索未返回可用结果"));
   }
 
   if (dailyHotResult.status === "fulfilled" && dailyHotResult.value.length) {
@@ -65,7 +65,7 @@ export async function searchHotSignals(query: string, options: HotSearchOptions 
           ...normalizeDailyHotPayload(feed.payload, {
             query: normalizedQuery,
             platform: dailyHotPlatformName(feed.platform),
-            source: `dailyhot-${feed.platform}`
+            source: "今日热榜"
           })
         );
       } catch (error) {
@@ -113,9 +113,9 @@ function createFallbackHotItems(query: string): HotItem[] {
     {
       id: "hot-fallback-1",
       title: `${query} 相关热点待接入`,
-      summary: "配置 TOPHUBDATA_API_KEY 或 TAVILY_API_KEY 后，这里会显示真实热榜和全网搜索结果。",
+      summary: "配置榜眼数据或全网搜索密钥后，这里会显示真实热榜和全网搜索结果。",
       url: "",
-      source: "fallback",
+      source: "AI筛选",
       platform: "系统提示",
       relevance: 40,
       tags: baseTags
@@ -125,7 +125,7 @@ function createFallbackHotItems(query: string): HotItem[] {
       title: "可纳入选题判断的场上事件",
       summary: "乌龙球、球衣被扯破、VAR 争议、伤退传闻等事件会被识别成热点信号，再进入选题引擎。",
       url: "",
-      source: "fallback",
+      source: "AI筛选",
       platform: "示例逻辑",
       relevance: 35,
       tags: ["乌龙球", "球衣被扯破", "争议判罚"]

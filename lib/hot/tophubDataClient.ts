@@ -2,7 +2,7 @@ const DEFAULT_BASE_URL = "https://api.tophubdata.com";
 
 export async function fetchTopHubDataSearch(query: string, overrideApiKey?: string) {
   const apiKey = overrideApiKey || process.env.TOPHUBDATA_API_KEY;
-  if (!apiKey) return { ok: false as const, reason: "TOPHUBDATA_API_KEY is not configured." };
+  if (!apiKey) return { ok: false as const, reason: "榜眼数据密钥未配置。" };
 
   const baseUrl = (process.env.TOPHUBDATA_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, "");
   const params = new URLSearchParams({ q: query, p: "1" });
@@ -14,7 +14,7 @@ export async function fetchTopHubDataSearch(query: string, overrideApiKey?: stri
   });
 
   if (!response.ok) {
-    throw new Error(`TopHubData request failed: ${response.status}`);
+    throw new Error(`榜眼数据请求失败：${response.status}`);
   }
 
   return { ok: true as const, payload: await response.json() };

@@ -92,7 +92,7 @@ export default function HotTopicDetailPage() {
       <section className="overflow-hidden rounded-[36px] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-sky-50 p-7 shadow-[0_24px_80px_rgba(15,23,42,0.08)] lg:p-9">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="max-w-3xl">
-            <div className="text-xs font-black uppercase tracking-[0.22em] text-emerald-700">HOT TOPIC WORKFLOW</div>
+            <div className="text-xs font-black tracking-[0.22em] text-emerald-700">热点分析与生产</div>
             <h1 className="mt-4 text-3xl font-black leading-tight text-slate-950 lg:text-5xl">{topic.title}</h1>
             <p className="mt-4 text-base leading-8 text-slate-600">{topic.summary || "该热点暂无摘要，建议结合来源链接人工确认背景后再生产内容。"}</p>
           </div>
@@ -148,7 +148,7 @@ export default function HotTopicDetailPage() {
         <section className="rounded-[34px] border border-emerald-100 bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <div className="text-xs font-black uppercase tracking-[0.18em] text-emerald-700">CONTENT PACKAGE</div>
+              <div className="text-xs font-black tracking-[0.18em] text-emerald-700">内容方案包</div>
               <h2 className="mt-2 text-3xl font-black text-slate-950">热点选题与平台生产包</h2>
             </div>
             <button
@@ -198,7 +198,7 @@ function DetailBlock({ title, items }: { title: string; items: string[] }) {
   if (!items.length) return null;
   return (
     <div className="mt-5">
-      <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">{title}</div>
+      <div className="text-xs font-black tracking-[0.14em] text-slate-400">{title}</div>
       <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-600">
         {items.map((item) => <li key={item}>· {item}</li>)}
       </ul>

@@ -34,7 +34,6 @@ export default function DashboardPage() {
   const priorityMatches = filteredMatches.filter((item) => getPriority(item) === "S" || getPriority(item) === "A");
   const watchMatches = filteredMatches.filter((item) => getPriority(item) === "B");
   const firstMatchHref = filteredMatches[0] ? `/matches/${filteredMatches[0].id}` : "/matches/argentina-france-2022-final";
-  const [highlightedMatch, setHighlightedMatch] = useState<WorldCupMatch | null>(null);
 
   useEffect(() => {
     setSportType(readSavedSportType());
@@ -125,7 +124,7 @@ export default function DashboardPage() {
         <div className="min-w-0 space-y-8">
           <section id="opportunity-pool">
             <div className="flex flex-wrap items-end justify-between gap-4">
-              <SectionTitle eyebrow="TODAY OPPORTUNITIES" title="今日赛事内容机会池" description="数据来自内部服务端接口，API-Football 不会暴露给浏览器。" />
+              <SectionTitle eyebrow="今日机会池" title="今日赛事内容机会池" description="数据来自内部服务端接口，足球数据密钥不会暴露给浏览器。" />
               <SourceBadge status={(useFullFixturePool ? allPayload?.sourceStatus : payload?.sourceStatus) ?? "fallback"} lastUpdated={(useFullFixturePool ? allPayload?.lastUpdated : payload?.lastUpdated)} loading={loading || (useFullFixturePool && allLoading)} error={error} />
             </div>
             <div className="mt-5 grid gap-3 rounded-[24px] border border-slate-200 bg-white p-4 md:grid-cols-4">
@@ -162,13 +161,7 @@ export default function DashboardPage() {
             <div className="mt-6 grid gap-5">
               {filteredMatches.length ? (
                 filteredMatches.map((item) => (
-                  <OpportunityMatchCard
-                    key={item.id}
-                    match={item}
-                    theme={theme}
-                    sourceStatus={payload?.sourceStatus ?? "fallback"}
-                    onInspect={setHighlightedMatch}
-                  />
+                  <OpportunityMatchCard key={item.id} match={item} theme={theme} sourceStatus={payload?.sourceStatus ?? "fallback"} />
                 ))
               ) : (
                 <div className="rounded-[30px] border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
@@ -180,7 +173,7 @@ export default function DashboardPage() {
 
           <section className="grid gap-5 lg:grid-cols-[1fr_1fr]">
             <div className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
-              <SectionTitle eyebrow="OPS DECISION" title="今日运营建议" description="把比赛转成可执行排期，而不是让用户自己在功能里找方向。" />
+              <SectionTitle eyebrow="运营判断" title="今日运营建议" description="把比赛转成可执行排期，而不是让用户自己在功能里找方向。" />
               <div className="mt-6 grid gap-4 md:grid-cols-2">
                 <DecisionCard icon={CheckCircle2} title="今日优先做" value={`${priorityMatches.length} 场`} body="先处理高热度、强叙事、平台适配清晰的比赛。" theme={theme} />
                 <DecisionCard icon={CircleDot} title="观望比赛" value={`${watchMatches.length} 场`} body="适合作为素材储备，等待赛后舆情和平台热度变化。" theme={theme} />
@@ -190,7 +183,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
-              <SectionTitle eyebrow="CLASSIC CASES" title="历史经典样例" description="真实 API 无数据时，仍保留高完成度 mock 样例入口。" />
+              <SectionTitle eyebrow="经典样例" title="历史经典样例" description="真实数据暂缺时，仍保留高完成度演示样例入口。" />
               <div className="mt-6 space-y-4">
                 <Link
                   href={firstMatchHref}
@@ -201,7 +194,7 @@ export default function DashboardPage() {
                     <div>
                       <div className="text-sm font-semibold" style={{ color: theme.primary }}>今日数据链路入口</div>
                       <div className="mt-2 text-xl font-semibold text-slate-950">进入第一场比赛分析</div>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">真实 fixtureId 会进入 API-Football 详情链路；历史样例继续走 fallback。</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">真实比赛编号会进入足球数据详情链路；历史样例继续走演示数据。</p>
                     </div>
                     <ArrowRight className="h-5 w-5 text-slate-400 transition group-hover:translate-x-1 group-hover:text-slate-950" />
                   </div>
@@ -215,7 +208,7 @@ export default function DashboardPage() {
                     <div>
                       <div className="text-sm font-semibold" style={{ color: theme.primary }}>经典样例</div>
                       <div className="mt-2 text-xl font-semibold text-slate-950">阿根廷 3-3 法国</div>
-                      <p className="mt-2 text-sm leading-6 text-slate-600">保留为 mock 历史经典样例，方便无 API key 时完整演示。</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">保留为历史经典演示样例，方便没有接口密钥时完整演示。</p>
                     </div>
                     <ArrowRight className="h-5 w-5 text-slate-400 transition group-hover:translate-x-1 group-hover:text-slate-950" />
                   </div>
@@ -225,7 +218,7 @@ export default function DashboardPage() {
           </section>
         </div>
 
-        <HotTopicRadarPanel theme={theme} matches={matches} highlightedMatch={highlightedMatch} />
+        <HotTopicRadarPanel theme={theme} matches={matches} />
       </div>
     </div>
   );
@@ -351,13 +344,11 @@ function ThemeSideSelector({
 function OpportunityMatchCard({
   match,
   theme,
-  sourceStatus,
-  onInspect
+  sourceStatus
 }: {
   match: WorldCupMatch;
   theme: SportTheme;
   sourceStatus: SourceStatus;
-  onInspect?: (match: WorldCupMatch) => void;
 }) {
   const priority = getPriority(match);
   const risk = match.status === "live" ? "中" : "低";
@@ -368,10 +359,7 @@ function OpportunityMatchCard({
 
   return (
     <article
-      onClick={() => onInspect?.(match)}
-      onMouseEnter={() => onInspect?.(match)}
-      onFocus={() => onInspect?.(match)}
-      className="grid cursor-pointer gap-5 rounded-[30px] border bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)] transition hover:-translate-y-1 hover:shadow-[0_28px_80px_rgba(15,23,42,0.1)] lg:grid-cols-[90px_1fr_220px]"
+      className="grid gap-5 rounded-[30px] border bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)] transition hover:-translate-y-1 hover:shadow-[0_28px_80px_rgba(15,23,42,0.1)] lg:grid-cols-[90px_1fr_220px]"
       style={{ borderColor: theme.border }}
     >
       <div className="flex items-center gap-3 lg:block">
@@ -452,7 +440,7 @@ function priorityColor(priority: string, theme: SportTheme) {
 
 function sourceLabel(status: SourceStatus) {
   const labels: Record<SourceStatus, string> = {
-    live: "真实 API 数据",
+    live: "真实接口数据",
     fallback: "示例数据",
     cache: "缓存数据",
     error: "请求失败"

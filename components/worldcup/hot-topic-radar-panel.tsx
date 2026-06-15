@@ -17,12 +17,10 @@ const tabs: HotTab[] = ["全部", "体育相关", "世界杯相关", "可借势"
 
 export function HotTopicRadarPanel({
   theme,
-  matches,
-  highlightedMatch
+  matches
 }: {
   theme: SportTheme;
   matches: WorldCupMatch[];
-  highlightedMatch?: WorldCupMatch | null;
 }) {
   const router = useRouter();
   const [topics, setTopics] = useState<HotTopic[]>([]);
@@ -42,11 +40,6 @@ export function HotTopicRadarPanel({
     setMessage(cached.message ?? "");
   }, []);
 
-  const highlightedKeywords = useMemo(() => {
-    if (!highlightedMatch) return [];
-    return buildMatchKeywords(highlightedMatch);
-  }, [highlightedMatch]);
-
   const rankedTopics = useMemo(() => {
     return topics
       .map((topic) => ({
@@ -55,11 +48,9 @@ export function HotTopicRadarPanel({
         relatedMatches: topic.relatedMatches?.length ? topic.relatedMatches : findRelatedMatches(topic, matches)
       }))
       .sort((a, b) => {
-        const highlightA = isTopicHighlighted(a, highlightedKeywords) ? 1 : 0;
-        const highlightB = isTopicHighlighted(b, highlightedKeywords) ? 1 : 0;
-        return highlightB - highlightA || sourcePriority(b.source) - sourcePriority(a.source) || (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0);
+        return getTopicHeatScore(b) - getTopicHeatScore(a) || (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0) || (a.rank ?? 999) - (b.rank ?? 999);
       });
-  }, [topics, matches, highlightedKeywords]);
+  }, [topics, matches]);
 
   const filteredTopics = useMemo(() => rankedTopics.filter((topic) => filterByTab(topic, activeTab)), [activeTab, rankedTopics]);
 
@@ -73,7 +64,7 @@ export function HotTopicRadarPanel({
     setError("");
 
     try {
-      const query = buildUpdateQuery(highlightedMatch);
+      const query = buildUpdateQuery();
       const response = await fetch(`/api/hot/search?q=${encodeURIComponent(query)}`, {
         cache: "no-store",
         headers: readHotSourceHeaders()
@@ -107,7 +98,7 @@ export function HotTopicRadarPanel({
       <div className="rounded-[32px] border bg-white p-5 shadow-[0_20px_70px_rgba(15,23,42,0.07)]" style={{ borderColor: theme.border }}>
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">HOT RADAR</div>
+            <div className="text-xs font-black tracking-[0.18em] text-slate-400">热点雷达</div>
             <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">今日热点雷达</h2>
           </div>
           <button
@@ -125,19 +116,14 @@ export function HotTopicRadarPanel({
         <div className="mt-4 rounded-2xl p-4 text-xs leading-6" style={{ backgroundColor: theme.background, color: theme.mutedText }}>
           <div className="font-semibold text-slate-800">数据源状态</div>
           <div>今日热榜：主数据源</div>
-          <div>Tavily：补充数据源，不覆盖今日热榜</div>
-          <div>AI筛选：分类、标签和借势价值加工层</div>
+          <div>全网搜索：补充数据源，不覆盖今日热榜</div>
+          <div>智能筛选：分类、标签和借势价值加工层</div>
+          <div>排序逻辑：按全网热度优先，不随左侧比赛切换。</div>
           <div className="mt-2 font-semibold">
             状态：{sourceStatusLabel(sourceStatus)}
             {lastUpdatedAt ? ` · 更新时间：${formatHotTime(lastUpdatedAt)}` : " · 暂无缓存"}
           </div>
         </div>
-
-        {highlightedMatch ? (
-          <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-semibold leading-5 text-emerald-800">
-            已根据左侧赛事高亮：{localizeTeamName(highlightedMatch.homeTeam.name)} vs {localizeTeamName(highlightedMatch.awayTeam.name)}
-          </div>
-        ) : null}
 
         {message ? <div className="mt-3 text-xs leading-5 text-slate-500">{message}</div> : null}
         {error ? <div className="mt-3 rounded-2xl bg-red-50 px-4 py-3 text-xs font-semibold text-red-600">{error} 旧缓存已保留。</div> : null}
@@ -161,18 +147,15 @@ export function HotTopicRadarPanel({
         <div className="mt-4 space-y-3">
           {filteredTopics.length ? (
             filteredTopics.slice(0, 12).map((topic, index) => {
-              const highlighted = isTopicHighlighted(topic, highlightedKeywords);
               return (
                 <article
                   key={topic.id}
                   onClick={() => openTopic(topic)}
-                  className={`block w-full cursor-pointer rounded-3xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(15,23,42,0.08)] ${
-                    highlighted ? "bg-white" : "bg-slate-50"
-                  }`}
-                  style={{ borderColor: highlighted ? theme.primary : theme.border }}
+                  className="block w-full cursor-pointer rounded-3xl border bg-slate-50 p-4 text-left transition hover:-translate-y-0.5 hover:bg-white hover:shadow-[0_14px_36px_rgba(15,23,42,0.08)]"
+                  style={{ borderColor: theme.border }}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black text-white" style={{ backgroundColor: highlighted ? theme.accent : theme.primary }}>
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black text-white" style={{ backgroundColor: theme.primary }}>
                       {topic.rank ?? index + 1}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -219,7 +202,7 @@ export function HotTopicRadarPanel({
             <div className="rounded-[26px] border border-dashed border-slate-300 bg-slate-50 p-7 text-center">
               <Search className="mx-auto h-7 w-7 text-slate-400" />
               <div className="mt-3 text-base font-semibold text-slate-950">暂无热点数据</div>
-              <p className="mt-2 text-sm leading-6 text-slate-500">点击“更新热点”获取最新内容。页面不会自动频繁请求热点 API。</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">点击“更新热点”获取最新内容。页面不会自动频繁请求热点接口。</p>
             </div>
           )}
         </div>
@@ -300,13 +283,14 @@ function normalizeHotTopics(items: HotItem[], matches: WorldCupMatch[], updatedA
   }
 
   return Array.from(seen.values()).sort(
-    (a, b) => sourcePriority(b.source) - sourcePriority(a.source) || (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0) || (a.rank ?? 999) - (b.rank ?? 999)
+    (a, b) => getTopicHeatScore(b) - getTopicHeatScore(a) || (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0) || (a.rank ?? 999) - (b.rank ?? 999)
   );
 }
 
 function normalizeSource(source: string): HotTopic["source"] {
-  if (/tavily/i.test(source)) return "Tavily";
-  if (/fallback|ai/i.test(source)) return "AI筛选";
+  if (/今日热榜|榜眼数据/i.test(source)) return "今日热榜";
+  if (/tavily|全网搜索/i.test(source)) return "全网搜索";
+  if (/fallback|ai|AI筛选|演示数据/i.test(source)) return "AI筛选";
   return "今日热榜";
 }
 
@@ -371,12 +355,6 @@ function buildMatchKeywords(match: WorldCupMatch) {
   ].filter(Boolean);
 }
 
-function isTopicHighlighted(topic: HotTopic, keywords: string[]) {
-  if (!keywords.length) return false;
-  const text = normalizeText(`${topic.title} ${topic.summary ?? ""} ${(topic.tags ?? []).join(" ")}`);
-  return keywords.some((keyword) => text.includes(normalizeText(keyword)));
-}
-
 function filterByTab(topic: HotTopic, tab: HotTab) {
   if (tab === "全部") return true;
   if (tab === "体育相关") return topic.category === "体育" || topic.category === "世界杯";
@@ -385,9 +363,8 @@ function filterByTab(topic: HotTopic, tab: HotTab) {
   return topic.leverageValue === "高价值";
 }
 
-function buildUpdateQuery(match?: WorldCupMatch | null) {
-  if (!match) return "世界杯 足球 今日热点";
-  return `${localizeTeamName(match.homeTeam.name)} ${localizeTeamName(match.awayTeam.name)} 世界杯 足球 今日热点`;
+function buildUpdateQuery() {
+  return "世界杯 足球 今日热点";
 }
 
 function formatHotTime(value: string) {
@@ -412,8 +389,28 @@ function sourceStatusLabel(status: HotSearchPayload["sourceStatus"]) {
 
 function sourcePriority(source: HotTopic["source"]) {
   if (source === "今日热榜") return 3;
-  if (source === "Tavily") return 2;
+  if (source === "全网搜索") return 2;
   return 1;
+}
+
+function getTopicHeatScore(topic: Pick<HotTopic, "heat" | "relevanceScore" | "rank">) {
+  if (typeof topic.heat === "number") return topic.heat;
+  if (typeof topic.heat === "string") {
+    const normalized = topic.heat.replace(/,/g, "").trim();
+    const matched = normalized.match(/([\d.]+)/);
+    if (matched) {
+      const value = Number(matched[1]);
+      if (Number.isFinite(value)) {
+        if (normalized.includes("亿")) return value * 100_000_000;
+        if (normalized.includes("万")) return value * 10_000;
+        return value;
+      }
+    }
+  }
+
+  const relevance = topic.relevanceScore ?? 0;
+  const rankBonus = topic.rank ? Math.max(0, 100 - topic.rank) : 0;
+  return relevance * 100 + rankBonus;
 }
 
 function normalizeText(value: string) {
