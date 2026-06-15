@@ -197,6 +197,11 @@ export default function DashboardPage() {
                 来源状态：{hotStatusLabel(hotPayload.sourceStatus)} · 最后更新：{formatDate(hotPayload.lastUpdated)}
               </div>
             ) : null}
+            {hotPayload?.message ? (
+              <div className="mt-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-semibold leading-5 text-amber-800">
+                接口说明：{hotPayload.message}
+              </div>
+            ) : null}
             {hotError ? <div className="mt-3 text-sm font-semibold text-red-600">{hotError}</div> : null}
           </div>
 

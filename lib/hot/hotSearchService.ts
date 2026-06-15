@@ -33,30 +33,44 @@ export async function searchHotSignals(query: string, options: HotSearchOptions 
   ]);
 
   if (topHubResult.status === "fulfilled" && topHubResult.value.ok) {
-    const normalized = normalizeTopHubDataPayload(topHubResult.value.payload, { query: normalizedQuery });
-    items.push(...normalized);
-    liveSourceCount += normalized.length ? 1 : 0;
+    try {
+      const normalized = normalizeTopHubDataPayload(topHubResult.value.payload, { query: normalizedQuery });
+      items.push(...normalized);
+      liveSourceCount += normalized.length ? 1 : 0;
+      if (!normalized.length) failures.push("榜眼数据没有返回匹配热点");
+    } catch (error) {
+      failures.push(readErrorMessage(error, "榜眼数据返回格式暂不兼容"));
+    }
   } else {
     failures.push(readFailure(topHubResult, "榜眼数据未返回可用结果"));
   }
 
   if (tavilyResult.status === "fulfilled" && tavilyResult.value.ok) {
-    const normalized = normalizeTavilyPayload(tavilyResult.value.payload, { query: normalizedQuery });
-    items.push(...normalized);
-    liveSourceCount += normalized.length ? 1 : 0;
+    try {
+      const normalized = normalizeTavilyPayload(tavilyResult.value.payload, { query: normalizedQuery });
+      items.push(...normalized);
+      liveSourceCount += normalized.length ? 1 : 0;
+      if (!normalized.length) failures.push("Tavily 没有返回匹配结果");
+    } catch (error) {
+      failures.push(readErrorMessage(error, "Tavily 返回格式暂不兼容"));
+    }
   } else {
     failures.push(readFailure(tavilyResult, "Tavily 未返回可用结果"));
   }
 
   if (dailyHotResult.status === "fulfilled" && dailyHotResult.value.length) {
     for (const feed of dailyHotResult.value) {
-      items.push(
-        ...normalizeDailyHotPayload(feed.payload, {
-          query: normalizedQuery,
-          platform: dailyHotPlatformName(feed.platform),
-          source: `dailyhot-${feed.platform}`
-        })
-      );
+      try {
+        items.push(
+          ...normalizeDailyHotPayload(feed.payload, {
+            query: normalizedQuery,
+            platform: dailyHotPlatformName(feed.platform),
+            source: `dailyhot-${feed.platform}`
+          })
+        );
+      } catch (error) {
+        failures.push(readErrorMessage(error, `${dailyHotPlatformName(feed.platform)}公共热榜返回格式暂不兼容`));
+      }
     }
     liveSourceCount += 1;
   } else {
@@ -124,7 +138,11 @@ function readFailure<T>(result: PromiseSettledResult<T>, fallback: string) {
     const value = result.value as { ok?: boolean; reason?: string };
     return value.reason ?? fallback;
   }
-  return result.reason instanceof Error ? result.reason.message : fallback;
+  return readErrorMessage(result.reason, fallback);
+}
+
+function readErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
 function normalizeQuery(query: string) {
