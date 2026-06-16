@@ -27,7 +27,7 @@ import { createRuleBasedAnalysis } from "@/lib/services/analysisService";
 import { createPlatformDraft } from "@/lib/services/contentService";
 import { createContentPackage, createPackageMarkdown, createPackageText } from "@/lib/services/exportService";
 import { localizeMatchStatus, localizeRoundName, localizeTeamName } from "@/lib/services/footballNames";
-import { writeReviewDraft, writeWorkflowState } from "@/lib/services/workflowStore";
+import { appendHistoryRecord, writeReviewDraft, writeWorkflowState } from "@/lib/services/workflowStore";
 import { worldCupMatchToMatchData } from "@/lib/sports/adapters";
 import { useWorldCupQuery } from "@/lib/sports/client";
 import type { SourceStatus, WorldCupMatch, WorldCupPayload } from "@/lib/sports/types";
@@ -287,7 +287,21 @@ export default function MatchAnalysisPage() {
               送入审稿
             </Link>
             <ActionButton
-              onClick={() => downloadTextFile(`${match.id}-content-package.json`, JSON.stringify(buildCurrentPackage(), null, 2), "application/json;charset=utf-8")}
+              onClick={() => {
+                appendHistoryRecord({
+                  kind: "workflow",
+                  matchId: match.id,
+                  title: match.name,
+                  score: match.score,
+                  stage: match.stage,
+                  platforms: ["内容包 JSON"],
+                  route: `/matches/${match.id}`,
+                  summary: workflowTopic.title,
+                  sourceStatus: matchContext.matchInfo.sourceStatus
+                });
+                downloadTextFile(`${match.id}-content-package.json`, JSON.stringify(buildCurrentPackage(), null, 2), "application/json;charset=utf-8");
+                showWorkflowNotice("内容包 JSON 已导出，并写入历史记录。");
+              }}
               theme={theme}
               variant="secondary"
             >
@@ -295,7 +309,21 @@ export default function MatchAnalysisPage() {
               导出 JSON
             </ActionButton>
             <ActionButton
-              onClick={() => downloadTextFile(`${match.id}-content-package.txt`, createPackageText(buildCurrentPackage()), "text/plain;charset=utf-8")}
+              onClick={() => {
+                appendHistoryRecord({
+                  kind: "workflow",
+                  matchId: match.id,
+                  title: match.name,
+                  score: match.score,
+                  stage: match.stage,
+                  platforms: ["内容包 TXT"],
+                  route: `/matches/${match.id}`,
+                  summary: workflowTopic.title,
+                  sourceStatus: matchContext.matchInfo.sourceStatus
+                });
+                downloadTextFile(`${match.id}-content-package.txt`, createPackageText(buildCurrentPackage()), "text/plain;charset=utf-8");
+                showWorkflowNotice("内容包 TXT 已导出，并写入历史记录。");
+              }}
               theme={theme}
               variant="secondary"
             >
@@ -399,7 +427,21 @@ export default function MatchAnalysisPage() {
           theme={theme}
           copied={copied}
           onCopy={handleCopy}
-          onExport={() => downloadTextFile(`${match.id}-${activePlatform}.md`, buildPlatformMarkdown(activePlatform, content), "text/markdown;charset=utf-8")}
+          onExport={() => {
+            appendHistoryRecord({
+              kind: "workflow",
+              matchId: match.id,
+              title: match.name,
+              score: match.score,
+              stage: match.stage,
+              platforms: [platformMeta[activePlatform].title],
+              route: `/matches/${match.id}`,
+              summary: workflowTopic.title,
+              sourceStatus: matchContext.matchInfo.sourceStatus
+            });
+            downloadTextFile(`${match.id}-${activePlatform}.md`, buildPlatformMarkdown(activePlatform, content), "text/markdown;charset=utf-8");
+            showWorkflowNotice(`${platformMeta[activePlatform].title} Markdown 已导出，并写入历史记录。`);
+          }}
           onRegenerate={handleGeneratePlatformDraft}
         />
       </section>
@@ -433,7 +475,21 @@ export default function MatchAnalysisPage() {
             <Clipboard className="h-4 w-4" />
             {copied === "all" ? "已复制全部" : "复制全部内容"}
           </ActionButton>
-          <ActionButton onClick={() => downloadTextFile(`${match.id}-content-report.md`, markdown, "text/markdown;charset=utf-8")} theme={theme}>
+          <ActionButton onClick={() => {
+            appendHistoryRecord({
+              kind: "workflow",
+              matchId: match.id,
+              title: match.name,
+              score: match.score,
+              stage: match.stage,
+              platforms: ["Markdown 报告"],
+              route: `/matches/${match.id}`,
+              summary: workflowTopic.title,
+              sourceStatus: matchContext.matchInfo.sourceStatus
+            });
+            downloadTextFile(`${match.id}-content-report.md`, markdown, "text/markdown;charset=utf-8");
+            showWorkflowNotice("Markdown 报告已导出，并写入历史记录。");
+          }} theme={theme}>
             <Download className="h-4 w-4" />
             导出 Markdown 报告
           </ActionButton>

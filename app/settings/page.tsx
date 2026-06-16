@@ -129,8 +129,12 @@ export default function SettingsPage() {
                 className="mt-4 inline-flex h-11 items-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {testing === row.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlugZap className="h-4 w-4" />}
-                测试连接
+                {testing === row.key ? "测试中..." : "测试连接"}
               </button>
+              <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-600">
+                当前模式：{status?.mode === "live" ? "真实接口" : status?.mode === "demo" ? "Mock / Demo" : status?.mode === "error" ? "请求失败" : "未测试"}
+                {status?.message ? ` ｜ ${status.message}` : " ｜ 点击测试连接获取状态。"}
+              </div>
             </div>
           );
         })}
@@ -185,7 +189,7 @@ function StatusPill({ status }: { status?: { ok: boolean; message: string; mode?
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
       <XCircle className="h-3.5 w-3.5" />
-      {status.mode === "demo" ? "demo 模式" : "连接失败"}
+      {status.mode === "demo" ? "demo 模式" : status.mode === "error" ? "请求失败" : "连接失败"}
     </span>
   );
 }

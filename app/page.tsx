@@ -37,6 +37,11 @@ export default function DashboardPage() {
       return left - right;
     });
   const competitions = Array.from(new Set(matches.map((item) => item.competition))).filter(Boolean);
+  const activePayload = useFullFixturePool ? allPayload : payload;
+  const activeStatus = activePayload?.sourceStatus ?? "fallback";
+  const hasFilters = Boolean(matchSearchQuery.trim() || dateFilter || statusFilter !== "all" || competitionFilter !== "all");
+  const isMockMode = activeStatus === "fallback";
+  const isNoDataState = !loading && !error && !hasFilters && filteredMatches.length === 0;
   const priorityMatches = filteredMatches.filter((item) => {
     const grade = getOpportunityGrade(item);
     return grade === "S" || grade === "A";
@@ -44,6 +49,15 @@ export default function DashboardPage() {
   const watchMatches = filteredMatches.filter((item) => getOpportunityGrade(item) === "B");
   const lowPriorityMatches = filteredMatches.filter((item) => getOpportunityGrade(item) === "C");
   const firstMatchHref = filteredMatches[0] ? `/matches/${filteredMatches[0].id}` : "/matches/argentina-france-2022-final";
+  const heroOpsState = getOpsState({
+    loading,
+    error,
+    filteredCount: filteredMatches.length,
+    priorityCount: priorityMatches.length,
+    watchCount: watchMatches.length,
+    lowCount: lowPriorityMatches.length,
+    status: activeStatus
+  });
 
   useEffect(() => {
     setSportType(readSavedSportType());
@@ -119,12 +133,12 @@ export default function DashboardPage() {
               <div className="text-base font-semibold text-slate-950">今日运营建议</div>
             </div>
             <div className="mt-3 grid grid-cols-3 gap-2">
-              <HeroMetric label="优先做" value={priorityMatches.length} theme={theme} />
-              <HeroMetric label="观望" value={watchMatches.length} theme={theme} />
-              <HeroMetric label="不投入" value={lowPriorityMatches.length} theme={theme} />
+              <HeroMetric label="优先做" value={heroOpsState.metrics.priority} theme={theme} />
+              <HeroMetric label="观望" value={heroOpsState.metrics.watch} theme={theme} />
+              <HeroMetric label="不投入" value={heroOpsState.metrics.low} theme={theme} />
             </div>
             <div className="mt-3 rounded-2xl p-3 text-xs leading-5" style={{ backgroundColor: theme.background, color: theme.mutedText }}>
-              今日主推内容方向：球星叙事 + 数据解释。风险提醒：避免黑幕、保送、确认伤退等定性表达。
+              {heroOpsState.copy}
             </div>
           </div>
         </div>
@@ -135,7 +149,7 @@ export default function DashboardPage() {
           <section id="opportunity-pool">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <SectionTitle eyebrow="今日机会池" title="今日赛事内容机会池" description="数据来自内部服务端接口，足球数据密钥不会暴露给浏览器。" />
-              <SourceBadge status={(useFullFixturePool ? allPayload?.sourceStatus : payload?.sourceStatus) ?? "fallback"} lastUpdated={(useFullFixturePool ? allPayload?.lastUpdated : payload?.lastUpdated)} loading={loading || (useFullFixturePool && allLoading)} error={error} />
+              <SourceBadge status={activeStatus} lastUpdated={activePayload?.lastUpdated} loading={loading || (useFullFixturePool && allLoading)} error={error} />
             </div>
             <div className="mt-5 grid gap-3 rounded-[24px] border border-slate-200 bg-white p-4 md:grid-cols-4">
               <label className="block">
@@ -186,6 +200,29 @@ export default function DashboardPage() {
                 filteredMatches.map((item) => (
                   <OpportunityMatchCard key={item.id} match={item} theme={theme} sourceStatus={payload?.sourceStatus ?? "fallback"} />
                 ))
+              ) : isNoDataState ? (
+                <div className="rounded-[30px] border border-dashed border-slate-300 bg-white p-10">
+                  <div className="text-xl font-semibold text-slate-950">
+                    {loading ? "正在加载今日比赛数据" : error ? "今日比赛数据请求失败" : isMockMode ? "当前没有可用的真实今日比赛数据" : "今天暂未返回比赛数据"}
+                  </div>
+                  <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
+                    {loading
+                      ? "正在从服务端读取今日比赛池，稍后会自动更新。"
+                      : error
+                        ? `当前接口返回错误：${error}。你可以先用经典样例完成完整演示。`
+                        : isMockMode
+                          ? "当前处于示例 / fallback 数据模式，没有拿到可展示的今日比赛。为保证演示顺畅，建议先进入经典样例走完整链路。"
+                          : "接口当前返回为空。你可以先切换筛选条件，或直接进入经典样例完整演示。"}
+                  </p>
+                  <div className="mt-5 flex flex-wrap gap-3">
+                    <Link href="/matches/argentina-france-2022-final" className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5">
+                      进入经典样例完整演示
+                    </Link>
+                    <Link href="/settings" className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5">
+                      检查数据源设置
+                    </Link>
+                  </div>
+                </div>
               ) : (
                 <div className="rounded-[30px] border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
                   当前筛选条件下没有比赛。可清空搜索、日期、状态筛选，或继续使用经典样例完整演示。
@@ -198,10 +235,10 @@ export default function DashboardPage() {
             <div className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
               <SectionTitle eyebrow="运营判断" title="今日运营建议" description="把比赛转成可执行排期，而不是让用户自己在功能里找方向。" />
               <div className="mt-6 grid gap-4 md:grid-cols-2">
-                <DecisionCard icon={CheckCircle2} title="今日优先做" value={`${priorityMatches.length} 场`} body="先处理高热度、强叙事、平台适配清晰的比赛。" theme={theme} />
-                <DecisionCard icon={CircleDot} title="观望比赛" value={`${watchMatches.length} 场`} body="适合作为素材储备，等待赛后舆情和平台热度变化。" theme={theme} />
-                <DecisionCard icon={Sparkles} title="今日主推方向" value="人物复盘" body="以世界杯强叙事比赛作为主线，承接长尾讨论。" theme={theme} />
-                <DecisionCard icon={ShieldAlert} title="今日风险提醒" value="中风险" body="避免黑幕、保送、确认伤退等定性表达。" theme={theme} />
+                <DecisionCard icon={CheckCircle2} title="今日优先做" value={heroOpsState.cards.priority.value} body={heroOpsState.cards.priority.body} theme={theme} />
+                <DecisionCard icon={CircleDot} title="观望比赛" value={heroOpsState.cards.watch.value} body={heroOpsState.cards.watch.body} theme={theme} />
+                <DecisionCard icon={Sparkles} title="今日主推方向" value={heroOpsState.cards.direction.value} body={heroOpsState.cards.direction.body} theme={theme} />
+                <DecisionCard icon={ShieldAlert} title="今日风险提醒" value={heroOpsState.cards.risk.value} body={heroOpsState.cards.risk.body} theme={theme} />
               </div>
             </div>
 
@@ -286,7 +323,7 @@ function SectionTitle({ eyebrow, title, description }: { eyebrow: string; title:
   );
 }
 
-function HeroMetric({ label, value, theme }: { label: string; value: number; theme: SportTheme }) {
+function HeroMetric({ label, value, theme }: { label: string; value: string | number; theme: SportTheme }) {
   return (
     <div className="rounded-2xl bg-white p-3 text-center shadow-sm">
       <div className="text-2xl font-black" style={{ color: theme.primary }}>{value}</div>
@@ -661,4 +698,77 @@ function readSavedSportType(): SportType {
   if (typeof window === "undefined") return "football";
   const saved = window.localStorage.getItem("worldcup.sportType");
   return saved === "basketball" || saved === "swimming" || saved === "football" ? saved : "football";
+}
+
+function getOpsState(input: {
+  loading: boolean;
+  error?: string;
+  filteredCount: number;
+  priorityCount: number;
+  watchCount: number;
+  lowCount: number;
+  status: SourceStatus;
+}) {
+  if (input.loading) {
+    return {
+      metrics: { priority: "…", watch: "…", low: "…" },
+      copy: "真实比赛池加载中，系统正在判断今天哪些比赛值得优先投入。",
+      cards: {
+        priority: { value: "加载中", body: "等待接口返回后再判断优先制作场次。" },
+        watch: { value: "加载中", body: "比赛池尚未完成初始化，先保留观察位。" },
+        direction: { value: "待判断", body: "等今日比赛池返回后，再决定主推方向。" },
+        risk: { value: "待确认", body: "当前先不要对外输出定性判断。" }
+      }
+    };
+  }
+
+  if (input.error) {
+    return {
+      metrics: { priority: "-", watch: "-", low: "-" },
+      copy: `真实数据请求失败：${input.error}。建议直接进入经典样例完成完整演示。`,
+      cards: {
+        priority: { value: "请求失败", body: "当前不适合根据空接口强行给出优先场次。" },
+        watch: { value: "等待重试", body: "可稍后重试真实数据，或改用样例继续演示。" },
+        direction: { value: "经典样例", body: "当前最稳妥的演示路径是阿根廷 vs 法国经典样例。" },
+        risk: { value: "中", body: "空数据时不要把平台建议和比赛判断写成确定结论。" }
+      }
+    };
+  }
+
+  if (input.filteredCount === 0 && input.status === "fallback") {
+    return {
+      metrics: { priority: 0, watch: 0, low: 0 },
+      copy: "当前处于示例 / fallback 数据模式，但今日比赛池没有可展示场次。建议切换到经典样例走完整链路。",
+      cards: {
+        priority: { value: "示例模式", body: "当前没有真实比赛可排优先级，不展示伪判断。" },
+        watch: { value: "无今日场次", body: "今日比赛池为空，适合转入经典样例演示。" },
+        direction: { value: "样例演示", body: "用经典样例展示赛事分析、选题、文案和审稿全链路。" },
+        risk: { value: "低", body: "演示模式下需明确标注是样例，不冒充真实今日判断。" }
+      }
+    };
+  }
+
+  if (input.filteredCount === 0) {
+    return {
+      metrics: { priority: 0, watch: 0, low: 0 },
+      copy: "今天暂未返回可分析的比赛数据，建议保留样例入口，不强行输出运营结论。",
+      cards: {
+        priority: { value: "无数据", body: "没有比赛时不展示伪优先级。" },
+        watch: { value: "无数据", body: "当前没有可观察比赛，等待接口更新。" },
+        direction: { value: "等待数据", body: "比赛池恢复后再做今日主推方向判断。" },
+        risk: { value: "低", body: "不要在无数据情况下产出看似真实的今日建议。" }
+      }
+    };
+  }
+
+  return {
+    metrics: { priority: input.priorityCount, watch: input.watchCount, low: input.lowCount },
+    copy: "今日主推内容方向：球星叙事 + 数据解释。风险提醒：避免黑幕、保送、确认伤退等定性表达。",
+    cards: {
+      priority: { value: `${input.priorityCount} 场`, body: "先处理高热度、强叙事、平台适配清晰的比赛。" },
+      watch: { value: `${input.watchCount} 场`, body: "适合作为素材储备，等待赛后舆情和平台热度变化。" },
+      direction: { value: "人物复盘", body: "以世界杯强叙事比赛作为主线，承接长尾讨论。" },
+      risk: { value: "中风险", body: "避免黑幕、保送、确认伤退等定性表达。" }
+    }
+  };
 }

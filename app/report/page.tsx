@@ -16,12 +16,13 @@ import { generateTopics } from "@/lib/ai/topics";
 import { copyToClipboard, downloadTextFile } from "@/lib/download";
 import { useLocalStorageState } from "@/lib/local-store";
 import { createContentPackage, createPackageMarkdown, createPackageText } from "@/lib/services/exportService";
-import { readWorkflowState } from "@/lib/services/workflowStore";
+import { appendHistoryRecord, readWorkflowState } from "@/lib/services/workflowStore";
 import type { ContentPackage, WorkflowState } from "@/types/workflow";
 
 export default function ReportPage() {
   const [matchId, setMatchId] = useLocalStorageState("worldcup.selectedMatchId", exampleMatches[0].id);
   const [workflowState, setWorkflowState] = useState<WorkflowState | null>(null);
+  const [notice, setNotice] = useState("");
   const match = exampleMatches.find((item) => item.id === matchId) ?? exampleMatches[0];
   const topics = useMemo(() => generateTopics(match), [match]);
   const content = useMemo(() => generatePlatformContent(match, topics[0]), [match, topics]);
@@ -34,6 +35,25 @@ export default function ReportPage() {
   useEffect(() => {
     setWorkflowState(readWorkflowState());
   }, []);
+
+  function rememberExport(platforms: string[]) {
+    appendHistoryRecord({
+      kind: "report",
+      matchId: match.id,
+      title: match.name,
+      score: match.score,
+      stage: match.stage,
+      platforms,
+      route: "/report",
+      summary: contentPackage?.selectedTopic.title ?? topics[0]?.title,
+      sourceStatus: workflowState?.dataSourceStatus
+    });
+  }
+
+  function showNotice(message: string) {
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 1800);
+  }
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
@@ -51,23 +71,40 @@ export default function ReportPage() {
             <MatchSelect value={matchId} onChange={setMatchId} />
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" className="gap-2" onClick={() => copyToClipboard(markdown)}>
+            <Button variant="secondary" className="gap-2" onClick={() => {
+              rememberExport(["Markdown 复制"]);
+              void copyToClipboard(markdown);
+              showNotice("Markdown 已复制，并写入历史记录。");
+            }}>
               <Copy className="h-4 w-4" />
               复制 Markdown
             </Button>
-            <Button className="gap-2" onClick={() => downloadTextFile("worldcup-copilot-report.md", markdown, "text/markdown;charset=utf-8")}>
+            <Button className="gap-2" onClick={() => {
+              rememberExport(["Markdown 报告"]);
+              downloadTextFile("worldcup-copilot-report.md", markdown, "text/markdown;charset=utf-8");
+              showNotice("Markdown 报告已导出，并写入历史记录。");
+            }}>
               <Download className="h-4 w-4" />
               导出 Markdown
             </Button>
-            <Button variant="secondary" className="gap-2" onClick={() => downloadTextFile("worldcup-copilot-package.txt", contentPackage ? createPackageText(contentPackage) : markdown, "text/plain;charset=utf-8")}>
+            <Button variant="secondary" className="gap-2" onClick={() => {
+              rememberExport(["TXT 内容包"]);
+              downloadTextFile("worldcup-copilot-package.txt", contentPackage ? createPackageText(contentPackage) : markdown, "text/plain;charset=utf-8");
+              showNotice("TXT 内容包已导出，并写入历史记录。");
+            }}>
               导出 TXT
             </Button>
-            <Button variant="secondary" className="gap-2" onClick={() => downloadTextFile("worldcup-copilot-package.json", JSON.stringify(contentPackage ?? { fallback: true, markdown }, null, 2), "application/json;charset=utf-8")}>
+            <Button variant="secondary" className="gap-2" onClick={() => {
+              rememberExport(["JSON 内容包"]);
+              downloadTextFile("worldcup-copilot-package.json", JSON.stringify(contentPackage ?? { fallback: true, markdown }, null, 2), "application/json;charset=utf-8");
+              showNotice("JSON 内容包已导出，并写入历史记录。");
+            }}>
               导出 JSON
             </Button>
           </div>
         </CardContent>
       </Card>
+      {notice ? <p className="text-sm font-semibold text-emerald-700">{notice}</p> : null}
 
       <Card>
         <CardHeader>
