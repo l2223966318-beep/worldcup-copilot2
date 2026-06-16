@@ -13,6 +13,7 @@ import {
   buildTopicIntro,
   generateHotDraft,
   HOT_RADAR_CACHE_KEY,
+  type HotAnalysisResult,
   type HotAuditResult,
   type HotGenerationConfig,
   type HotRadarCache
@@ -49,6 +50,10 @@ export default function HotTopicDetailPage() {
   const [audit, setAudit] = useState<HotAuditResult | null>(null);
   const [copied, setCopied] = useState("");
   const [saved, setSaved] = useState(false);
+  const [analysis, setAnalysis] = useState<HotAnalysisResult | null>(null);
+  const [topicIntro, setTopicIntro] = useState("");
+  const [analysisStatus, setAnalysisStatus] = useState<"idle" | "loading" | "live" | "fallback" | "error">("idle");
+  const [analysisMessage, setAnalysisMessage] = useState("");
 
   useEffect(() => {
     try {
@@ -65,7 +70,54 @@ export default function HotTopicDetailPage() {
     }
   }, [topicId]);
 
-  const analysis = useMemo(() => (topic ? buildHotAnalysis(topic) : null), [topic]);
+  const fallbackAnalysis = useMemo(() => (topic ? buildHotAnalysis(topic) : null), [topic]);
+  const fallbackIntro = useMemo(() => (topic ? buildTopicIntro(topic) : ""), [topic]);
+
+  useEffect(() => {
+    let active = true;
+    if (!topic) {
+      setAnalysis(null);
+      setTopicIntro("");
+      setAnalysisStatus("idle");
+      setAnalysisMessage("");
+      return;
+    }
+
+    setAnalysis(fallbackAnalysis);
+    setTopicIntro(fallbackIntro);
+    setAnalysisStatus("loading");
+    setAnalysisMessage("");
+
+    void fetch("/api/ai/hot-topic", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic })
+    })
+      .then(async (response) => {
+        const payload = (await response.json()) as {
+          sourceStatus?: "live" | "fallback" | "error";
+          intro?: string;
+          analysis?: HotAnalysisResult;
+          message?: string;
+        };
+        if (!active) return;
+        setTopicIntro(payload.intro || fallbackIntro);
+        setAnalysis(payload.analysis || fallbackAnalysis);
+        setAnalysisStatus(payload.sourceStatus === "live" ? "live" : payload.sourceStatus === "fallback" ? "fallback" : "error");
+        setAnalysisMessage(payload.message || "");
+      })
+      .catch((error) => {
+        if (!active) return;
+        setAnalysis(fallbackAnalysis);
+        setTopicIntro(fallbackIntro);
+        setAnalysisStatus("error");
+        setAnalysisMessage(error instanceof Error ? error.message : "热点分析请求失败。");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [topic, fallbackAnalysis, fallbackIntro]);
 
   function updateConfig<Key extends keyof HotGenerationConfig>(key: Key, value: HotGenerationConfig[Key]) {
     setConfig((current) => ({ ...current, [key]: value }));
@@ -139,7 +191,10 @@ export default function HotTopicDetailPage() {
           <div className="max-w-3xl">
             <div className="text-xs font-black tracking-[0.22em] text-emerald-700">热点概览</div>
             <h1 className="mt-4 text-3xl font-black leading-tight text-slate-950 lg:text-5xl">{topic.title}</h1>
-            <p className="mt-4 max-w-3xl text-base leading-8 text-slate-600">{buildTopicIntro(topic)}</p>
+            <div className="mt-4 rounded-[24px] border border-emerald-100 bg-white/75 p-4">
+              <div className="text-xs font-black tracking-[0.14em] text-slate-400">基本介绍</div>
+              <p className="mt-2 max-w-3xl text-base leading-8 text-slate-700">{topicIntro || fallbackIntro}</p>
+            </div>
             <div className="mt-6 flex flex-wrap gap-2">
               {topic.category ? <Badge>{topic.category}</Badge> : null}
               {topic.leverageValue ? <Badge strong={topic.valueLevel === "high"}>{topic.leverageValue}</Badge> : null}
@@ -154,6 +209,9 @@ export default function HotTopicDetailPage() {
               <MetaItem label="热度" value={String(topic.heat ?? "-")} />
               <MetaItem label="价值" value={topic.leverageValue ?? "待判断"} />
             </div>
+            <div className="mt-4 rounded-2xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+              {analysisStatus === "loading" ? "分析引擎：正在生成精炼判断" : analysisStatus === "live" ? "分析引擎：DeepSeek" : "分析引擎：本地规则兜底"}
+            </div>
             {topic.url ? (
               <a href={topic.url} target="_blank" rel="noreferrer" className="mt-4 inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-emerald-200 bg-white text-sm font-semibold text-emerald-700 transition hover:-translate-y-0.5">
                 查看来源
@@ -167,14 +225,14 @@ export default function HotTopicDetailPage() {
       {analysis ? (
         <section className="grid gap-5 lg:grid-cols-2">
           <Panel title="热点分析">
-            <DetailBlock title="为什么值得关注" items={analysis.whyCare} />
-            <DetailBlock title="与世界杯/足球内容的关系" items={analysis.relation} />
-            <DetailBlock title="可切入的内容角度" items={analysis.angles} />
+            <InsightGrid items={analysis.overview} accent="emerald" />
+            <DetailBlock title="价值说明" items={analysis.whyCare} compact />
+            <DetailBlock title="内容切入" items={analysis.angles} compact />
           </Panel>
           <Panel title="生产判断">
-            <DetailBlock title="适合平台" items={analysis.platforms} />
-            <DetailBlock title="需要核验的信息" items={analysis.factsToVerify} />
-            <DetailBlock title="潜在风险" items={analysis.risks} />
+            <InsightGrid items={analysis.production} accent="sky" />
+            <DetailBlock title="核验边界" items={analysis.factsToVerify} compact />
+            <DetailBlock title="风险提醒" items={analysis.risks} compact />
           </Panel>
         </section>
       ) : null}
@@ -251,7 +309,8 @@ export default function HotTopicDetailPage() {
               生成或编辑内容后，点击“一键审核”。系统会检查真实性、表达风险、传播伦理和平台适配，并给出可回填的改写建议。
             </p>
           )}
-          {cacheMeta.message ? <p className="mt-4 text-xs leading-5 text-slate-500">{cacheMeta.message}</p> : null}
+          {analysisMessage ? <p className="mt-4 text-xs leading-5 text-slate-500">{analysisMessage}</p> : null}
+          {cacheMeta.message ? <p className="mt-2 text-xs leading-5 text-slate-500">{cacheMeta.message}</p> : null}
         </Panel>
       </section>
     </div>
@@ -275,14 +334,32 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-function DetailBlock({ title, items }: { title: string; items: string[] }) {
+function DetailBlock({ title, items, compact }: { title: string; items: string[]; compact?: boolean }) {
   if (!items.length) return null;
   return (
     <div className="mt-5">
       <div className="text-xs font-black tracking-[0.14em] text-slate-400">{title}</div>
-      <ul className="mt-2 space-y-2 text-sm leading-6 text-slate-600">
+      <ul className={`mt-2 text-sm text-slate-600 ${compact ? "space-y-1.5 leading-6" : "space-y-2 leading-6"}`}>
         {items.map((item) => <li key={item}>· {item}</li>)}
       </ul>
+    </div>
+  );
+}
+
+function InsightGrid({ items, accent }: { items: HotAnalysisResult["overview"]; accent: "emerald" | "sky" }) {
+  const styles =
+    accent === "emerald"
+      ? "border-emerald-100 bg-emerald-50/60 text-emerald-700"
+      : "border-sky-100 bg-sky-50/60 text-sky-700";
+  return (
+    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+      {items.map((item) => (
+        <div key={`${item.label}-${item.value}`} className={`rounded-[22px] border p-4 ${styles}`}>
+          <div className="text-[11px] font-black tracking-[0.14em] text-slate-400">{item.label}</div>
+          <div className="mt-2 text-lg font-black text-slate-950">{item.value}</div>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{item.note}</p>
+        </div>
+      ))}
     </div>
   );
 }
