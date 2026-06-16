@@ -37,8 +37,12 @@ export default function DashboardPage() {
       return left - right;
     });
   const competitions = Array.from(new Set(matches.map((item) => item.competition))).filter(Boolean);
-  const priorityMatches = filteredMatches.filter((item) => getPriority(item) === "S" || getPriority(item) === "A");
-  const watchMatches = filteredMatches.filter((item) => getPriority(item) === "B");
+  const priorityMatches = filteredMatches.filter((item) => {
+    const grade = getOpportunityGrade(item);
+    return grade === "S" || grade === "A";
+  });
+  const watchMatches = filteredMatches.filter((item) => getOpportunityGrade(item) === "B");
+  const lowPriorityMatches = filteredMatches.filter((item) => getOpportunityGrade(item) === "C");
   const firstMatchHref = filteredMatches[0] ? `/matches/${filteredMatches[0].id}` : "/matches/argentina-france-2022-final";
 
   useEffect(() => {
@@ -117,7 +121,7 @@ export default function DashboardPage() {
             <div className="mt-3 grid grid-cols-3 gap-2">
               <HeroMetric label="优先做" value={priorityMatches.length} theme={theme} />
               <HeroMetric label="观望" value={watchMatches.length} theme={theme} />
-              <HeroMetric label="不投入" value={0} theme={theme} />
+              <HeroMetric label="不投入" value={lowPriorityMatches.length} theme={theme} />
             </div>
             <div className="mt-3 rounded-2xl p-3 text-xs leading-5" style={{ backgroundColor: theme.background, color: theme.mutedText }}>
               今日主推内容方向：球星叙事 + 数据解释。风险提醒：避免黑幕、保送、确认伤退等定性表达。
@@ -369,7 +373,8 @@ function OpportunityMatchCard({
   theme: SportTheme;
   sourceStatus: SourceStatus;
 }) {
-  const priority = getPriority(match);
+  const opportunity = getOpportunityProfile(match);
+  const priority = opportunity.grade;
   const risk = match.status === "live" ? "中" : "低";
   const homeTeam = localizeTeamName(match.homeTeam.name);
   const awayTeam = localizeTeamName(match.awayTeam.name);
@@ -386,6 +391,14 @@ function OpportunityMatchCard({
           {priority}
         </div>
         <div className="text-sm font-semibold text-slate-500 lg:mt-2">机会等级</div>
+        <div className="mt-1 text-xs font-semibold text-slate-400 lg:mt-1">评分 {opportunity.score}</div>
+        <div className="mt-2 flex flex-wrap gap-1.5 lg:mt-3">
+          {opportunity.signals.slice(0, 3).map((signal) => (
+            <span key={signal} className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+              {signal}
+            </span>
+          ))}
+        </div>
       </div>
       <div>
         <div className="flex flex-wrap items-center gap-2">
@@ -399,7 +412,7 @@ function OpportunityMatchCard({
           <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">风险：{risk}</span>
           <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">数据：{sourceLabel(sourceStatus)}</span>
         </div>
-        <p className="mt-3 text-sm leading-6 text-slate-600">推荐内容主线：{round}，适合从赛果、球员叙事和数据反差中寻找内容角度。</p>
+        <p className="mt-3 text-sm leading-6 text-slate-600">推荐内容主线：{opportunity.reason}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {["B站", "微博", "赛后复盘", "数据解读", match.venue.city ?? match.venue.name ?? "世界杯"].map((direction) => (
             <span key={direction} className="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600 ring-1 ring-slate-200">
@@ -449,9 +462,129 @@ function DecisionCard({ icon: Icon, title, value, body, theme }: { icon: typeof 
 }
 
 function getPriority(match: WorldCupMatch) {
-  if (match.status === "live") return "S";
-  if (match.status === "finished") return "A";
-  return "B";
+  return getOpportunityGrade(match);
+}
+
+function getOpportunityGrade(match: WorldCupMatch) {
+  return getOpportunityProfile(match).grade;
+}
+
+function getOpportunityProfile(match: WorldCupMatch) {
+  const { score, signals } = getOpportunityScore(match);
+
+  if (score >= 85) {
+    return {
+      grade: "S",
+      score,
+      reason: "高张力场次，适合立即做热点承接、赛后复盘和观点扩散。",
+      signals
+    } as const;
+  }
+
+  if (score >= 70) {
+    return {
+      grade: "A",
+      score,
+      reason: "内容价值明确，适合从赛果、球员叙事和数据反差切入。",
+      signals
+    } as const;
+  }
+
+  if (score >= 55) {
+    return {
+      grade: "B",
+      score,
+      reason: "有基础内容空间，先观察舆情或作为备选素材储备。",
+      signals
+    } as const;
+  }
+
+  return {
+    grade: "C",
+    score,
+    reason: "当前内容信号偏弱，除非出现额外热点事件，否则不建议优先投入。",
+    signals
+  } as const;
+}
+
+function getOpportunityScore(match: WorldCupMatch) {
+  let score = 42;
+  const signals: string[] = [];
+
+  if (match.status === "live") {
+    score += 26;
+    signals.push("进行中");
+  } else if (match.status === "finished") {
+    score += 18;
+    signals.push("已结束可复盘");
+  } else if (match.status === "scheduled") {
+    score += 8;
+    signals.push("赛前预热");
+  }
+
+  const roundText = `${match.round} ${match.group ?? ""}`.toLowerCase();
+  if (/final|semi|quarter|淘汰|八强|四强|决赛|半决赛|1\/8|1\/4/.test(roundText)) {
+    score += 18;
+    signals.push("淘汰赛");
+  } else if (/group|小组/.test(roundText)) {
+    score += 8;
+    signals.push("小组赛");
+  }
+
+  const home = match.score.home;
+  const away = match.score.away;
+  const totalGoals = typeof home === "number" && typeof away === "number" ? home + away : 0;
+  const goalDiff = typeof home === "number" && typeof away === "number" ? Math.abs(home - away) : null;
+
+  if (totalGoals >= 4) {
+    score += 12;
+    signals.push("进球多");
+  } else if (totalGoals >= 2) {
+    score += 7;
+  }
+
+  if (goalDiff === 0 && totalGoals > 0) {
+    score += 10;
+    signals.push("比分胶着");
+  } else if (goalDiff === 1) {
+    score += 8;
+    signals.push("一球差");
+  }
+
+  const eventCount = match.events.length;
+  if (eventCount >= 5) {
+    score += 14;
+    signals.push("事件密集");
+  } else if (eventCount >= 3) {
+    score += 9;
+    signals.push("多关键事件");
+  } else if (eventCount >= 1) {
+    score += 4;
+  }
+
+  const eventText = match.events.map((event) => `${event.type} ${event.detail} ${event.comment ?? ""}`).join(" ");
+  if (/penalty|own goal|var|red card|yellow card|争议|乌龙|点球|红牌|裁判/i.test(eventText)) {
+    score += 12;
+    signals.push("争议/名场面");
+  }
+
+  const statsCoverage = match.statistics.some((entry) =>
+    entry.values.some((value) => value.type !== "Data Coverage" && value.value !== null && value.value !== "")
+  );
+  if (statsCoverage) {
+    score += 6;
+    signals.push("数据可讲");
+  }
+
+  if (match.source.provider === "api-football") {
+    score += 5;
+    signals.push("实时接口");
+  }
+
+  return {
+    score: Math.max(0, Math.min(99, score)),
+    signals
+  };
 }
 
 function priorityColor(priority: string, theme: SportTheme) {
