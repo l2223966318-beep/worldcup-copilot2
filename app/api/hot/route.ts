@@ -6,6 +6,34 @@ export const dynamic = "force-dynamic";
 
 type UnknownRecord = Record<string, unknown>;
 
+const DEFAULT_HOT_TYPES = ["weibo", "douyin", "bilibili", "zhihu", "baidu", "toutiao"] as const;
+const HOT_TYPE_MAP: Record<string, string> = {
+  all: "all",
+  weibo: "weibo",
+  douyin: "douyin",
+  bilibili: "bilibili",
+  bsite: "bilibili",
+  zhihu: "zhihu",
+  baidu: "baidu",
+  toutiao: "toutiao"
+};
+
+const MESSAGE = {
+  mockUnconfigured: "\u70ed\u70b9 API \u672a\u914d\u7f6e\uff0c\u5f53\u524d\u4f7f\u7528\u6f14\u793a\u6570\u636e\u3002",
+  unconfigured:
+    "\u70ed\u70b9 API \u672a\u914d\u7f6e\u3002\u8bf7\u914d\u7f6e UAPIPRO_BASE_URL\u3001UAPIPRO_HOT_ENDPOINT\u3002",
+  failedStatus: "\u70ed\u70b9 API \u8bf7\u6c42\u5931\u8d25\uff0c\u72b6\u6001\u7801",
+  empty: "\u70ed\u70b9 API \u6682\u65e0\u53ef\u5c55\u793a\u6570\u636e\u3002",
+  mockFailed: "\u70ed\u70b9 API \u8bf7\u6c42\u5931\u8d25\uff0c\u5f53\u524d\u4f7f\u7528\u6f14\u793a\u6570\u636e\u3002",
+  failed:
+    "\u70ed\u70b9 API \u8bf7\u6c42\u5931\u8d25\uff0c\u8bf7\u68c0\u67e5\u63a5\u53e3\u5730\u5740\u3001\u5bc6\u94a5\u6216\u7f51\u7edc\u72b6\u6001\u3002",
+  realTag: "\u771f\u5b9e\u70ed\u70b9",
+  demoData: "\u6f14\u793a\u6570\u636e",
+  demoTitle: "\u4e16\u754c\u676f\u8d5b\u540e\u70ed\u70b9\u6837\u4f8b\uff1a\u4e4c\u9f99\u7403\u5f15\u53d1\u8ba8\u8bba",
+  demoSummary: "\u8fd9\u662f\u6f14\u793a\u6570\u636e\uff0c\u4ec5\u7528\u4e8e\u672c\u5730\u529f\u80fd\u94fe\u8def\u6f14\u793a\u3002",
+  unknownSource: "\u672a\u77e5\u6765\u6e90"
+};
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const source = searchParams.get("source") || "all";
@@ -16,53 +44,89 @@ export async function GET(request: Request) {
   const baseUrl = process.env.UAPIPRO_BASE_URL?.trim();
   const endpoint = process.env.UAPIPRO_HOT_ENDPOINT?.trim();
 
-  if (!apiKey || !baseUrl || !endpoint) {
+  if (!baseUrl || !endpoint) {
     if (useMock) {
-      return NextResponse.json(createPayload("fallback", createMockItems(limit), "热点接口未配置，当前使用演示数据。"));
+      return NextResponse.json(createPayload("fallback", createMockItems(limit), MESSAGE.mockUnconfigured));
     }
-    return NextResponse.json(createPayload("error", [], "热点 API 未配置。请配置 UAPIPRO_API_KEY、UAPIPRO_BASE_URL、UAPIPRO_HOT_ENDPOINT。"), { status: 503 });
+    return NextResponse.json(createPayload("error", [], MESSAGE.unconfigured), { status: 503 });
   }
 
   try {
-    const url = buildUApiUrl(baseUrl, endpoint, source, limit);
-    const response = await fetch(url, {
-      cache: "no-store",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${apiKey}`,
-        "X-API-Key": apiKey,
-        "x-api-key": apiKey
-      }
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      console.error("[hot-api] UApiPro 请求失败", { status: response.status, error: errorText.slice(0, 500) });
-      return NextResponse.json(createPayload("error", [], `热点 API 请求失败，状态码 ${response.status}。`), { status: 502 });
-    }
-
-    const raw = await response.json();
-    const items = extractHotArray(raw)
-      .map((item, index) => normalizeUApiHotItem(item, index))
+    const hotTypes = getRequestedTypes(source);
+    const settled = await Promise.allSettled(
+      hotTypes.map((type) => fetchUApiHotItems({ apiKey, baseUrl, endpoint, type, limit }))
+    );
+    const failures = settled.filter((result) => result.status === "rejected");
+    const items = settled
+      .flatMap((result) => (result.status === "fulfilled" ? result.value : []))
       .filter((item) => item.title)
       .filter((item) => source === "all" || matchSource(item, source))
+      .filter(dedupeByTitle)
+      .sort(sortByHeatAndRank)
       .slice(0, limit);
 
-    return NextResponse.json(createPayload("live", items, items.length ? undefined : "热点 API 暂无可展示数据。"));
-  } catch (error) {
-    console.error("[hot-api] UApiPro 请求异常", { error: error instanceof Error ? error.message : String(error) });
-    if (useMock) {
-      return NextResponse.json(createPayload("fallback", createMockItems(limit), "热点 API 请求失败，当前使用演示数据。"));
+    if (!items.length && failures.length) {
+      return NextResponse.json(createPayload("error", [], MESSAGE.failed), { status: 502 });
     }
-    return NextResponse.json(createPayload("error", [], "热点 API 请求失败，请检查接口地址、密钥或网络状态。"), { status: 502 });
+
+    return NextResponse.json(createPayload("live", items, items.length ? undefined : MESSAGE.empty));
+  } catch (error) {
+    console.error("[hot-api] UApiPro request exception", { error: error instanceof Error ? error.message : String(error) });
+    if (useMock) {
+      return NextResponse.json(createPayload("fallback", createMockItems(limit), MESSAGE.mockFailed));
+    }
+    return NextResponse.json(createPayload("error", [], MESSAGE.failed), { status: 502 });
   }
 }
 
-function buildUApiUrl(baseUrl: string, endpoint: string, source: string, limit: number) {
+async function fetchUApiHotItems({
+  apiKey,
+  baseUrl,
+  endpoint,
+  type,
+  limit
+}: {
+  apiKey?: string;
+  baseUrl: string;
+  endpoint: string;
+  type: string;
+  limit: number;
+}) {
+  const url = buildUApiUrl(baseUrl, endpoint, type, limit);
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers: buildUApiHeaders(apiKey)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    console.error("[hot-api] UApiPro request failed", {
+      type,
+      status: response.status,
+      error: errorText.slice(0, 500)
+    });
+    throw new Error(`${MESSAGE.failedStatus} ${response.status}`);
+  }
+
+  const raw = await response.json();
+  return extractHotArray(raw).map((item, index) => normalizeUApiHotItem(item, index, getPayloadType(raw) || type));
+}
+
+function buildUApiHeaders(apiKey?: string) {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (apiKey) {
+    headers.Authorization = `Bearer ${apiKey}`;
+    headers["X-API-Key"] = apiKey;
+    headers["x-api-key"] = apiKey;
+  }
+  return headers;
+}
+
+function buildUApiUrl(baseUrl: string, endpoint: string, type: string, limit: number) {
   const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
   const url = endpoint.startsWith("http") ? new URL(endpoint) : new URL(endpoint.replace(/^\//, ""), normalizedBase);
+  url.searchParams.set("type", type);
   url.searchParams.set("limit", String(limit));
-  if (source !== "all") url.searchParams.set("source", source);
   return url;
 }
 
@@ -84,19 +148,47 @@ function extractHotArray(payload: unknown): unknown[] {
   if (Array.isArray(resultRecord.list)) return resultRecord.list;
   if (Array.isArray(resultRecord.items)) return resultRecord.items;
   if (Array.isArray(resultRecord.data)) return resultRecord.data;
+  if (Array.isArray(root.list)) return root.list;
+  if (Array.isArray(root.items)) return root.items;
 
   return [];
 }
 
-function normalizeUApiHotItem(value: unknown, index: number): HotItem {
+function getPayloadType(payload: unknown) {
+  const root = asRecord(payload);
+  const data = asRecord(root.data);
+  const result = asRecord(root.result);
+  return (
+    pickString(root, ["type", "source", "platform"]) ||
+    pickString(data, ["type", "source", "platform"]) ||
+    pickString(result, ["type", "source", "platform"])
+  );
+}
+
+function normalizeUApiHotItem(value: unknown, index: number, payloadType?: string): HotItem {
   const item = asRecord(value);
   const nested = asRecord(item.item) || asRecord(item.node) || {};
-  const title = pickString(item, ["title", "name", "word", "keyword", "query"]) || pickString(nested, ["title", "name", "word", "keyword"]);
-  const url = pickString(item, ["url", "link", "href", "mobileUrl", "shareUrl"]) || pickString(nested, ["url", "link", "href", "mobileUrl"]);
-  const source = pickString(item, ["source", "platform", "sourceName", "site", "channel"]) || pickString(nested, ["source", "platform", "sourceName"]) || "UApiPro";
-  const hot = pickValue(item, ["hot", "heat", "index", "score", "views", "readCount"]) ?? pickValue(nested, ["hot", "heat", "index", "score", "views"]);
-  const summary = pickString(item, ["summary", "desc", "description", "content", "abstract"]) || pickString(nested, ["summary", "desc", "description"]) || title;
-  const time = pickString(item, ["time", "datetime", "createdAt", "publishedAt", "updateTime"]) || pickString(nested, ["time", "datetime", "createdAt", "publishedAt"]);
+  const title =
+    pickString(item, ["title", "name", "word", "keyword", "query"]) ||
+    pickString(nested, ["title", "name", "word", "keyword"]);
+  const url =
+    pickString(item, ["url", "link", "href", "mobileUrl", "shareUrl"]) ||
+    pickString(nested, ["url", "link", "href", "mobileUrl"]);
+  const source =
+    pickString(item, ["source", "platform", "sourceName", "site", "channel"]) ||
+    pickString(nested, ["source", "platform", "sourceName"]) ||
+    payloadType ||
+    "UApiPro";
+  const hot =
+    pickValue(item, ["hot", "heat", "hot_value", "hotValue", "index", "score", "views", "readCount"]) ??
+    pickValue(nested, ["hot", "heat", "hot_value", "hotValue", "index", "score", "views"]);
+  const summary =
+    pickString(item, ["summary", "desc", "description", "content", "abstract"]) ||
+    pickString(nested, ["summary", "desc", "description"]) ||
+    title;
+  const time =
+    pickString(item, ["time", "datetime", "createdAt", "publishedAt", "updateTime"]) ||
+    pickString(nested, ["time", "datetime", "createdAt", "publishedAt"]);
   const rank = numberValue(item.rank) ?? numberValue(item.index) ?? index + 1;
 
   return {
@@ -112,7 +204,7 @@ function normalizeUApiHotItem(value: unknown, index: number): HotItem {
     publishedAt: time,
     time,
     relevance: scoreByRank(rank, hot),
-    tags: ["真实热点"]
+    tags: [MESSAGE.realTag]
   };
 }
 
@@ -129,18 +221,18 @@ function createMockItems(limit: number): HotItem[] {
   return [
     {
       id: "mock-hot-1",
-      title: "世界杯赛后热点样例：乌龙球引发讨论",
-      summary: "这是演示数据，仅用于本地功能链路演示。",
+      title: MESSAGE.demoTitle,
+      summary: MESSAGE.demoSummary,
       url: "",
-      source: "演示数据",
-      platform: "演示数据",
+      source: MESSAGE.demoData,
+      platform: MESSAGE.demoData,
       rank: 1,
-      heat: "演示热度",
-      hot: "演示热度",
+      heat: "\u6f14\u793a\u70ed\u5ea6",
+      hot: "\u6f14\u793a\u70ed\u5ea6",
       publishedAt: new Date().toISOString(),
       time: new Date().toISOString(),
       relevance: 60,
-      tags: ["演示数据"]
+      tags: [MESSAGE.demoData]
     }
   ].slice(0, limit);
 }
@@ -148,24 +240,53 @@ function createMockItems(limit: number): HotItem[] {
 function matchSource(item: HotItem, source: string) {
   const text = `${item.source} ${item.platform}`.toLowerCase();
   const sourceMap: Record<string, string[]> = {
-    weibo: ["微博", "weibo"],
-    bilibili: ["b站", "bilibili", "哔哩"],
-    douyin: ["抖音", "douyin"],
-    zhihu: ["知乎", "zhihu"],
-    baidu: ["百度", "baidu"],
-    toutiao: ["头条", "toutiao"]
+    weibo: ["\u5fae\u535a", "weibo"],
+    bilibili: ["b\u7ad9", "bilibili", "\u54d4\u54e9"],
+    douyin: ["\u6296\u97f3", "douyin"],
+    zhihu: ["\u77e5\u4e4e", "zhihu"],
+    baidu: ["\u767e\u5ea6", "baidu"],
+    toutiao: ["\u5934\u6761", "toutiao"]
   };
   return (sourceMap[source] ?? [source]).some((keyword) => text.includes(keyword.toLowerCase()));
 }
 
+function getRequestedTypes(source: string) {
+  const normalized = HOT_TYPE_MAP[source] ?? source;
+  return normalized === "all" ? [...DEFAULT_HOT_TYPES] : [normalized];
+}
+
+function dedupeByTitle(item: HotItem, index: number, items: HotItem[]) {
+  const current = normalizeComparableText(item.title);
+  return items.findIndex((candidate) => normalizeComparableText(candidate.title) === current) === index;
+}
+
+function normalizeComparableText(value: string) {
+  return value.toLowerCase().replace(/\s+/g, "").replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+function sortByHeatAndRank(a: HotItem, b: HotItem) {
+  const heatDiff = numericHeat(b.heat ?? b.hot) - numericHeat(a.heat ?? a.hot);
+  if (heatDiff !== 0) return heatDiff;
+  return (a.rank ?? 999) - (b.rank ?? 999);
+}
+
+function numericHeat(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number(value.replace(/[^\d.]/g, ""));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
 function normalizeSourceName(source: string) {
-  if (/weibo|微博/i.test(source)) return "微博";
-  if (/bilibili|哔哩|b站/i.test(source)) return "B站";
-  if (/douyin|抖音/i.test(source)) return "抖音";
-  if (/zhihu|知乎/i.test(source)) return "知乎";
-  if (/baidu|百度/i.test(source)) return "百度";
-  if (/toutiao|头条/i.test(source)) return "头条";
-  return source || "未知来源";
+  if (/weibo|\u5fae\u535a/i.test(source)) return "\u5fae\u535a";
+  if (/bilibili|\u54d4\u54e9|b\u7ad9/i.test(source)) return "B\u7ad9";
+  if (/douyin|\u6296\u97f3/i.test(source)) return "\u6296\u97f3";
+  if (/zhihu|\u77e5\u4e4e/i.test(source)) return "\u77e5\u4e4e";
+  if (/baidu|\u767e\u5ea6/i.test(source)) return "\u767e\u5ea6";
+  if (/toutiao|\u5934\u6761/i.test(source)) return "\u5934\u6761";
+  return source || MESSAGE.unknownSource;
 }
 
 function clampLimit(value: string | null) {
