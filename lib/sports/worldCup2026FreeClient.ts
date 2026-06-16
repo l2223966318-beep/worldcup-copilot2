@@ -1,7 +1,11 @@
 import { createPayload } from "@/lib/sports/normalizers";
 import { inferStaticFixtureStatus } from "@/lib/sports/staticFixtureStatus";
 import type { MatchEvent, MatchStatistic, WorldCupMatch, WorldCupPayload } from "@/lib/sports/types";
-import { getBeijingDateKey, getBeijingDateKeyFromValue } from "@/lib/time/beijingTime";
+import {
+  convertLocalDateTimeInZoneToUtcIso,
+  getBeijingDateKey,
+  getBeijingDateKeyFromValue
+} from "@/lib/time/beijingTime";
 
 const WORLD_CUP_2026_LEAGUE = 1;
 const WORLD_CUP_2026_SEASON = 2026;
@@ -173,7 +177,7 @@ function normalizeWorldCup26Game(game: WorldCup26Game, stadiums: Map<string | un
   const homeScore = parseNullableNumber(game.home_score);
   const awayScore = parseNullableNumber(game.away_score);
   const stadium = stadiums.get(game.stadium_id);
-  const kickoffTime = localDateToIso(game.local_date);
+  const kickoffTime = localDateToIso(game.local_date, stadiumTimeZone(stadium));
   const status = normalizeWorldCup26Status(game, kickoffTime);
   const hasTrustedScore = hasTrustedWorldCup26Score(game);
 
@@ -326,12 +330,13 @@ function normalizeScorers(team: string, raw?: string): MatchEvent[] {
   }));
 }
 
-function localDateToIso(value?: string) {
+function localDateToIso(value?: string, timeZone?: string) {
   if (!value) return "";
   const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/);
   if (!match) return value;
   const [, month, day, year, hour, minute] = match;
-  return `${year}-${month}-${day}T${hour}:${minute}:00`;
+  const localIso = `${year}-${month}-${day}T${hour}:${minute}:00`;
+  return convertLocalDateTimeInZoneToUtcIso(localIso, timeZone) || localIso;
 }
 
 function normalizeDateKey(value: string) {
@@ -345,4 +350,30 @@ function getTodayDate() {
 function parseNullableNumber(value?: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function stadiumTimeZone(stadium?: WorldCup26Stadium) {
+  const city = `${stadium?.city_en ?? ""} ${stadium?.name_en ?? ""} ${stadium?.fifa_name ?? ""}`.toLowerCase();
+  const country = (stadium?.country_en ?? "").toLowerCase();
+
+  if (city.includes("vancouver")) return "America/Vancouver";
+  if (city.includes("seattle")) return "America/Los_Angeles";
+  if (city.includes("san francisco") || city.includes("santa clara")) return "America/Los_Angeles";
+  if (city.includes("los angeles") || city.includes("inglewood")) return "America/Los_Angeles";
+  if (city.includes("dallas") || city.includes("arlington")) return "America/Chicago";
+  if (city.includes("houston")) return "America/Chicago";
+  if (city.includes("kansas city")) return "America/Chicago";
+  if (city.includes("atlanta")) return "America/New_York";
+  if (city.includes("miami")) return "America/New_York";
+  if (city.includes("philadelphia")) return "America/New_York";
+  if (city.includes("boston") || city.includes("foxborough")) return "America/New_York";
+  if (city.includes("new york") || city.includes("east rutherford") || city.includes("new jersey")) return "America/New_York";
+  if (city.includes("toronto")) return "America/Toronto";
+  if (city.includes("mexico city")) return "America/Mexico_City";
+  if (city.includes("monterrey") || city.includes("guadalupe")) return "America/Monterrey";
+  if (country.includes("canada")) return "America/Toronto";
+  if (country.includes("mexico")) return "America/Mexico_City";
+  if (country.includes("united states")) return "America/New_York";
+
+  return "America/New_York";
 }

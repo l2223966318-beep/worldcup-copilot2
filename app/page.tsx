@@ -24,12 +24,18 @@ export default function DashboardPage() {
   const useFullFixturePool = Boolean(matchSearchQuery.trim() || dateFilter || statusFilter !== "all" || competitionFilter !== "all");
   const matches = useFullFixturePool ? allPayload?.data ?? [] : payload?.data ?? [];
   const queryFilteredMatches = filterMatchesByQuery(matches, matchSearchQuery);
-  const filteredMatches = queryFilteredMatches.filter((item) => {
-    const statusOk = statusFilter === "all" || item.status === statusFilter;
-    const dateOk = !dateFilter || getBeijingDateKeyFromValue(item.kickoffTime) === dateFilter;
-    const competitionOk = competitionFilter === "all" || item.competition === competitionFilter;
-    return statusOk && dateOk && competitionOk;
-  });
+  const filteredMatches = queryFilteredMatches
+    .filter((item) => {
+      const statusOk = statusFilter === "all" || item.status === statusFilter;
+      const dateOk = !dateFilter || getBeijingDateKeyFromValue(item.kickoffTime) === dateFilter;
+      const competitionOk = competitionFilter === "all" || item.competition === competitionFilter;
+      return statusOk && dateOk && competitionOk;
+    })
+    .sort((a, b) => {
+      const left = Date.parse(a.kickoffTime || "") || 0;
+      const right = Date.parse(b.kickoffTime || "") || 0;
+      return left - right;
+    });
   const competitions = Array.from(new Set(matches.map((item) => item.competition))).filter(Boolean);
   const priorityMatches = filteredMatches.filter((item) => getPriority(item) === "S" || getPriority(item) === "A");
   const watchMatches = filteredMatches.filter((item) => getPriority(item) === "B");
@@ -146,7 +152,20 @@ export default function DashboardPage() {
               </label>
               <label className="block">
                 <span className="text-xs font-semibold text-slate-500">日期</span>
-                <input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none" />
+                <div className="relative mt-2">
+                  {!dateFilter ? (
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+                      年/月/日
+                    </span>
+                  ) : null}
+                  <input
+                    type="date"
+                    lang="zh-CN"
+                    value={dateFilter}
+                    onChange={(event) => setDateFilter(event.target.value)}
+                    className={`h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none ${dateFilter ? "text-slate-700" : "text-transparent"}`}
+                  />
+                </div>
               </label>
               <label className="block">
                 <span className="text-xs font-semibold text-slate-500">状态</span>
@@ -370,6 +389,9 @@ function OpportunityMatchCard({
       </div>
       <div>
         <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">
+            北京时间 {formatKickoffTime(match.kickoffTime)}
+          </span>
           <h3 className="text-3xl font-semibold tracking-tight text-slate-950">
             {homeTeam} <span style={{ color: theme.primary }}>{match.score.display}</span> {awayTeam}
           </h3>
@@ -449,6 +471,15 @@ function sourceLabel(status: SourceStatus) {
 }
 
 function formatDate(value: string) {
+  return formatBeijingDateTime(value, {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function formatKickoffTime(value: string) {
   return formatBeijingDateTime(value, {
     month: "2-digit",
     day: "2-digit",

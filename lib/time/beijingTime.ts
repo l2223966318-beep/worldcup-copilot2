@@ -47,6 +47,55 @@ export function formatBeijingDateTime(value: string, options: Intl.DateTimeForma
   }).format(date);
 }
 
+export function convertLocalDateTimeInZoneToUtcIso(
+  value: string | undefined,
+  timeZone: string | undefined
+) {
+  if (!value || !timeZone) return value ?? "";
+
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?$/
+  );
+  if (!match) return value;
+
+  const [, year, month, day, hour, minute, second = "00"] = match;
+  const utcGuess = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second)
+  );
+  const guessDate = new Date(utcGuess);
+  const offset = getTimeZoneOffsetMs(guessDate, timeZone);
+  const corrected = new Date(utcGuess - offset);
+
+  return corrected.toISOString();
+}
+
 function validDate(date: Date) {
   return Number.isNaN(date.getTime()) ? undefined : date;
+}
+
+function getTimeZoneOffsetMs(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  }).formatToParts(date);
+
+  const year = Number(parts.find((part) => part.type === "year")?.value ?? "0");
+  const month = Number(parts.find((part) => part.type === "month")?.value ?? "0");
+  const day = Number(parts.find((part) => part.type === "day")?.value ?? "0");
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+  const second = Number(parts.find((part) => part.type === "second")?.value ?? "0");
+
+  return Date.UTC(year, month - 1, day, hour, minute, second) - date.getTime();
 }
