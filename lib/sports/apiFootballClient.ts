@@ -1,6 +1,7 @@
 import type { ApiFootballResponse } from "@/lib/sports/types";
 
 const BASE_URL = "https://v3.football.api-sports.io";
+const REQUEST_TIMEOUT_MS = Number(process.env.API_FOOTBALL_TIMEOUT_MS ?? 5000);
 
 export class ApiFootballError extends Error {
   constructor(message: string, public status?: number) {
@@ -29,14 +30,23 @@ export async function apiFootballGet<T>(
     if (value !== undefined && value !== "") url.searchParams.set(key, String(value));
   });
 
-  const response = await fetch(url, {
-    ...init,
-    headers: {
-      "x-apisports-key": apiKey,
-      ...(init?.headers ?? {})
-    },
-    next: { revalidate: 60 }
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      ...init,
+      signal: init?.signal ?? controller.signal,
+      headers: {
+        "x-apisports-key": apiKey,
+        ...(init?.headers ?? {})
+      },
+      next: { revalidate: 60 }
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
     throw new ApiFootballError(`API-Football request failed: ${response.status}`, response.status);

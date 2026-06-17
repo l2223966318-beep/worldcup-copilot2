@@ -26,8 +26,9 @@ import { getBeijingDateKey } from "@/lib/time/beijingTime";
 const WORLD_CUP_LEAGUE = 1;
 const DEFAULT_WORLD_CUP_SEASON = 2026;
 const WORLD_CUP_SEASON = getConfiguredWorldCupSeason();
-const FIXTURE_CACHE_TTL_MS = 30_000;
-const ACTIVE_CACHE_TTL_MS = 15_000;
+const FIXTURE_CACHE_TTL_MS = 10 * 60_000;
+const ACTIVE_CACHE_TTL_MS = 60_000;
+const ERROR_CACHE_TTL_MS = 30_000;
 
 type CacheEntry<T> = {
   expiresAt: number;
@@ -148,7 +149,7 @@ async function cached<T>(
 
   try {
     const payload = await load();
-    if (payload.sourceStatus === "live") {
+    if (payload.sourceStatus === "live" || payload.sourceStatus === "fallback") {
       cache.set(key, { expiresAt: now + ttlMs, payload });
     }
     return payload;
@@ -157,11 +158,13 @@ async function cached<T>(
     const message = error instanceof Error ? error.message : "Unknown API-Football error.";
     const fallbackPayload = fallback(message);
     const sourceStatus: SourceStatus = message.includes("API_FOOTBALL_KEY is not configured") ? "fallback" : "error";
-    return {
+    const payload = {
       ...fallbackPayload,
       sourceStatus,
       message
     };
+    cache.set(key, { expiresAt: now + ERROR_CACHE_TTL_MS, payload });
+    return payload;
   }
 }
 

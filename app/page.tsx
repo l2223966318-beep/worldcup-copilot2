@@ -22,13 +22,20 @@ import { formatBeijingDateTime, getBeijingDateKeyFromValue } from "@/lib/time/be
 export default function DashboardPage() {
   const [sportType, setSportType] = useState<SportType>("football");
   const theme = getSportTheme(sportType);
-  const { payload, loading, error } = useWorldCupQuery<WorldCupMatch[]>("/api/worldcup/fixtures/today", 20_000);
-  const { payload: allPayload, loading: allLoading } = useWorldCupQuery<WorldCupMatch[]>("/api/worldcup/fixtures", 30_000);
   const [matchSearchQuery, setMatchSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState("");
   const [competitionFilter, setCompetitionFilter] = useState("all");
   const useFullFixturePool = Boolean(matchSearchQuery.trim() || dateFilter || statusFilter !== "all" || competitionFilter !== "all");
+  const { payload, loading, error } = useWorldCupQuery<WorldCupMatch[]>("/api/worldcup/fixtures/today", 20_000, {
+    cacheKey: "worldcup.fixtures.today",
+    staleMs: 90_000
+  });
+  const { payload: allPayload, loading: allLoading } = useWorldCupQuery<WorldCupMatch[]>("/api/worldcup/fixtures", 120_000, {
+    enabled: useFullFixturePool,
+    cacheKey: "worldcup.fixtures.all",
+    staleMs: 300_000
+  });
   const matches = useFullFixturePool ? allPayload?.data ?? [] : payload?.data ?? [];
   const queryFilteredMatches = filterMatchesByQuery(matches, matchSearchQuery);
   const filteredMatches = queryFilteredMatches

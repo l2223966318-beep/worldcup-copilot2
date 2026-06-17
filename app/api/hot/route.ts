@@ -8,8 +8,15 @@ export const dynamic = "force-dynamic";
 
 type UnknownRecord = Record<string, unknown>;
 type HotFetchResult = { items: HotItem[]; message?: string };
+type HotCacheEntry = {
+  expiresAt: number;
+  payload: HotSearchPayload;
+};
 
 const DEFAULT_HOT_TYPES = ["weibo", "douyin", "bilibili", "zhihu", "baidu", "toutiao", "xiaohongshu"] as const;
+const HOT_CACHE_TTL_MS = Number(process.env.HOT_API_CACHE_TTL_MS ?? 60_000);
+const HOT_REQUEST_TIMEOUT_MS = Number(process.env.HOT_API_TIMEOUT_MS ?? 4500);
+const hotCache = new Map<string, HotCacheEntry>();
 const HOT_TYPE_MAP: Record<string, string> = {
   all: "all",
   weibo: "weibo",
@@ -54,6 +61,12 @@ export async function GET(request: Request) {
   const apiKey = process.env.UAPIPRO_API_KEY?.trim();
   const baseUrl = process.env.UAPIPRO_BASE_URL?.trim();
   const endpoint = process.env.UAPIPRO_HOT_ENDPOINT?.trim();
+  const cacheKey = `hot:${source}:${scope}:${limit}:${baseUrl ?? ""}:${endpoint ?? ""}`;
+
+  const cached = hotCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return NextResponse.json({ ...cached.payload, sourceStatus: "cache" });
+  }
 
   if (!baseUrl || !endpoint) {
     if (useMock) {
@@ -88,7 +101,9 @@ export async function GET(request: Request) {
     }
 
     const message = items.length ? messages.join(" ") : messages.join(" ") || (scope === "all" ? MESSAGE.empty : MESSAGE.noSports);
-    return NextResponse.json(createPayload("live", items, message));
+    const payload = createPayload("live", items, message);
+    hotCache.set(cacheKey, { expiresAt: Date.now() + HOT_CACHE_TTL_MS, payload });
+    return NextResponse.json(payload);
   } catch (error) {
     console.error("[hot-api] UApiPro request exception", { error: error instanceof Error ? error.message : String(error) });
     if (useMock) {
@@ -112,7 +127,7 @@ async function fetchUApiHotItems({
   limit: number;
 }) {
   const url = buildUApiUrl(baseUrl, endpoint, type, limit);
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     cache: "no-store",
     headers: buildUApiHeaders(apiKey)
   });
@@ -129,6 +144,20 @@ async function fetchUApiHotItems({
 
   const raw = await response.json();
   return extractHotArray(raw).map((item, index) => normalizeUApiHotItem(item, index, getPayloadType(raw) || type));
+}
+
+async function fetchWithTimeout(url: URL, init: RequestInit) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), HOT_REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: init.signal ?? controller.signal
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function buildUApiHeaders(apiKey?: string) {

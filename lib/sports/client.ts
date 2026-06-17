@@ -10,15 +10,39 @@ type QueryState<T> = {
   error?: string;
 };
 
+type QueryOptions = {
+  enabled?: boolean;
+  cacheKey?: string;
+  staleMs?: number;
+};
+
 export function useWorldCupQuery<T>(
   url: string,
-  refreshMs?: number | ((payload: WorldCupPayload<T>) => number | undefined)
+  refreshMs?: number | ((payload: WorldCupPayload<T>) => number | undefined),
+  options: QueryOptions = {}
 ) {
   const [state, setState] = useState<QueryState<T>>({ loading: true });
+  const enabled = options.enabled ?? true;
+  const cacheKey = options.cacheKey ?? `worldcup.query.${url}`;
+  const staleMs = options.staleMs ?? 120_000;
 
   useEffect(() => {
     let active = true;
     let timer: number | undefined;
+
+    if (!enabled) {
+      setState({ loading: false });
+      return () => {
+        active = false;
+      };
+    }
+
+    const cached = readCachedPayload<T>(cacheKey, staleMs);
+    if (cached) {
+      setState({ payload: cached, loading: false });
+    } else {
+      setState((current) => ({ ...current, loading: !current.payload }));
+    }
 
     async function load() {
       try {
@@ -26,6 +50,7 @@ export function useWorldCupQuery<T>(
         if (!response.ok) throw new Error(`Request failed: ${response.status}`);
         const payload = (await response.json()) as WorldCupPayload<T>;
         if (!active) return;
+        writeCachedPayload(cacheKey, payload);
         setState({ payload, loading: false });
         const nextRefreshMs = typeof refreshMs === "function" ? refreshMs(payload) : refreshMs;
         if (active && nextRefreshMs && nextRefreshMs > 0) {
@@ -36,7 +61,7 @@ export function useWorldCupQuery<T>(
         setState((current) => ({
           ...current,
           loading: false,
-          error: error instanceof Error ? error.message : "请求失败"
+          error: error instanceof Error ? error.message : "\u8bf7\u6c42\u5931\u8d25"
         }));
       }
     }
@@ -47,7 +72,32 @@ export function useWorldCupQuery<T>(
       active = false;
       if (timer) window.clearTimeout(timer);
     };
-  }, [refreshMs, url]);
+  }, [cacheKey, enabled, refreshMs, staleMs, url]);
 
   return state;
+}
+
+function readCachedPayload<T>(cacheKey: string, staleMs: number): WorldCupPayload<T> | undefined {
+  if (typeof window === "undefined") return undefined;
+
+  try {
+    const raw = window.sessionStorage.getItem(cacheKey);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw) as { savedAt?: number; payload?: WorldCupPayload<T> };
+    if (!parsed.payload || !parsed.savedAt) return undefined;
+    if (Date.now() - parsed.savedAt > staleMs) return undefined;
+    return { ...parsed.payload, sourceStatus: "cache" };
+  } catch {
+    return undefined;
+  }
+}
+
+function writeCachedPayload<T>(cacheKey: string, payload: WorldCupPayload<T>) {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.sessionStorage.setItem(cacheKey, JSON.stringify({ savedAt: Date.now(), payload }));
+  } catch {
+    // Storage may be disabled or full; live data has already been rendered.
+  }
 }

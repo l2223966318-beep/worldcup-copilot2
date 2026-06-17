@@ -82,7 +82,11 @@ export default function MatchAnalysisPage() {
   const fixtureId = params.id;
   const { payload, loading, error } = useWorldCupQuery<WorldCupMatch>(
     `/api/worldcup/matches/${fixtureId}`,
-    matchRefreshPolicy
+    matchRefreshPolicy,
+    {
+      cacheKey: `worldcup.match.${fixtureId}`,
+      staleMs: 120_000
+    }
   );
   const sourceMatch = payload?.data;
   const fallbackMatch = getMatchDetail(fixtureId);

@@ -11,7 +11,7 @@ const WORLD_CUP_2026_LEAGUE = 1;
 const WORLD_CUP_2026_SEASON = 2026;
 const WORLDCUP26_BASE_URL = "https://worldcup26.ir";
 const THE_STATS_API_FIXTURES_URL = "https://www.thestatsapi.com/world-cup/data/fixtures.json";
-const REQUEST_TIMEOUT_MS = 12_000;
+const REQUEST_TIMEOUT_MS = Number(process.env.WORLD_CUP_FREE_SOURCE_TIMEOUT_MS ?? 3500);
 
 type WorldCup26GamesResponse = {
   games?: WorldCup26Game[];
