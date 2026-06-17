@@ -3,10 +3,9 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, PlugZap, Save, XCircle } from "lucide-react";
 
-type SourceKey = "apiFootball" | "tavily" | "topHubData" | "deepseek" | "openai";
+type SourceKey = "tavily" | "topHubData" | "deepseek" | "openai";
 
 type SettingsState = {
-  apiFootballKey: string;
   tavilyKey: string;
   topHubDataKey: string;
   deepseekKey: string;
@@ -18,7 +17,6 @@ type SettingsState = {
 const STORAGE_KEY = "worldcup.datasource.settings";
 
 const sourceRows: Array<{ key: SourceKey; label: string; field: keyof SettingsState; hint: string }> = [
-  { key: "apiFootball", label: "API-FOOTBALL", field: "apiFootballKey", hint: "用于正式足球赛程、比分、事件和技术统计。" },
   { key: "tavily", label: "Tavily", field: "tavilyKey", hint: "用于全网热点搜索和事件补充。" },
   { key: "topHubData", label: "今日热榜 / 榜眼数据", field: "topHubDataKey", hint: "用于接入微博、抖音、B站等热榜数据源。" },
   { key: "deepseek", label: "DeepSeek", field: "deepseekKey", hint: "用于赛事分析、选题和内容生成增强。" },
@@ -26,7 +24,6 @@ const sourceRows: Array<{ key: SourceKey; label: string; field: keyof SettingsSt
 ];
 
 const defaultSettings: SettingsState = {
-  apiFootballKey: "",
   tavilyKey: "",
   topHubDataKey: "",
   deepseekKey: "",

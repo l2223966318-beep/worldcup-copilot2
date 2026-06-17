@@ -106,7 +106,6 @@ function normalizeEventType(type: string): MatchEvent["type"] {
 
 function sourceProviderName(provider: WorldCupMatch["source"]["provider"]) {
   const names: Record<WorldCupMatch["source"]["provider"], string> = {
-    sportmonks: "Sportmonks",
     "api-football": "API-Football",
     "worldcup26-free": "WorldCup26 免费 API",
     "thestatsapi-fixtures": "TheStatsAPI 免费赛程",
