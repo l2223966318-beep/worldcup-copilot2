@@ -9,6 +9,16 @@ import type {
   WorldCupPayload
 } from "@/lib/sports/types";
 import {
+  getSportradarWorldCupFixtures,
+  getSportradarWorldCupLive,
+  getSportradarWorldCupMatch,
+  getSportradarWorldCupStandings,
+  getSportradarWorldCupToday,
+  hasSportradarKey,
+  hasSportradarSeasonId,
+  isSportradarFixtureId
+} from "@/lib/sports/sportradarClient";
+import {
   getFreeWorldCup2026Fixtures,
   getFreeWorldCup2026Live,
   getFreeWorldCup2026Match,
@@ -26,18 +36,56 @@ type CacheEntry<T> = {
   payload: WorldCupPayload<T>;
 };
 
+type SourceLoader<T> = {
+  enabled?: boolean;
+  load: () => Promise<WorldCupPayload<T>>;
+};
+
 const cache = new Map<string, CacheEntry<unknown>>();
 
 export async function getWorldCupFixtures() {
-  return cached("free-2026-fixtures", FIXTURE_CACHE_TTL_MS, getFreeWorldCup2026Fixtures, fallbackList);
+  return cachedFirstAvailable(
+    "worldcup-fixtures",
+    FIXTURE_CACHE_TTL_MS,
+    [
+      {
+        enabled: hasSportradarKey() && hasSportradarSeasonId(),
+        load: getSportradarWorldCupFixtures
+      },
+      { load: getFreeWorldCup2026Fixtures }
+    ],
+    fallbackList
+  );
 }
 
 export async function getTodayWorldCupFixtures(date = getTodayDate()) {
-  return cached(`free-2026-fixtures-today-${date}`, ACTIVE_CACHE_TTL_MS, () => getFreeWorldCup2026Today(date), fallbackList);
+  return cachedFirstAvailable(
+    `worldcup-fixtures-today-${date}`,
+    ACTIVE_CACHE_TTL_MS,
+    [
+      {
+        enabled: hasSportradarKey(),
+        load: () => requireNonEmpty(getSportradarWorldCupToday(date), "Sportradar returned no fixtures for today.")
+      },
+      { load: () => getFreeWorldCup2026Today(date) }
+    ],
+    fallbackList
+  );
 }
 
 export async function getLiveWorldCupFixtures() {
-  return cached("free-2026-fixtures-live", 20_000, getFreeWorldCup2026Live, () => createPayload("fallback", []));
+  return cachedFirstAvailable(
+    "worldcup-fixtures-live",
+    20_000,
+    [
+      {
+        enabled: hasSportradarKey(),
+        load: getSportradarWorldCupLive
+      },
+      { load: getFreeWorldCup2026Live }
+    ],
+    () => createPayload("fallback", [])
+  );
 }
 
 export async function getWorldCupMatch(fixtureId: string) {
@@ -45,22 +93,39 @@ export async function getWorldCupMatch(fixtureId: string) {
     return createPayload("fallback", getFallbackMatch(fixtureId), "Historical mock sample.");
   }
 
-  return cached(
-    `free-2026-match-${fixtureId}`,
+  return cachedFirstAvailable(
+    `worldcup-match-${fixtureId}`,
     ACTIVE_CACHE_TTL_MS,
-    () => getFreeWorldCup2026Match(fixtureId),
+    [
+      {
+        enabled: hasSportradarKey() && isSportradarFixtureId(fixtureId),
+        load: () => getSportradarWorldCupMatch(fixtureId)
+      },
+      { load: () => getFreeWorldCup2026Match(fixtureId) }
+    ],
     (message) => createPayload("fallback", getFallbackMatch(fixtureId), message)
   );
 }
 
 export async function getWorldCupStandings() {
-  return cached("free-2026-standings", 120_000, getFreeWorldCup2026Standings, (message) => createPayload("fallback", [], message));
+  return cachedFirstAvailable(
+    "worldcup-standings",
+    120_000,
+    [
+      {
+        enabled: hasSportradarKey() && hasSportradarSeasonId(),
+        load: getSportradarWorldCupStandings
+      },
+      { load: getFreeWorldCup2026Standings }
+    ],
+    (message) => createPayload("fallback", [], message)
+  );
 }
 
-async function cached<T>(
+async function cachedFirstAvailable<T>(
   key: string,
   ttlMs: number,
-  load: () => Promise<WorldCupPayload<T>>,
+  sources: SourceLoader<T>[],
   fallback: (message?: string) => WorldCupPayload<T>
 ): Promise<WorldCupPayload<T>> {
   const entry = cache.get(key) as CacheEntry<T> | undefined;
@@ -70,27 +135,48 @@ async function cached<T>(
     return { ...entry.payload, sourceStatus: "cache" as SourceStatus };
   }
 
-  try {
-    const payload = await load();
-    if (payload.sourceStatus === "live" || payload.sourceStatus === "fallback") {
-      cache.set(key, { expiresAt: now + ttlMs, payload });
+  let lastMessage: string | undefined;
+
+  for (const source of sources) {
+    if (source.enabled === false) continue;
+
+    try {
+      const payload = await source.load();
+      if (payload.sourceStatus === "live" || payload.sourceStatus === "fallback") {
+        cache.set(key, { expiresAt: now + ttlMs, payload });
+      }
+      return payload;
+    } catch (error) {
+      lastMessage = error instanceof Error ? error.message : "Unknown World Cup data source error.";
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[worldcup-service]", lastMessage);
+      }
     }
-    return payload;
-  } catch (error) {
-    if (entry) return { ...entry.payload, sourceStatus: "cache" };
-    const message = error instanceof Error ? error.message : "Unknown free World Cup data source error.";
-    const payload = {
-      ...fallback(message),
-      sourceStatus: "error" as SourceStatus,
-      message
-    };
-    cache.set(key, { expiresAt: now + ERROR_CACHE_TTL_MS, payload });
-    return payload;
   }
+
+  if (entry) return { ...entry.payload, sourceStatus: "cache" };
+
+  const message = lastMessage ?? "No World Cup data source was available.";
+  const payload = {
+    ...fallback(message),
+    sourceStatus: "error" as SourceStatus,
+    message
+  };
+  cache.set(key, { expiresAt: now + ERROR_CACHE_TTL_MS, payload });
+  return payload;
 }
 
 function fallbackList(message?: string): WorldCupPayload<WorldCupMatch[]> {
   return createPayload("fallback", getFallbackMatches(), message);
+}
+
+async function requireNonEmpty<T>(
+  payloadPromise: Promise<WorldCupPayload<T[]>>,
+  message: string
+) {
+  const payload = await payloadPromise;
+  if (!payload.data.length) throw new Error(payload.message ?? message);
+  return payload;
 }
 
 function getTodayDate() {

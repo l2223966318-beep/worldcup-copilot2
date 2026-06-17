@@ -70,13 +70,14 @@ npm run dev
 可选环境变量：
 
 ```bash
-# 默认值就是 free-2026，不需要 API key
-WORLD_CUP_DATA_SOURCE=free-2026
+# 如需启用 Sportradar Soccer v4，配置服务端环境变量：
+SPORTRADAR_API_KEY=你的 Sportradar key
+SPORTRADAR_ACCESS_LEVEL=trial
+SPORTRADAR_LANGUAGE_CODE=en
+SPORTRADAR_WORLD_CUP_COMPETITION_ID=
+SPORTRADAR_WORLD_CUP_SEASON_ID=
 
-# 如需改回 API-Football，可配置：
-WORLD_CUP_DATA_SOURCE=api-football
-API_FOOTBALL_KEY=你的服务端 key
-API_FOOTBALL_SEASON=2026
+# 未配置 Sportradar 时，系统会继续使用 free-2026 免费源和经典样例兜底。
 
 # 如需启用 DeepSeek 增强内容推理：
 DEEPSEEK_API_KEY=你的 DeepSeek key
