@@ -49,6 +49,7 @@ const platformLabels = {
   douyin: "抖音",
   article: "公众号"
 } as const;
+const SETTINGS_STORAGE_KEY = "worldcup.datasource.settings";
 
 type PlatformKey = keyof typeof platformLabels;
 
@@ -142,7 +143,7 @@ export default function MatchAnalysisPage() {
     fetch("/api/ai/match-workflow", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ match, baselineTopics }),
+      body: JSON.stringify({ match, baselineTopics, apiKey: getStoredDeepseekKey() || undefined }),
       signal: controller.signal
     })
       .then((response) => response.json())
@@ -1076,6 +1077,17 @@ function topicToWorkflowTopic(topic: TopicIdea): WorkflowTopic {
 
 function toWorkflowPlatform(platform: PlatformKey) {
   return platform === "douyin" ? "douyin" : platform;
+}
+
+function getStoredDeepseekKey() {
+  if (typeof window === "undefined") return "";
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    const settings = raw ? (JSON.parse(raw) as { deepseekKey?: string }) : null;
+    return settings?.deepseekKey?.trim() ?? "";
+  } catch {
+    return "";
+  }
 }
 
 function getPlatformPreview(platform: PlatformKey, content: PlatformContent) {

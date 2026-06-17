@@ -28,6 +28,30 @@ type AuditPayload = {
   rewriteSuggestion?: string;
 };
 
+type GenerateCacheEntry = {
+  expiresAt: number;
+  payload: {
+    sourceStatus: "live";
+    draft: string;
+    model?: string;
+  };
+};
+
+type AuditCacheEntry = {
+  expiresAt: number;
+  payload: {
+    sourceStatus: "live";
+    audit: HotAuditResult;
+    model?: string;
+  };
+};
+
+const HOT_WORKFLOW_AI_CACHE_TTL_MS = Number(process.env.HOT_WORKFLOW_AI_CACHE_TTL_MS ?? 10 * 60_000);
+const HOT_WORKFLOW_GENERATE_TIMEOUT_MS = Number(process.env.HOT_WORKFLOW_GENERATE_TIMEOUT_MS ?? 20_000);
+const HOT_WORKFLOW_AUDIT_TIMEOUT_MS = Number(process.env.HOT_WORKFLOW_AUDIT_TIMEOUT_MS ?? 18_000);
+const generateCache = new Map<string, GenerateCacheEntry>();
+const auditCache = new Map<string, AuditCacheEntry>();
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as {
@@ -77,13 +101,27 @@ export async function POST(request: Request) {
 
 async function handleGenerate(topic: HotTopic, config: HotGenerationConfig, apiKey?: string) {
   const fallbackDraft = qualityControl(generateHotDraft(topic, config));
+  const cacheKey = buildGenerateCacheKey(topic, config);
+  const cached = generateCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return NextResponse.json(cached.payload);
+  }
 
   const result = await generateDeepSeekJson<GeneratePayload>(
     [
       {
         role: "system",
-        content:
-          "你是体育内容运营编辑。你只输出严格 JSON，不要 Markdown。任务是基于热点信息生成一段可直接使用的中文内容。必须遵守：1. 只能基于 title、summary、source、platform、url、category、valueScore、tags 和明确给出的配置写作。2. 不得编造比分、球员发言、受伤、判罚细节、官方结论。3. 信息不足时必须明确写“需核实”或“目前只能确认存在讨论”。4. 输出必须真的可发，不要空话，不要模板腔。5. 不同平台风格要明显区分：B站偏结构和互动，微博偏短评和讨论钩子，小红书偏卡片标题和解释，抖音偏前三秒钩子和口播节奏，通用版偏稳妥概述。最终只返回 {\"draft\":\"...\"}。"
+        content: [
+          "你是体育赛事内容运营编辑，只输出严格 JSON，不要 Markdown。",
+          "任务：基于一个热点生成可直接编辑发布的中文内容。",
+          "硬规则：只能使用热点 title、summary、source、platform、url、category、valueScore、tags 和用户配置；不得编造比分、球员发言、伤病、判罚细节、官方结论。",
+          "信息不足时必须写“需核实”或“目前只能确认存在讨论”。",
+          "不同平台必须彻底分开写法，不共用同一套模板。",
+          platformInstruction(config),
+          lengthInstruction(config),
+          "最终只返回 {\"draft\":\"...\"}。"
+        ].join("\n")
       },
       {
         role: "user",
@@ -91,12 +129,12 @@ async function handleGenerate(topic: HotTopic, config: HotGenerationConfig, apiK
           topic,
           config,
           outputGoal: {
-            draft: "完整可编辑文案，保留分段和换行，长度跟随配置，必要时点明需核实项"
+            draft: "生成一段完整可编辑文案；保留换行；必须贴合所选平台、内容类型、语气和长度；必要处标注需核验。"
           }
         })
       }
     ],
-    { timeoutMs: 30000, apiKey }
+    { timeoutMs: HOT_WORKFLOW_GENERATE_TIMEOUT_MS, apiKey, quality: "quality" }
   );
 
   if (!result.ok) {
@@ -108,22 +146,41 @@ async function handleGenerate(topic: HotTopic, config: HotGenerationConfig, apiK
   }
 
   const draft = normalizeDraft(result.data.draft, fallbackDraft);
-  return NextResponse.json({
+  const payload = {
     sourceStatus: "live",
     draft,
     model: result.model
-  });
+  } as const;
+  generateCache.set(cacheKey, { expiresAt: Date.now() + HOT_WORKFLOW_AI_CACHE_TTL_MS, payload });
+  return NextResponse.json(payload);
 }
 
 async function handleAudit(topic: HotTopic, config: HotGenerationConfig, draft: string, apiKey?: string) {
   const fallbackAudit = qualityControl(auditHotDraft(draft, topic, config.platform));
+  const cacheKey = buildAuditCacheKey(topic, config, draft);
+  const cached = auditCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return NextResponse.json(cached.payload);
+  }
 
   const result = await generateDeepSeekJson<AuditPayload>(
     [
       {
         role: "system",
-        content:
-          "你是体育内容审核编辑。你只输出严格 JSON，不要 Markdown。你要审核一段准备发布的体育热点内容，输出字段：level、authenticity、risk、ethics、platformFit、suggestions、rewriteSuggestion。规则：1. level 只能是 pass / revise / block。2. 必须根据输入文本具体判断，不要泛泛而谈。3. 真实性重点查未核验事实、比分、球员、伤病、裁判、官方结论。4. 风险重点查造谣、引战、人身攻击、地域歧视、标题党、版权和平台不适配。5. rewriteSuggestion 必须是一版更稳妥、可直接替换的完整文本，且不能保留高风险定性词。6. 如果信息不足，明确写“需核实”。"
+        content: [
+          "你是体育内容审稿编辑，只输出严格 JSON，不要 Markdown。",
+          "任务：审稿一段准备发布的体育热点内容。",
+          "必须指出具体风险句子，不能只写泛泛风险。",
+          "输出字段：level、authenticity、risk、ethics、platformFit、suggestions、rewriteSuggestion。",
+          "level 只能是 pass / revise / block。",
+          "authenticity：指出未核验事实、比分、球员、伤病、裁判、官方结论等具体句子。",
+          "risk：指出造谣、引战、人身攻击、地域歧视、标题党、版权、平台不适配等具体句子。",
+          "ethics：指出过度煽动、断章取义、诱导网暴等问题。",
+          "platformFit：判断是否适合所选平台。",
+          "suggestions：给出可直接执行的修改建议。",
+          "rewriteSuggestion：必须给出一版完整可替换文本，删除高风险定性词，保留可核验表达；信息不足时写“需核实”。"
+        ].join("\n")
       },
       {
         role: "user",
@@ -134,7 +191,7 @@ async function handleAudit(topic: HotTopic, config: HotGenerationConfig, draft: 
         })
       }
     ],
-    { timeoutMs: 30000, apiKey }
+    { timeoutMs: HOT_WORKFLOW_AUDIT_TIMEOUT_MS, apiKey, quality: "quality" }
   );
 
   if (!result.ok) {
@@ -146,11 +203,67 @@ async function handleAudit(topic: HotTopic, config: HotGenerationConfig, draft: 
   }
 
   const audit = normalizeAudit(result.data, fallbackAudit);
-  return NextResponse.json({
+  const payload = {
     sourceStatus: "live",
     audit,
     model: result.model
-  });
+  } as const;
+  auditCache.set(cacheKey, { expiresAt: Date.now() + HOT_WORKFLOW_AI_CACHE_TTL_MS, payload });
+  return NextResponse.json(payload);
+}
+
+function platformInstruction(config: HotGenerationConfig) {
+  switch (config.platform) {
+    case "B站":
+      return "B站写法：标题要有观点和信息密度；正文包含开头钩子、视频结构、弹幕互动点、评论区问题；适合深度复盘和观点解释。";
+    case "微博":
+      return "微博写法：先给 1 句短评，再给话题标签、讨论钩子和降风险表述；适合热点承接，不写长篇铺垫。";
+    case "小红书":
+      return "小红书写法：输出首图标题、3-5 页卡片结构、新手能懂的解释、收藏理由；语气清楚但不过度标题党。";
+    case "抖音":
+      return "抖音写法：必须有前三秒钩子、分镜、口播节奏和画面素材建议；先抓注意力，再回到事实核验。";
+    default:
+      return "通用写法：稳妥概述热点、说明可用角度、标注需核验信息和发布风险。";
+  }
+}
+
+function lengthInstruction(config: HotGenerationConfig) {
+  if (config.length === "短") return "长度：短，控制在 120-220 字或等量结构。";
+  if (config.length === "长") return "长度：长，给出完整结构和可直接展开的段落。";
+  return "长度：中，信息完整但避免冗长。";
+}
+
+function buildGenerateCacheKey(topic: HotTopic, config: HotGenerationConfig) {
+  return [
+    "generate",
+    topic.id,
+    topic.title,
+    topic.updatedAt ?? "",
+    config.platform,
+    config.contentType,
+    config.tone,
+    config.length,
+    config.useMatchFacts ? "facts" : "nofacts",
+    config.includeRiskReminder ? "risk" : "norisk"
+  ].join("::");
+}
+
+function buildAuditCacheKey(topic: HotTopic, config: HotGenerationConfig, draft: string) {
+  return [
+    "audit",
+    topic.id,
+    config.platform,
+    config.contentType,
+    simpleHash(draft)
+  ].join("::");
+}
+
+function simpleHash(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  }
+  return String(hash);
 }
 
 function normalizeDraft(value: string | undefined, fallback: string) {
@@ -178,6 +291,6 @@ function normalizeList(value: string[] | undefined, fallback: string[]) {
     .filter((item): item is string => typeof item === "string")
     .map((item) => item.trim())
     .filter(Boolean)
-    .slice(0, 4);
+    .slice(0, 5);
   return list.length ? list : fallback;
 }

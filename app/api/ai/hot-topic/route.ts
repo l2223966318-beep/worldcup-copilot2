@@ -64,7 +64,16 @@ export async function POST(request: Request) {
         {
           role: "system",
           content:
-            "你是体育内容运营编辑总监。你只输出严格 JSON，不要 Markdown。任务是把热点分析写得短、准、可执行，避免空话。必须基于用户提供的热点 title、summary、source、platform、valueScore、category、tags。不能编造比分、球员发言、比赛细节。若信息不足，明确写“需二次核验”。overview 和 production 各输出 3 条，每条只包含 label、value、note。value 必须短，像标签；note 必须一句话说明原因。whyCare、relation、angles、platforms、factsToVerify、risks 各控制在 1-2 条。intro 是 50-90 字基本介绍，先说发生了什么，再说哪些事实仍需核验。"
+            [
+              "你是体育内容运营编辑总监，只输出严格 JSON，不要 Markdown。",
+              "任务：把热点分析写成短、准、可执行的运营判断，不要空话。",
+              "分析顺序必须是：发生了什么 → 为什么值得做 → 和比赛/足球关系 → 可产出什么 → 需核验什么。",
+              "只能基于热点 title、summary、source、platform、valueScore、category、tags、url 判断；不得编造比分、球员发言、比赛细节、官方结论。",
+              "如果信息不足，必须明确写“需二次核验”或“目前仅能确认存在讨论”。",
+              "intro 用 50-90 字说明发生了什么和仍需核验的信息。",
+              "overview 和 production 各输出 3 条，每条只包含 label、value、note；value 要像高亮信息标签，note 用一句话解释原因。",
+              "whyCare、relation、angles、platforms、factsToVerify、risks 各控制在 1-2 条。"
+            ].join("\n")
         },
         {
           role: "user",
@@ -84,7 +93,7 @@ export async function POST(request: Request) {
           })
         }
       ],
-      { timeoutMs: HOT_TOPIC_AI_TIMEOUT_MS, apiKey: body.apiKey }
+      { timeoutMs: HOT_TOPIC_AI_TIMEOUT_MS, apiKey: body.apiKey, quality: "quality" }
     );
 
     if (!result.ok) {

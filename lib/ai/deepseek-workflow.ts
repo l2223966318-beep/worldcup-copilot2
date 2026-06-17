@@ -44,33 +44,52 @@ export type MatchWorkflowEnhancement = {
   platformContent?: PlatformContent;
 };
 
-const categories: TopicCategory[] = ["战术复盘", "球员叙事", "数据解读", "历史对照", "争议讨论", "情绪共鸣", "冷知识科普", "平台热点"];
-const recommendations: TopicRecommendation[] = ["主推", "次推", "观察", "谨慎发布"];
+const DEFAULT_CATEGORY = "鏁版嵁瑙ｈ" as TopicCategory;
+const DEFAULT_RECOMMENDATION = "瑙傚療" as TopicRecommendation;
+const DEFAULT_LEVEL = "涓?" as TopicIdea["difficulty"];
+const DEFAULT_LOW_LEVEL = "浣?" as TopicIdea["riskLevel"];
+const CATEGORY_ALIASES: Record<string, TopicCategory> = {
+  战术复盘: "鎴樻湳澶嶇洏" as TopicCategory,
+  球员叙事: "鐞冨憳鍙欎簨" as TopicCategory,
+  数据解读: "鏁版嵁瑙ｈ" as TopicCategory,
+  历史对照: "鍘嗗彶瀵圭収" as TopicCategory,
+  争议讨论: "浜夎璁ㄨ" as TopicCategory,
+  情绪共鸣: "鎯呯华鍏遍福" as TopicCategory,
+  冷知识科普: "鍐风煡璇嗙鏅?" as TopicCategory,
+  平台热点: "骞冲彴鐑偣" as TopicCategory
+};
+const RECOMMENDATION_ALIASES: Record<string, TopicRecommendation> = {
+  主推: "涓绘帹" as TopicRecommendation,
+  次推: "娆℃帹" as TopicRecommendation,
+  观察: "瑙傚療" as TopicRecommendation,
+  谨慎发布: "璋ㄦ厧鍙戝竷" as TopicRecommendation
+};
 
 export async function enhanceMatchWorkflowWithDeepSeek(input: {
   match: MatchData;
   baselineTopics: TopicIdea[];
+  apiKey?: string;
 }): Promise<MatchWorkflowEnhancement> {
-  const { match, baselineTopics } = input;
+  const { match, baselineTopics, apiKey } = input;
   const signalContext = buildSignalContext(match);
   const result = await generateDeepSeekJson<DeepSeekWorkflowResponse>(
     [
       {
         role: "system",
         content:
-          "你是体育赛事内容运营总监。你只输出严格 JSON，不要 Markdown。基于真实比赛数据和场上热点信号给出可执行的运营结论、选题、平台策略和平台内容预览。选题优先级是：场上热点事件 > 关键进球事件 > 比分走势 > 球员表现 > 技术统计 > 历史背景。不能编造伤病、采访、内幕、社媒热搜或未提供的事实。涉及不确定信息必须使用“需核实”“建议补充来源”。"
+          "你是体育赛事内容运营总监，只输出严格 JSON，不要 Markdown。你的任务不是普通写稿，而是把一场比赛拆成可执行的内容生产方案。分析顺序必须是：事实摘要 -> 关键事件 -> 传播价值 -> 平台打法 -> 风险点。只基于用户提供的 match、matchSignals、baselineTopics，不得编造伤病、采访、内幕、社媒热搜、球员发言或未给出的比分。若信息不足，明确写“需核验”或“建议补充来源”。输出要短、准、可执行，避免泛泛模板。"
       },
       {
         role: "user",
         content: JSON.stringify({
           task:
-            "增强 WorldCup Copilot 单场比赛工作流。输出 conclusions 3 条、topics 3 条、platformStrategy 和 platformContent。必须优先使用 matchSignals 中的乌龙球、球衣被扯破、VAR、争议判罚、冲突、伤病需核实等场上热点信号生成选题；不要只围绕比分或控球率。topics 与 platformContent 必须贴合当前比赛，不要套用梅西/姆巴佩等无关样例。",
+            "增强 WorldCup Copilot 单场比赛工作流。输出 conclusions 3 条、topics 3 条、platformStrategy 和 platformContent。conclusions 必须分别覆盖：事实摘要、运营判断、风险提醒。topics 必须优先利用 matchSignals 中的乌龙球、球衣被扯破、VAR、争议判罚、冲突、伤病需核验等场上热点信号；没有信号时，再从比分走势、关键球员、技术统计里找角度。不要只围绕比分或控球率。platformContent 必须贴合当前比赛和主推选题，不要套用无关球员或历史样例。",
           outputShape: {
-            conclusions: [{ title: "为什么值得做", body: "80字以内", featured: false }],
+            conclusions: [{ title: "事实摘要/运营判断/风险提醒", body: "80字以内，必须具体", featured: false }],
             topics: [
               {
-                title: "选题标题",
-                coreAngle: "核心角度",
+                title: "具体选题标题",
+                coreAngle: "一句话说明内容切入角度",
                 category: "战术复盘/球员叙事/数据解读/历史对照/争议讨论/情绪共鸣/冷知识科普/平台热点",
                 recommendation: "主推/次推/观察/谨慎发布",
                 newsValue: 0,
@@ -84,29 +103,29 @@ export async function enhanceMatchWorkflowWithDeepSeek(input: {
                 difficulty: "低/中/高",
                 productionCost: "低/中/高",
                 riskLevel: "低/中/高",
-                scoreReason: "评分理由",
-                businessExplanation: "为什么推荐这个选题",
-                reason: "数据依据",
-                sampleTitles: ["示例标题1", "示例标题2"]
+                scoreReason: "说明评分为什么是这个值",
+                businessExplanation: "为什么运营上推荐这个选题",
+                reason: "引用的比赛事实/热点信号/数据依据",
+                sampleTitles: ["可直接使用标题1", "可直接使用标题2"]
               }
             ],
             platformStrategy: {
-              bilibili: "B站打法",
-              weibo: "微博打法",
-              xiaohongshu: "小红书打法",
-              article: "公众号打法"
+              bilibili: "B站打法：深度结构、开头钩子、互动点",
+              weibo: "微博打法：短评、话题、讨论钩子、降风险表述",
+              xiaohongshu: "小红书打法：卡片结构、新手解释、收藏理由",
+              article: "公众号打法：深度评论、图表位置、结尾观点"
             },
             platformContent: {
               bilibili: {
                 titles: ["视频标题1", "视频标题2"],
                 coverCopy: "封面文案",
-                openingScript: "开头 15 秒口播",
+                openingScript: "开头15秒口播",
                 outline: ["00:00 结构段落"],
                 danmakuPoints: ["弹幕互动问题"]
               },
               weibo: {
                 hashtags: ["#话题#"],
-                fiveMinuteComment: "赛后 5 分钟快评",
+                fiveMinuteComment: "赛后5分钟快评",
                 debateQuestion: "讨论钩子",
                 riskTip: "风险提示"
               },
@@ -131,7 +150,7 @@ export async function enhanceMatchWorkflowWithDeepSeek(input: {
         })
       }
     ],
-    { timeoutMs: 45_000 }
+    { timeoutMs: 22_000, apiKey, quality: "quality" }
   );
 
   if (!result.ok) {
@@ -170,30 +189,32 @@ function normalizeConclusions(conclusions?: DeepSeekWorkflowResponse["conclusion
 }
 
 function normalizeTopics(matchId: string, topics: DeepSeekTopic[] | undefined, fallback: TopicIdea[]) {
-  const normalized = (topics ?? []).slice(0, 3).map((topic, index) => ({
-    id: `${matchId}-deepseek-${index + 1}`,
-    title: String(topic.title || fallback[index]?.title || "比赛内容运营选题"),
-    coreAngle: String(topic.coreAngle || fallback[index]?.coreAngle || "基于比分、技术统计和关键事件拆解内容价值。"),
-    category: normalizeEnum(topic.category, categories, fallback[index]?.category ?? "数据解读"),
-    recommendation: normalizeEnum(topic.recommendation, recommendations, fallback[index]?.recommendation ?? "观察"),
-    newsValue: normalizeScore(topic.newsValue, fallback[index]?.newsValue ?? 80),
-    spreadPotential: normalizeScore(topic.spreadPotential, fallback[index]?.spreadPotential ?? 80),
-    platformFit: normalizeScore(topic.platformFit, fallback[index]?.platformFit ?? 80),
-    bilibiliFit: normalizeScore(topic.bilibiliFit, fallback[index]?.bilibiliFit ?? 82),
-    xiaohongshuFit: normalizeScore(topic.xiaohongshuFit, fallback[index]?.xiaohongshuFit ?? 72),
-    weiboFit: normalizeScore(topic.weiboFit, fallback[index]?.weiboFit ?? 82),
-    shortVideoFit: normalizeScore(topic.shortVideoFit, fallback[index]?.shortVideoFit ?? 80),
-    recommendedFormat: String(topic.recommendedFormat || fallback[index]?.recommendedFormat || "B站复盘 + 微博讨论"),
-    difficulty: normalizeEnum(topic.difficulty, ["低", "中", "高"], fallback[index]?.difficulty ?? "中"),
-    productionCost: normalizeEnum(topic.productionCost, ["低", "中", "高"], fallback[index]?.productionCost ?? "中"),
-    riskLevel: normalizeEnum(topic.riskLevel, ["低", "中", "高"], fallback[index]?.riskLevel ?? "低"),
-    scoreReason: String(topic.scoreReason || fallback[index]?.scoreReason || "数据和内容角度具备基础支撑。"),
-    businessExplanation: String(topic.businessExplanation || fallback[index]?.businessExplanation || "适合用于赛事内容运营拆解。"),
-    reason: String(topic.reason || fallback[index]?.reason || "基于当前比赛数据生成。"),
-    sampleTitles: Array.isArray(topic.sampleTitles) && topic.sampleTitles.length
-      ? topic.sampleTitles.slice(0, 3).map(String)
-      : fallback[index]?.sampleTitles ?? ["从一场比赛看内容机会", "比分之外的赛事复盘角度"]
-  }));
+  const fallbackTopic = fallback[0];
+  const normalized = (topics ?? []).slice(0, 3).map((topic, index) => {
+    const currentFallback = fallback[index] ?? fallbackTopic;
+    return {
+      id: `${matchId}-deepseek-${index + 1}`,
+      title: stringValue(topic.title, currentFallback?.title ?? "比赛内容运营选题"),
+      coreAngle: stringValue(topic.coreAngle, currentFallback?.coreAngle ?? "基于比赛事实、关键事件和传播价值拆解内容角度。"),
+      category: normalizeCategory(topic.category, currentFallback?.category ?? DEFAULT_CATEGORY),
+      recommendation: normalizeRecommendation(topic.recommendation, currentFallback?.recommendation ?? DEFAULT_RECOMMENDATION),
+      newsValue: normalizeScore(topic.newsValue, currentFallback?.newsValue ?? 75),
+      spreadPotential: normalizeScore(topic.spreadPotential, currentFallback?.spreadPotential ?? 75),
+      platformFit: normalizeScore(topic.platformFit, currentFallback?.platformFit ?? 75),
+      bilibiliFit: normalizeScore(topic.bilibiliFit, currentFallback?.bilibiliFit ?? 75),
+      xiaohongshuFit: normalizeScore(topic.xiaohongshuFit, currentFallback?.xiaohongshuFit ?? 70),
+      weiboFit: normalizeScore(topic.weiboFit, currentFallback?.weiboFit ?? 78),
+      shortVideoFit: normalizeScore(topic.shortVideoFit, currentFallback?.shortVideoFit ?? 76),
+      recommendedFormat: stringValue(topic.recommendedFormat, currentFallback?.recommendedFormat ?? "B站复盘 + 微博讨论"),
+      difficulty: normalizeLevel(topic.difficulty, currentFallback?.difficulty ?? DEFAULT_LEVEL),
+      productionCost: normalizeLevel(topic.productionCost, currentFallback?.productionCost ?? DEFAULT_LEVEL),
+      riskLevel: normalizeLevel(topic.riskLevel, currentFallback?.riskLevel ?? DEFAULT_LOW_LEVEL),
+      scoreReason: stringValue(topic.scoreReason, currentFallback?.scoreReason ?? "基于比赛事实、热点信号和平台适配综合评分。"),
+      businessExplanation: stringValue(topic.businessExplanation, currentFallback?.businessExplanation ?? "适合用于赛事内容运营拆解。"),
+      reason: stringValue(topic.reason, currentFallback?.reason ?? "基于当前比赛数据和热点信号生成。"),
+      sampleTitles: stringList(topic.sampleTitles, currentFallback?.sampleTitles ?? ["从一场比赛看内容机会", "比分之外的赛事复盘角度"]).slice(0, 3)
+    } satisfies TopicIdea;
+  });
 
   return qualityControl(normalized.length ? normalized : fallback.slice(0, 3)) as TopicIdea[];
 }
@@ -236,12 +257,12 @@ function normalizePlatformContent(content: DeepSeekPlatformContent | undefined, 
 }
 
 function stringValue(value: unknown, fallback: string) {
-  return typeof value === "string" && value.trim() ? value : fallback;
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
 function stringList(value: unknown, fallback: string[]) {
   if (!Array.isArray(value)) return fallback;
-  const list = value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
+  const list = value.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map((item) => item.trim());
   return list.length ? list : fallback;
 }
 
@@ -263,6 +284,20 @@ function normalizeScore(value: unknown, fallback: number) {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-function normalizeEnum<T extends string>(value: unknown, allowed: T[], fallback: T): T {
-  return allowed.includes(value as T) ? (value as T) : fallback;
+function normalizeCategory(value: unknown, fallback: TopicCategory): TopicCategory {
+  if (typeof value !== "string") return fallback;
+  return CATEGORY_ALIASES[value.trim()] ?? fallback;
+}
+
+function normalizeRecommendation(value: unknown, fallback: TopicRecommendation): TopicRecommendation {
+  if (typeof value !== "string") return fallback;
+  return RECOMMENDATION_ALIASES[value.trim()] ?? fallback;
+}
+
+function normalizeLevel<T extends TopicIdea["difficulty"] | TopicIdea["riskLevel"] | TopicIdea["productionCost"]>(value: unknown, fallback: T): T {
+  if (typeof value !== "string") return fallback;
+  if (value === "低") return "浣?" as T;
+  if (value === "中") return "涓?" as T;
+  if (value === "高") return "楂?" as T;
+  return fallback;
 }
