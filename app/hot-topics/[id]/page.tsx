@@ -34,15 +34,17 @@ const contentTypes: HotGenerationConfig["contentType"][] = ["选题", "标题", 
 const tones: HotGenerationConfig["tone"][] = ["客观资讯", "球迷讨论", "轻松整活", "专业分析"];
 const lengths: HotGenerationConfig["length"][] = ["短", "中", "长"];
 const SETTINGS_STORAGE_KEY = "worldcup.datasource.settings";
+const HOT_TOPIC_ANALYSIS_CACHE_KEY = "worldcup.hot-topic-analysis.v1";
+const HOT_TOPIC_ANALYSIS_CACHE_TTL_MS = 6 * 60 * 60_000;
 
 export default function HotTopicDetailPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const rawId = Array.isArray(params.id) ? params.id[0] : params.id;
   const topicId = rawId ? decodeURIComponent(rawId) : "";
-  const [topic, setTopic] = useState<HotTopic | null>(null);
-  const [cacheMeta, setCacheMeta] = useState<{ lastUpdatedAt?: string; message?: string }>({});
-  const [loaded, setLoaded] = useState(false);
+  const [topic, setTopic] = useState<HotTopic | null>(() => readHotTopicSnapshot(topicId).topic);
+  const [cacheMeta, setCacheMeta] = useState<{ lastUpdatedAt?: string; message?: string }>(() => readHotTopicSnapshot(topicId).cacheMeta);
+  const [loaded, setLoaded] = useState(true);
   const [config, setConfig] = useState<HotGenerationConfig>(() => ({
     ...defaultConfig,
     contentType: searchParams.get("mode") === "generate" ? "选题" : "选题"
@@ -53,7 +55,7 @@ export default function HotTopicDetailPage() {
   const [saved, setSaved] = useState(false);
   const [analysis, setAnalysis] = useState<HotAnalysisResult | null>(null);
   const [topicIntro, setTopicIntro] = useState("");
-  const [analysisStatus, setAnalysisStatus] = useState<"idle" | "loading" | "live" | "fallback" | "error">("idle");
+  const [analysisStatus, setAnalysisStatus] = useState<"idle" | "loading" | "live" | "fallback" | "cache" | "error">("idle");
   const [analysisMessage, setAnalysisMessage] = useState("");
   const [contentStatus, setContentStatus] = useState<"idle" | "loading" | "live" | "fallback" | "error">("idle");
   const [contentMessage, setContentMessage] = useState("");
@@ -62,18 +64,10 @@ export default function HotTopicDetailPage() {
   const [deepseekKey, setDeepseekKey] = useState("");
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(HOT_RADAR_CACHE_KEY);
-      const cache = raw ? (JSON.parse(raw) as HotRadarCache) : null;
-      const found = cache?.topics.find((item) => item.id === topicId) ?? null;
-      setTopic(found);
-      setCacheMeta({ lastUpdatedAt: cache?.lastUpdatedAt, message: cache?.message });
-    } catch {
-      setTopic(null);
-      setCacheMeta({});
-    } finally {
-      setLoaded(true);
-    }
+    const snapshot = readHotTopicSnapshot(topicId);
+    setTopic(snapshot.topic);
+    setCacheMeta(snapshot.cacheMeta);
+    setLoaded(true);
   }, [topicId]);
 
   useEffect(() => {
@@ -107,9 +101,11 @@ export default function HotTopicDetailPage() {
       return;
     }
 
-    setAnalysis(fallbackAnalysis);
-    setTopicIntro(fallbackIntro);
-    setAnalysisStatus("loading");
+    const fallbackAnalysisSnapshot = fallbackAnalysis ?? buildHotAnalysis(topic);
+    const cachedAnalysis = readHotTopicAnalysis(topic.id);
+    setAnalysis(cachedAnalysis?.analysis ?? fallbackAnalysisSnapshot);
+    setTopicIntro(cachedAnalysis?.intro ?? fallbackIntro);
+    setAnalysisStatus(cachedAnalysis ? "cache" : "loading");
     setAnalysisMessage("");
 
     void fetch("/api/ai/hot-topic", {
@@ -125,14 +121,19 @@ export default function HotTopicDetailPage() {
           message?: string;
         };
         if (!active) return;
-        setTopicIntro(payload.intro || fallbackIntro);
-        setAnalysis(payload.analysis || fallbackAnalysis);
+        const nextIntro = payload.intro || fallbackIntro;
+        const nextAnalysis = payload.analysis || fallbackAnalysisSnapshot;
+        setTopicIntro(nextIntro);
+        setAnalysis(nextAnalysis);
         setAnalysisStatus(payload.sourceStatus === "live" ? "live" : payload.sourceStatus === "fallback" ? "fallback" : "error");
         setAnalysisMessage(payload.message || "");
+        if (payload.sourceStatus === "live" || payload.sourceStatus === "fallback") {
+          writeHotTopicAnalysis(topic.id, { intro: nextIntro, analysis: nextAnalysis });
+        }
       })
       .catch((error) => {
         if (!active) return;
-        setAnalysis(fallbackAnalysis);
+        setAnalysis(fallbackAnalysisSnapshot);
         setTopicIntro(fallbackIntro);
         setAnalysisStatus("error");
         setAnalysisMessage(error instanceof Error ? error.message : "热点分析请求失败。");
@@ -532,6 +533,50 @@ function Badge({ children, strong }: { children: string | number; strong?: boole
   );
 }
 
+function readHotTopicSnapshot(topicId: string): { topic: HotTopic | null; cacheMeta: { lastUpdatedAt?: string; message?: string } } {
+  if (typeof window === "undefined") return { topic: null, cacheMeta: {} };
+
+  try {
+    const raw = window.localStorage.getItem(HOT_RADAR_CACHE_KEY);
+    const cache = raw ? (JSON.parse(raw) as HotRadarCache) : null;
+    const topic = cache?.topics.find((item) => item.id === topicId) ?? null;
+    return {
+      topic,
+      cacheMeta: { lastUpdatedAt: cache?.lastUpdatedAt, message: cache?.message }
+    };
+  } catch {
+    return { topic: null, cacheMeta: {} };
+  }
+}
+
+function readHotTopicAnalysis(topicId: string): { intro: string; analysis: HotAnalysisResult } | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = window.sessionStorage.getItem(HOT_TOPIC_ANALYSIS_CACHE_KEY);
+    const cache = raw ? (JSON.parse(raw) as Record<string, { savedAt?: number; intro?: string; analysis?: HotAnalysisResult }>) : {};
+    const entry = cache[topicId];
+    if (!entry?.intro || !entry.analysis || !entry.savedAt) return null;
+    if (Date.now() - entry.savedAt > HOT_TOPIC_ANALYSIS_CACHE_TTL_MS) return null;
+    return { intro: entry.intro, analysis: entry.analysis };
+  } catch {
+    return null;
+  }
+}
+
+function writeHotTopicAnalysis(topicId: string, payload: { intro: string; analysis: HotAnalysisResult }) {
+  if (typeof window === "undefined") return;
+
+  try {
+    const raw = window.sessionStorage.getItem(HOT_TOPIC_ANALYSIS_CACHE_KEY);
+    const cache = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    cache[topicId] = { ...payload, savedAt: Date.now() };
+    window.sessionStorage.setItem(HOT_TOPIC_ANALYSIS_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // AI analysis can still render without browser storage.
+  }
+}
+
 function getStoredDeepseekKey() {
   try {
     const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
@@ -546,10 +591,11 @@ function refreshDeepseekKey(setter: (value: string) => void) {
   setter(getStoredDeepseekKey());
 }
 
-function toStatusLabel(status: "idle" | "loading" | "live" | "fallback" | "error") {
+function toStatusLabel(status: "idle" | "loading" | "live" | "fallback" | "cache" | "error") {
   if (status === "idle") return "未触发";
   if (status === "loading") return "处理中";
   if (status === "live") return "DeepSeek 已调用";
+  if (status === "cache") return "缓存结果";
   if (status === "fallback") return "本地兜底";
   return "调用异常";
 }

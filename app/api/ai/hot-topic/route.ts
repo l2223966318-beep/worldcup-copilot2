@@ -11,6 +11,20 @@ import type { HotTopic } from "@/lib/hot/types";
 
 export const dynamic = "force-dynamic";
 
+type AiCacheEntry = {
+  expiresAt: number;
+  payload: {
+    sourceStatus: "live";
+    intro: string;
+    analysis: HotAnalysisResult;
+    model?: string;
+  };
+};
+
+const HOT_TOPIC_AI_CACHE_TTL_MS = Number(process.env.HOT_TOPIC_AI_CACHE_TTL_MS ?? 10 * 60_000);
+const HOT_TOPIC_AI_TIMEOUT_MS = Number(process.env.HOT_TOPIC_AI_TIMEOUT_MS ?? 12_000);
+const aiCache = new Map<string, AiCacheEntry>();
+
 type HotTopicAiPayload = {
   intro?: string;
   overview?: Partial<HotInsight>[];
@@ -38,6 +52,12 @@ export async function POST(request: Request) {
 
     const fallbackIntro = buildTopicIntro(body.topic);
     const fallbackAnalysis = buildHotAnalysis(body.topic);
+    const cacheKey = buildAiCacheKey(body.topic);
+    const cached = aiCache.get(cacheKey);
+
+    if (cached && cached.expiresAt > Date.now()) {
+      return NextResponse.json(cached.payload);
+    }
 
     const result = await generateDeepSeekJson<HotTopicAiPayload>(
       [
@@ -64,7 +84,7 @@ export async function POST(request: Request) {
           })
         }
       ],
-      { timeoutMs: 30000, apiKey: body.apiKey }
+      { timeoutMs: HOT_TOPIC_AI_TIMEOUT_MS, apiKey: body.apiKey }
     );
 
     if (!result.ok) {
@@ -79,12 +99,14 @@ export async function POST(request: Request) {
     const analysis = normalizeAnalysis(result.data, fallbackAnalysis);
     const intro = normalizeIntro(result.data.intro, fallbackIntro);
 
-    return NextResponse.json({
+    const payload = {
       sourceStatus: "live",
       intro,
       analysis,
       model: result.model
-    });
+    } as const;
+    aiCache.set(cacheKey, { expiresAt: Date.now() + HOT_TOPIC_AI_CACHE_TTL_MS, payload });
+    return NextResponse.json(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown hot topic AI error.";
     return NextResponse.json(
@@ -95,6 +117,10 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
+}
+
+function buildAiCacheKey(topic: HotTopic) {
+  return `${topic.id}:${topic.title}:${topic.updatedAt ?? ""}`;
 }
 
 function normalizeIntro(value: string | undefined, fallback: string) {

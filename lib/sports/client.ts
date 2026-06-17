@@ -21,10 +21,14 @@ export function useWorldCupQuery<T>(
   refreshMs?: number | ((payload: WorldCupPayload<T>) => number | undefined),
   options: QueryOptions = {}
 ) {
-  const [state, setState] = useState<QueryState<T>>({ loading: true });
   const enabled = options.enabled ?? true;
   const cacheKey = options.cacheKey ?? `worldcup.query.${url}`;
   const staleMs = options.staleMs ?? 120_000;
+  const [state, setState] = useState<QueryState<T>>(() => {
+    if (!enabled) return { loading: false };
+    const cached = readCachedPayload<T>(cacheKey, staleMs);
+    return cached ? { payload: cached, loading: false } : { loading: true };
+  });
 
   useEffect(() => {
     let active = true;
