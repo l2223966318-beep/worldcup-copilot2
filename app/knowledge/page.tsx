@@ -12,7 +12,7 @@ import { appendKnowledgeContext } from "@/lib/services/workflowStore";
 const sampleQuestions = [
   "梅西和姆巴佩在世界杯决赛中的表现有什么历史意义？",
   "阿根廷和法国世界杯历史交锋有哪些？",
-  "什么是 xG？",
+  "控球率高就一定占优势吗？",
   "点球大战为什么适合做短视频内容？"
 ];
 
@@ -22,7 +22,7 @@ export default function KnowledgePage() {
   const result = useMemo(() => {
     const exact = knowledgeEntries.find((item) => item.question === question);
     if (exact) return exact;
-    if (question.toLowerCase().includes("xg")) return knowledgeEntries.find((item) => item.id === "what-is-xg") ?? knowledgeEntries[0];
+    if (question.includes("控球")) return knowledgeEntries.find((item) => item.id === "football-terms") ?? knowledgeEntries[0];
     if (question.includes("点球")) return knowledgeEntries.find((item) => item.id === "penalty-short-video") ?? knowledgeEntries[0];
     if (question.includes("历史") || question.includes("交锋")) return knowledgeEntries.find((item) => item.id === "argentina-france-history") ?? knowledgeEntries[0];
     return knowledgeEntries[0];

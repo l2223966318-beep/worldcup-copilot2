@@ -541,7 +541,7 @@ function MatchHero({
     statistic.values.every((entry) => entry.type === "Goals" || entry.type === "Data Coverage")
   );
   const actionTitle = `优先做${primaryTopic.recommendedFormat}`;
-  const actionBody = `先用“${primaryTopic.title}”建立内容主线，再用控球、射门、射正和 xG 做证据层，最后按 B站深度、微博讨论、小红书解释卡分发。`;
+  const actionBody = `先用“${primaryTopic.title}”建立内容主线，再用比分、控球、射门、射正和事件说明做证据层，最后按 B站深度、微博讨论、小红书解释卡分发。`;
 
   return (
     <section className={`relative overflow-hidden rounded-[40px] border bg-gradient-to-br ${theme.gradient} p-7 shadow-[0_28px_90px_rgba(15,23,42,0.08)] lg:p-10`} style={{ borderColor: theme.border }}>
@@ -908,11 +908,9 @@ function buildMatchWorkflow(
   const scores = buildOpportunityScores(match, primaryTopic);
   const possessionLeader = leaderBy(match, "possession");
   const shotLeader = leaderBy(match, "shotsOnTarget");
-  const xgLeader = leaderBy(match, "xg");
   const possessionGap = Math.abs(match.stats.teamA.possession - match.stats.teamB.possession);
   const shotTotal = match.stats.teamA.shots + match.stats.teamB.shots;
   const onTargetTotal = match.stats.teamA.shotsOnTarget + match.stats.teamB.shotsOnTarget;
-  const hasXg = match.stats.teamA.xg > 0 || match.stats.teamB.xg > 0;
   const scoreText = match.score === "vs" ? "当前赛程还没有比分" : `比分已经定格为 ${match.score}`;
   const priority = scores.heat >= 90 && scores.narrative >= 88 ? "S" : scores.heat >= 78 ? "A" : "B";
 
@@ -940,8 +938,8 @@ function buildMatchWorkflow(
         value: `${match.stats.teamA.possession}% / ${match.stats.teamB.possession}%`,
         compare: `${possessionLeader.name}控球更高`,
         explain: possessionGap <= 3
-          ? "双方控球接近，运营表达应重点转向射正、xG 和关键事件，不要硬写谁完全控制比赛。"
-          : `${possessionLeader.name}控球多出 ${possessionGap}%，但控球是否形成威胁，还要继续看射正和 xG。`,
+          ? "双方控球接近，运营表达应重点转向射正和关键事件，不要硬写谁完全控制比赛。"
+          : `${possessionLeader.name}控球多出 ${possessionGap}%，但控球是否形成威胁，还要继续看射正和事件说明。`,
         angle: "适合做“控球是否等于控制比赛”的战术复盘，也适合给非核心球迷做解释卡。"
       },
       {
@@ -952,15 +950,6 @@ function buildMatchWorkflow(
           ? `双方合计 ${shotTotal} 次射门、${onTargetTotal} 次射正，能支撑“机会质量”和“进攻效率”的内容判断。`
           : "当前接口没有返回射门细项，页面先保留结构，发布时应补充技术统计来源。",
         angle: "适合转成 B站机会质量复盘、微博赛后讨论题和短视频数据钩子。"
-      },
-      {
-        label: "xG",
-        value: `${match.stats.teamA.xg} / ${match.stats.teamB.xg}`,
-        compare: hasXg ? `${xgLeader.name}机会质量更高` : "xG 暂缺或为 0",
-        explain: hasXg
-          ? `${xgLeader.name}的 xG 更高，可以解释比分之外的机会质量差异。`
-          : "如果 API 没有返回 xG，不要强行写预期进球结论，应改用射门、射正和事件时间线补证据。",
-        angle: hasXg ? "适合支撑战术复盘和胜负原因分析。" : "适合做“数据缺失时如何稳妥表达”的风险审稿样例。"
       }
     ],
     risks: [

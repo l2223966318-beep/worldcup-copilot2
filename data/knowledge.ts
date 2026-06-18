@@ -30,16 +30,6 @@ export const knowledgeEntries: KnowledgeEntry[] = [
     sourceNote: "示例知识库：历史交锋用于演示，发布前建议人工复核。"
   },
   {
-    id: "what-is-xg",
-    question: "什么是 xG？",
-    answer:
-      "xG 是预期进球值，用来估计一次射门在特定位置、角度和方式下转化为进球的概率。它不能直接判断球队强弱，但能帮助解释射门质量和比赛走势。",
-    facts: ["xG 越高通常代表机会质量越好。", "xG 不是实际进球数。", "不同数据源的模型可能存在差异。"],
-    angles: ["控球不等于机会质量", "射门数量与射门质量的差异", "为什么一支球队看起来被动却更接近进球"],
-    usage: "适合数据解读、科普卡片和赛后复盘。",
-    sourceNote: "示例知识库：概念解释为通用说明，正式版本需注明数据来源。"
-  },
-  {
     id: "penalty-short-video",
     question: "点球大战为什么适合做短视频内容？",
     answer:

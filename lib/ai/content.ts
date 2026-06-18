@@ -62,12 +62,10 @@ export type PlatformContent = {
 export function generatePlatformContent(match: MatchData, topic: TopicIdea): PlatformContent {
   const leadPlayer = match.keyPlayers[0];
   const opponentPlayer = match.keyPlayers[1] ?? leadPlayer;
-  const statLine = `${match.teamA}控球率 ${match.stats.teamA.possession}%，射正 ${match.stats.teamA.shotsOnTarget} 次，xG ${match.stats.teamA.xg}；${match.teamB}控球率 ${match.stats.teamB.possession}%，射正 ${match.stats.teamB.shotsOnTarget} 次，xG ${match.stats.teamB.xg}`;
+  const statLine = `${match.teamA}控球率 ${match.stats.teamA.possession}%，射门 ${match.stats.teamA.shots} 次，射正 ${match.stats.teamA.shotsOnTarget} 次；${match.teamB}控球率 ${match.stats.teamB.possession}%，射门 ${match.stats.teamB.shots} 次，射正 ${match.stats.teamB.shotsOnTarget} 次`;
   const scoreHook = match.score === "vs" ? "赛程信息" : `${match.score} 的比分`;
   const eventFocus = match.keyEvents.length > 1 ? "关键事件时间线" : "基础数据";
-  const evidenceLine = match.stats.teamA.xg || match.stats.teamB.xg
-    ? "控球、射正和 xG"
-    : "控球、射门和射正";
+  const evidenceLine = "控球、射门和射正";
 
   const raw: PlatformContent = {
     bilibili: {
@@ -132,7 +130,7 @@ export function generatePlatformContent(match: MatchData, topic: TopicIdea): Pla
     shortVideo: {
       threeSecondHook: `${scoreHook}不是全部，真正的内容价值在数据和关键事件里。`,
       fifteenSec: `开头 2 秒：${match.score} 不是全部。中段 8 秒：抛出“${topic.title}”。结尾 5 秒：用一个关键数据或镜头落到评论区问题。`,
-      thirtySec: `0-5 秒：比分定格和冲突问题；5-12 秒：讲${leadPlayer.name}或关键事件；12-22 秒：用射正和 xG 解释比赛；22-30 秒：提示风险边界并引导评论。`,
+      thirtySec: `0-5 秒：比分定格和冲突问题；5-12 秒：讲${leadPlayer.name}或关键事件；12-22 秒：用射门和射正解释比赛；22-30 秒：提示风险边界并引导评论。`,
       sixtySec: `用事件时间线串起比赛：开场建立双方状态，中段讲${topic.coreAngle}，后段用数据图表解释走势，最后落到“这条内容适合哪个平台发”。`,
       storyboard: [
         `比分定格画面，字幕：${scoreHook}不是全部`,
@@ -151,7 +149,7 @@ export function generatePlatformContent(match: MatchData, topic: TopicIdea): Pla
       fullOutline: [
         "一、比赛信息与核心结论",
         "二、关键事件时间线",
-        "三、数据洞察：控球、射门、xG 和效率",
+        "三、数据洞察：控球、射门、射正和效率",
         "四、人物叙事：主角、对照与历史意义",
         "五、多平台分发策略",
         "六、风险审稿与合规提醒"

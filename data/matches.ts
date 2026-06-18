@@ -5,7 +5,6 @@ export type TeamStats = {
   corners: number;
   fouls: number;
   yellowCards: number;
-  xg: number;
 };
 
 export type KeyPlayer = {
@@ -68,8 +67,8 @@ export const exampleMatches: MatchData[] = [
     summary:
       "阿根廷两度领先，法国在常规时间末段和加时赛完成追平，最终阿根廷通过点球大战夺冠。这场比赛兼具球星叙事、战术调整、数据反差、心理博弈和历史意义，是世界杯内容运营的高密度样本。",
     stats: {
-      teamA: { possession: 54, shots: 20, shotsOnTarget: 10, corners: 6, fouls: 20, yellowCards: 5, xg: 3.2 },
-      teamB: { possession: 46, shots: 10, shotsOnTarget: 5, corners: 5, fouls: 18, yellowCards: 3, xg: 2.4 }
+      teamA: { possession: 54, shots: 20, shotsOnTarget: 10, corners: 6, fouls: 20, yellowCards: 5 },
+      teamB: { possession: 46, shots: 10, shotsOnTarget: 5, corners: 5, fouls: 18, yellowCards: 3 }
     },
     keyPlayers: [
       { name: "梅西", team: "阿根廷", role: "前锋", goals: 2, assists: 0, shots: 5, keyPasses: 3, duelsWon: 6, rating: 9.4 },
@@ -104,8 +103,8 @@ export const exampleMatches: MatchData[] = [
     score: "1-2",
     summary: "巴西利用边路速度和转换进攻制造威胁，英格兰控球时间更长但禁区内效率不足，适合拆解“控球优势与进攻质量不一致”的选题。",
     stats: {
-      teamA: { possession: 58, shots: 14, shotsOnTarget: 4, corners: 7, fouls: 12, yellowCards: 2, xg: 1.4 },
-      teamB: { possession: 42, shots: 11, shotsOnTarget: 6, corners: 4, fouls: 15, yellowCards: 3, xg: 1.9 }
+      teamA: { possession: 58, shots: 14, shotsOnTarget: 4, corners: 7, fouls: 12, yellowCards: 2 },
+      teamB: { possession: 42, shots: 11, shotsOnTarget: 6, corners: 4, fouls: 15, yellowCards: 3 }
     },
     keyPlayers: [
       { name: "贝林厄姆", team: "英格兰", role: "中场", goals: 0, assists: 1, shots: 3, keyPasses: 4, duelsWon: 7, rating: 8.0 },
@@ -133,8 +132,8 @@ export const exampleMatches: MatchData[] = [
     score: "1-1",
     summary: "中国队在防守压力下保持阵型紧凑，通过定位球取得进球。比赛结果让出线形势仍保留讨论空间，适合做情绪共鸣、数据解释和发布风险审稿演示。",
     stats: {
-      teamA: { possession: 39, shots: 8, shotsOnTarget: 3, corners: 3, fouls: 17, yellowCards: 4, xg: 0.9 },
-      teamB: { possession: 61, shots: 15, shotsOnTarget: 5, corners: 8, fouls: 11, yellowCards: 1, xg: 1.6 }
+      teamA: { possession: 39, shots: 8, shotsOnTarget: 3, corners: 3, fouls: 17, yellowCards: 4 },
+      teamB: { possession: 61, shots: 15, shotsOnTarget: 5, corners: 8, fouls: 11, yellowCards: 1 }
     },
     keyPlayers: [
       { name: "张玉宁", team: "中国队", role: "中锋", goals: 1, assists: 0, shots: 3, keyPasses: 1, duelsWon: 5, rating: 7.8 },

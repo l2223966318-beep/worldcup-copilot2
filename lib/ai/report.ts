@@ -51,7 +51,6 @@ export function createMarkdownReport(input: ReportInput) {
     "## 数据洞察",
     `- 控球率：${match.teamA} ${match.stats.teamA.possession}%，${match.teamB} ${match.stats.teamB.possession}%。运营解释应强调控球不等于控制比赛。`,
     `- 射门 / 射正：${match.teamA} ${match.stats.teamA.shots}/${match.stats.teamA.shotsOnTarget}，${match.teamB} ${match.stats.teamB.shots}/${match.stats.teamB.shotsOnTarget}。可用来解释机会质量。`,
-    `- xG：${match.teamA} ${match.stats.teamA.xg}，${match.teamB} ${match.stats.teamB.xg}。适合放在公众号和 B站深度复盘中。`,
     "- 时间线：用关键事件做短视频节奏点，不要只罗列比分。",
     "",
     "## 发布节奏",

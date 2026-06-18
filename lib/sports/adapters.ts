@@ -102,8 +102,7 @@ function statisticsToTeamStats(statistics: MatchStatistic[], teamName: string): 
     shotsOnTarget: numberStat(item, ["Shots on Goal", "Shots on Target", "射正"], 0),
     corners: numberStat(item, ["Corner Kicks", "角球"], 0),
     fouls: numberStat(item, ["Fouls", "犯规"], 0),
-    yellowCards: numberStat(item, ["Yellow Cards", "黄牌"], 0),
-    xg: numberStat(item, ["Expected Goals", "xG"], 0)
+    yellowCards: numberStat(item, ["Yellow Cards", "黄牌"], 0)
   };
 }
 

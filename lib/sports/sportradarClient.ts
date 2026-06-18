@@ -507,7 +507,6 @@ function statisticLabel(value: string) {
     fouls: "Fouls",
     yellow_cards: "Yellow Cards",
     red_cards: "Red Cards",
-    expected_goals: "Expected Goals"
   };
   return labels[value] ?? value.replace(/_/g, " ");
 }

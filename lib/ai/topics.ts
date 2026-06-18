@@ -49,7 +49,6 @@ export function generateTopics(match: MatchData): TopicIdea[] {
     ? `${topPlayer.name}的比分、射门、射正和控球表现`
     : `${topPlayer.name}的进球、关键传球、对抗和评分`;
   const possessionGap = Math.abs(match.stats.teamA.possession - match.stats.teamB.possession);
-  const xgGap = Math.abs(match.stats.teamA.xg - match.stats.teamB.xg).toFixed(1);
 
   const topics = match.id === "argentina-france-2022-final"
     ? worldCupFinalTopics(match)
@@ -57,7 +56,7 @@ export function generateTopics(match: MatchData): TopicIdea[] {
         createTopic(match, {
           id: "control-gap",
           title: `${match.teamA}真的控制住比赛了吗？`,
-          coreAngle: `控球率差距 ${possessionGap}% 不等于内容结论，需要结合射正、xG 和关键事件判断比赛控制权。`,
+          coreAngle: `控球率差距 ${possessionGap}% 不等于内容结论，需要结合射正、射门效率和关键事件判断比赛控制权。`,
           category: "战术复盘",
           recommendation: "主推",
           scores: [86, 84, 82, 91, 58, 78, 84],
@@ -88,8 +87,8 @@ export function generateTopics(match: MatchData): TopicIdea[] {
         }),
         createTopic(match, {
           id: "data-anomaly",
-          title: `xG 差距 ${xgGap}：比分之外还有什么信号`,
-          coreAngle: "把 xG、射门、射正和角球放在一起，解释哪些机会真正改变了比赛。",
+          title: "比分之外还有什么数据信号",
+          coreAngle: "把射门、射正、角球和关键事件放在一起，解释哪些机会真正改变了比赛。",
           category: "数据解读",
           recommendation: "观察",
           scores: [84, 78, 78, 88, 72, 80, 78],
@@ -229,7 +228,7 @@ function worldCupFinalTopics(match: MatchData): TopicIdea[] {
       scoreReason: "数据解释价值高，但需要图表辅助才能降低理解门槛。",
       businessExplanation: "适合作为报告和长文里的证据模块，而不是单独主推。",
       reason: "数据反差可以支撑“为什么观感紧张但阿根廷长期占优”的解释。",
-      sampleTitles: ["别只看 3-3：这组射门数据说明了决赛的另一面", "阿根廷赢在哪里？先看射正和 xG"]
+      sampleTitles: ["别只看 3-3：这组射门数据说明了决赛的另一面", "阿根廷赢在哪里？先看射正和关键事件"]
     }),
     createTopic(match, {
       id: "2018-to-2022",

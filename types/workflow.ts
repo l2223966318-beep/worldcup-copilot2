@@ -5,7 +5,6 @@ export type TeamStatsSnapshot = {
   corners: number;
   fouls: number;
   yellowCards: number;
-  xg: number;
 };
 
 export type MatchContext = {

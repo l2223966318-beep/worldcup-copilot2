@@ -62,14 +62,14 @@ const platformFactories: Record<
   douyin: (match, topic, analysis) => [
     { title: "前三秒钩子", content: `前三秒：${match.matchInfo.score} 不是全部，这个瞬间才改变了比赛。` },
     { title: "15秒口播", content: `比分一出来，先抓 ${topic.title}。一句话：${analysis.turningPoints[0]}` },
-    { title: "30秒口播", content: `先给比分，再讲关键事件，最后用射正和 xG 解释为什么这不是普通赛后复盘。` },
+    { title: "30秒口播", content: `先给比分，再讲关键事件，最后用射门和射正解释为什么这不是普通赛后复盘。` },
     { title: "60秒口播", content: `用事件时间线串起比赛：开局/转折/数据/风险提示/评论区问题，结尾引导讨论。` },
     { title: "画面素材清单", content: "比分卡、球员特写、射门数据图、事件时间线、评论区问题卡。" }
   ],
   videoScript: (match, topic) => [
     { title: "分镜1", content: `比分卡：${match.matchInfo.teamA} ${match.matchInfo.score} ${match.matchInfo.teamB}` },
     { title: "分镜2", content: `事件线：突出 ${topic.coreAngle}` },
-    { title: "分镜3", content: "数据图：控球率、射门、射正、xG 对比。" },
+    { title: "分镜3", content: "数据图：控球率、射门、射正对比。" },
     { title: "分镜4", content: "结尾：用一个安全问题引导评论，不做未经证实判断。" },
     { title: "BGM建议", content: "前段节奏紧，中段降速解释，结尾用鼓点增强讨论感。" }
   ],

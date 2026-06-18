@@ -88,7 +88,7 @@ export function getProjectDataSource(projectId: string) {
     name: "示例赛后数据",
     status: "已连接",
     updateFrequency: "手动导入 / 示例数据",
-    fields: ["比分", "关键事件", "控球率", "射门", "射正", "角球", "犯规", "黄牌", "xG"]
+    fields: ["比分", "关键事件", "控球率", "射门", "射正", "角球", "犯规", "黄牌"]
   };
 }
 
@@ -103,7 +103,7 @@ export function analyzeMatch(matchData: MatchData) {
 
   return {
     trend: `${matchData.teamA}在控球和持续进攻上更主动，${matchData.teamB}则依靠关键时段的效率改变比赛情绪。`,
-    reason: `射正率分别为 ${teamAShotRate}% 和 ${teamBShotRate}%，xG 为 ${matchData.stats.teamA.xg} 比 ${matchData.stats.teamB.xg}，说明内容不能只写比分，要解释机会质量。`,
+    reason: `射正率分别为 ${teamAShotRate}% 和 ${teamBShotRate}%，说明内容不能只写比分，要解释射门质量和关键节点。`,
     turningPoint: matchData.keyEvents[Math.min(3, matchData.keyEvents.length - 1)]?.description ?? matchData.summary,
     contentValue: "适合拆成数据解释、球员叙事和平台化短内容三条线。"
   };
@@ -119,12 +119,11 @@ export function reviewContentRisk() {
 
 export function searchKnowledgeBase(query: string, projectId: string) {
   void projectId;
-  if (query.includes("xG")) return "xG 是预期进球，表示一次射门根据位置、角度和方式形成进球的概率。";
-  if (query.includes("控球")) return "控球率高不一定代表优势，运营表达要继续看射正、xG 和关键区域触球。";
+  if (query.includes("控球")) return "控球率高不一定代表优势，运营表达要继续看射正、关键事件和关键区域触球。";
   if (query.includes("风险")) return "涉及黑哨、黑幕、确认伤退等定性说法时，应改为需核实、建议补充来源、建议人工确认。";
   return "可以从术语解释、运营理解、内容表达和风险提示四个角度组织回答。";
 }
 
 export function suggestKnowledgeTerms() {
-  return ["xG", "控球率", "高位逼抢", "点球大战", "争议判罚表达风险"];
+  return ["控球率", "射正率", "高位逼抢", "点球大战", "争议判罚表达风险"];
 }

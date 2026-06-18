@@ -129,8 +129,7 @@ export function mockMatchToWorldCupMatch(match: MatchData): WorldCupMatch {
           { type: "射正", value: match.stats.teamA.shotsOnTarget },
           { type: "角球", value: match.stats.teamA.corners },
           { type: "犯规", value: match.stats.teamA.fouls },
-          { type: "黄牌", value: match.stats.teamA.yellowCards },
-          { type: "xG", value: match.stats.teamA.xg }
+          { type: "黄牌", value: match.stats.teamA.yellowCards }
         ]
       },
       {
@@ -141,8 +140,7 @@ export function mockMatchToWorldCupMatch(match: MatchData): WorldCupMatch {
           { type: "射正", value: match.stats.teamB.shotsOnTarget },
           { type: "角球", value: match.stats.teamB.corners },
           { type: "犯规", value: match.stats.teamB.fouls },
-          { type: "黄牌", value: match.stats.teamB.yellowCards },
-          { type: "xG", value: match.stats.teamB.xg }
+          { type: "黄牌", value: match.stats.teamB.yellowCards }
         ]
       }
     ],

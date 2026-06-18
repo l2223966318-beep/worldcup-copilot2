@@ -139,8 +139,7 @@ function MatchDetail({ matchId }: { matchId: string }) {
     ["射正", match.stats.teamA.shotsOnTarget, match.stats.teamB.shotsOnTarget],
     ["角球", match.stats.teamA.corners, match.stats.teamB.corners],
     ["犯规", match.stats.teamA.fouls, match.stats.teamB.fouls],
-    ["黄牌", match.stats.teamA.yellowCards, match.stats.teamB.yellowCards],
-    ["xG", match.stats.teamA.xg, match.stats.teamB.xg]
+    ["黄牌", match.stats.teamA.yellowCards, match.stats.teamB.yellowCards]
   ];
 
   return (

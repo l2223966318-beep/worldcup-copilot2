@@ -51,7 +51,7 @@ export function InsightCharts({ match, theme = getSportTheme("football") }: { ma
     ? `${radarPlayer.name}射门 ${radarPlayer.shots} 次、进球 ${radarPlayer.goals} 个。雷达图适合放在球队走势段，说明这条内容线是否有数据支撑。`
     : `${radarPlayer.name}评分 ${radarPlayer.rating}，进球 ${radarPlayer.goals}，关键传球 ${radarPlayer.keyPasses}。雷达图适合放在人物叙事段，证明主角不是靠单一镜头成立。`;
   const radarQuote = isTeamSubject
-    ? `${radarPlayer.name}这条内容线不能只看比分，要看它在射门、控球和机会质量里的位置。`
+    ? `${radarPlayer.name}这条内容线不能只看比分，要看它在射门、控球和关键事件里的位置。`
     : `${radarPlayer.name}的价值不只在进球，也在他把比赛叙事串了起来。`;
 
   return (
@@ -59,7 +59,7 @@ export function InsightCharts({ match, theme = getSportTheme("football") }: { ma
       <ChartCard
         title="控球率对比：谁真正掌握比赛时间？"
         operation={`${match.teamA}控球率为 ${match.stats.teamA.possession}%，${match.teamB}为 ${match.stats.teamB.possession}%。运营上不要只写谁控球更多，要解释控球是否转化成真正威胁。`}
-        quote="控球率只是比赛的时间分配，射正和 xG 才更接近机会质量。"
+        quote="控球率只是比赛的时间分配，射正和关键事件更接近真实威胁。"
         theme={theme}
       >
         <ResponsiveContainer width="100%" height={250}>
