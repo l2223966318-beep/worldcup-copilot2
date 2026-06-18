@@ -224,16 +224,19 @@ function signalToMatchHotspot(signal: Pick<MatchSignal, "id" | "label" | "minute
 
 function getMatchReason(text: string, match: MatchData) {
   const normalized = normalizeText(text);
-  const keys = [
-    match.teamA,
-    match.teamB,
-    match.name,
-    ...match.name.split(/\s+vs\s+|：|:/),
-    ...match.keyEvents.flatMap((event) => [event.team, event.type, event.description])
-  ].filter(Boolean);
-  const matched = keys.find((key) => normalizeText(key).length >= 2 && normalized.includes(normalizeText(key)));
-  if (!matched) return "";
-  return `命中“${matched}”，与${match.teamA} vs ${match.teamB}相关`;
+  const teamAAliases = teamAliases(match.teamA);
+  const teamBAliases = teamAliases(match.teamB);
+  const hasTeamA = teamAAliases.some((alias) => normalized.includes(alias));
+  const hasTeamB = teamBAliases.some((alias) => normalized.includes(alias));
+  if (hasTeamA && hasTeamB) return "当前对阵";
+  return "";
+}
+
+function teamAliases(team: string) {
+  const compact = normalizeText(team);
+  const withoutBrackets = normalizeText(team.replace(/[（(].*?[）)]/g, ""));
+  const bracketText = team.match(/[（(](.*?)[）)]/)?.[1] ?? "";
+  return Array.from(new Set([compact, withoutBrackets, normalizeText(`${withoutBrackets}${bracketText}`)].filter((item) => item.length >= 2)));
 }
 
 function dedupeHotspots(items: MatchHotspot[]) {

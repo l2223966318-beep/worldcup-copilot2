@@ -97,7 +97,52 @@ const hotspots = buildMatchHotspotShortlist({
 });
 assert.equal(hotspots[0].title, "美国队4比1巴拉圭 乌龙球");
 assert.ok(hotspots[0].heatScore > hotspots[1].heatScore);
-assert.ok(hotspots.every((item) => item.matchReason.includes("美国") || item.matchReason.includes("巴拉圭") || item.source === "场上事件"));
+assert.ok(hotspots.every((item) => item.matchReason === "当前对阵" || item.source === "场上事件"));
+
+const narrowMatch = {
+  ...match,
+  id: "portugal-congo",
+  name: "世界杯：葡萄牙 vs 刚果（金）",
+  teamA: "葡萄牙",
+  teamB: "刚果（金）",
+  score: "vs",
+  keyEvents: [
+    { minute: "90+1'", team: "葡萄牙", type: "关键扑救", description: "补时阶段出现关键扑救。" }
+  ]
+};
+const narrowHotspots = buildMatchHotspotShortlist({
+  match: narrowMatch,
+  signals: [],
+  hotItems: [
+    {
+      id: "generic-world-cup",
+      title: "世界杯今日赛程热议",
+      summary: "泛世界杯热点，没有出现当前对阵双方。",
+      url: "",
+      source: "UApiPro",
+      platform: "微博",
+      relevance: 80,
+      valueScore: 85,
+      heat: "900万",
+      tags: ["世界杯"]
+    },
+    {
+      id: "fixture-match",
+      title: "葡萄牙vs刚果 世界杯小组赛前瞻",
+      summary: "当前对阵相关热点。",
+      url: "",
+      source: "UApiPro",
+      platform: "抖音",
+      relevance: 88,
+      valueScore: 90,
+      heat: "500万",
+      tags: ["葡萄牙", "刚果"]
+    }
+  ]
+});
+assert.equal(narrowHotspots.length, 1);
+assert.equal(narrowHotspots[0].id, "fixture-match");
+assert.equal(narrowHotspots[0].matchReason, "当前对阵");
 
 const mergedPayload = mergeHotSearchPayloads([
   {

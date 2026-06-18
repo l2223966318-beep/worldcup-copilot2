@@ -840,17 +840,13 @@ function MatchHotspotCard({
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap gap-2">
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{hotspot.platform || "全网"}</span>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{hotspot.source}</span>
-            <span className="rounded-full px-3 py-1 text-xs font-semibold text-white" style={{ backgroundColor: theme.primary }}>
+            <HotspotBadge>{compactHotspotLabel(hotspot.platform || "全网")}</HotspotBadge>
+            <HotspotBadge>{compactHotspotLabel(hotspot.source)}</HotspotBadge>
+            <span className="inline-flex max-w-24 items-center rounded-full px-2.5 py-1 text-[11px] font-semibold text-white" style={{ backgroundColor: theme.primary }}>
               热度 {hotspot.heat ?? hotspot.valueScore}
             </span>
           </div>
           <h3 className="mt-4 text-xl font-semibold leading-tight text-slate-950">{hotspot.title}</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{hotspot.summary}</p>
-          <div className="mt-4 rounded-2xl p-4 text-sm leading-6" style={{ backgroundColor: theme.background, color: theme.secondary }}>
-            {hotspot.matchReason}
-          </div>
           <div className="mt-4 flex flex-wrap gap-2">
             <ActionButton onClick={onUse} theme={theme}>
               {hotspot.actionText}
@@ -869,6 +865,14 @@ function MatchHotspotCard({
       </div>
     </article>
   );
+}
+
+function HotspotBadge({ children }: { children: ReactNode }) {
+  return <span className="inline-flex max-w-24 items-center truncate rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">{children}</span>;
+}
+
+function compactHotspotLabel(value: string) {
+  return value.split(/[\/｜|]/)[0]?.trim() || value;
 }
 
 function TopicRecommendationCard({ topic, theme, featured, selected, copied, onSelect, onCopy }: { topic: TopicIdea; theme: SportTheme; featured?: boolean; selected: boolean; copied: boolean; onSelect: () => void; onCopy: () => void }) {
