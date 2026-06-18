@@ -22,7 +22,8 @@ writeFileSync(modulePath, compiled, "utf8");
 const {
   buildDraftReviewFlow,
   buildMatchHotspotShortlist,
-  buildTeamRadarData
+  buildTeamRadarData,
+  mergeHotSearchPayloads
 } = await import(`file:///${modulePath.replaceAll("\\", "/")}`);
 
 const match = {
@@ -97,6 +98,62 @@ const hotspots = buildMatchHotspotShortlist({
 assert.equal(hotspots[0].title, "美国队4比1巴拉圭 乌龙球");
 assert.ok(hotspots[0].heatScore > hotspots[1].heatScore);
 assert.ok(hotspots.every((item) => item.matchReason.includes("美国") || item.matchReason.includes("巴拉圭") || item.source === "场上事件"));
+
+const mergedPayload = mergeHotSearchPayloads([
+  {
+    sourceStatus: "live",
+    lastUpdated: "2026-06-18T01:00:00.000Z",
+    message: "UApiPro 已返回热榜",
+    data: [
+      {
+        id: "uapi-1",
+        title: "美国队4比1巴拉圭登上抖音热榜",
+        summary: "来自 UApiPro 的热点",
+        url: "https://example.com/uapi",
+        source: "UApiPro",
+        platform: "抖音",
+        relevance: 90,
+        valueScore: 92,
+        heat: "800万",
+        tags: ["美国", "巴拉圭"]
+      }
+    ]
+  },
+  {
+    sourceStatus: "partial",
+    lastUpdated: "2026-06-18T01:01:00.000Z",
+    message: "榜眼数据没有返回匹配热点",
+    data: [
+      {
+        id: "search-1",
+        title: "美国队4比1巴拉圭登上抖音热榜",
+        summary: "重复热点",
+        url: "https://example.com/uapi",
+        source: "榜眼数据",
+        platform: "全网搜索",
+        relevance: 70,
+        valueScore: 70,
+        heat: "100万",
+        tags: ["美国", "巴拉圭"]
+      },
+      {
+        id: "search-2",
+        title: "世界杯小组赛赛后讨论",
+        summary: "另一个搜索热点",
+        url: "",
+        source: "全网搜索",
+        platform: "全网搜索",
+        relevance: 50,
+        valueScore: 55,
+        tags: ["世界杯"]
+      }
+    ]
+  }
+]);
+assert.equal(mergedPayload.sourceStatus, "live");
+assert.equal(mergedPayload.data.length, 2);
+assert.equal(mergedPayload.data[0].source, "UApiPro");
+assert.ok(mergedPayload.message.includes("UApiPro"));
 
 const review = buildDraftReviewFlow(
   "美国队这场彻底打爆巴拉圭，巴拉圭后卫乌龙就是灾难。",

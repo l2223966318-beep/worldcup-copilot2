@@ -1,7 +1,7 @@
 import type { MatchData } from "@/data/matches";
 import type { MatchSignal } from "@/lib/ai/signals";
 import type { RiskReviewResult } from "@/lib/ai/risk";
-import type { HotItem } from "@/lib/hot/types";
+import type { HotItem, HotSearchPayload } from "@/lib/hot/types";
 
 export type TeamRadarRow = {
   metric: string;
@@ -69,6 +69,29 @@ export function buildMatchHotspotShortlist({
     .sort((a, b) => b.heatScore - a.heatScore || b.valueScore - a.valueScore || a.rank - b.rank)
     .slice(0, limit)
     .map((item, index) => ({ ...item, rank: index + 1 }));
+}
+
+export function mergeHotSearchPayloads(payloads: HotSearchPayload[]): HotSearchPayload {
+  const liveRank = { live: 5, partial: 4, cache: 3, fallback: 2, error: 1 } satisfies Record<HotSearchPayload["sourceStatus"], number>;
+  const sortedPayloads = [...payloads].sort((a, b) => liveRank[b.sourceStatus] - liveRank[a.sourceStatus]);
+  const sourceStatus = sortedPayloads[0]?.sourceStatus ?? "fallback";
+  const message = payloads.map((payload) => payload.message).filter(Boolean).join("；");
+  const seen = new Set<string>();
+  const data = payloads
+    .flatMap((payload) => payload.data)
+    .filter((item) => {
+      const key = normalizeText(item.url || item.title);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+  return {
+    sourceStatus,
+    data,
+    lastUpdated: payloads[0]?.lastUpdated ?? new Date().toISOString(),
+    message
+  };
 }
 
 export function buildDraftReviewFlow(draft: string, match: MatchData, result?: RiskReviewResult): DraftReviewFlow {

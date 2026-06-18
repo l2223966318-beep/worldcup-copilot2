@@ -29,7 +29,7 @@ import { createRuleBasedAnalysis } from "@/lib/services/analysisService";
 import { createPlatformDraft } from "@/lib/services/contentService";
 import { createContentPackage, createPackageMarkdown, createPackageText } from "@/lib/services/exportService";
 import { localizeMatchStatus, localizeRoundName, localizeTeamName, localizeVenueText } from "@/lib/services/footballNames";
-import { buildDraftReviewFlow, buildMatchHotspotShortlist } from "@/lib/services/matchDetailPresentation";
+import { buildDraftReviewFlow, buildMatchHotspotShortlist, mergeHotSearchPayloads } from "@/lib/services/matchDetailPresentation";
 import { appendHistoryRecord, writeReviewDraft, writeWorkflowState } from "@/lib/services/workflowStore";
 import { worldCupMatchToMatchData } from "@/lib/sports/adapters";
 import { useWorldCupQuery } from "@/lib/sports/client";
@@ -176,14 +176,16 @@ export default function MatchAnalysisPage() {
     setHotspotLoading(true);
     setHotspotError("");
 
-    fetch(`/api/hot/search?q=${encodeURIComponent(query)}`, {
-      cache: "no-store",
-      headers: getStoredHotSearchHeaders(),
-      signal: controller.signal
-    })
-      .then((response) => response.json())
-      .then((payload: HotSearchPayload) => {
+    Promise.allSettled([
+      fetchHotPayload("/api/hot?source=all&scope=sports&limit=50", controller.signal),
+      fetchHotPayload(`/api/hot/search?q=${encodeURIComponent(query)}`, controller.signal, getStoredHotSearchHeaders())
+    ])
+      .then((results) => {
         if (controller.signal.aborted) return;
+        const payloads = results.flatMap((result) => (result.status === "fulfilled" ? [result.value] : []));
+        const failures = results.flatMap((result) => (result.status === "rejected" ? [result.reason] : []));
+        if (!payloads.length) throw failures[0] ?? new Error("热点源请求失败，已保留本场事件信号。");
+        const payload = mergeHotSearchPayloads(payloads);
         if (payload.sourceStatus === "error") {
           setHotspotError(payload.message || "热点源暂不可用，已保留本场事件信号。");
           setMatchHotItems([]);
@@ -1169,6 +1171,19 @@ function getStoredHotSearchHeaders() {
   } catch {
     return {};
   }
+}
+
+async function fetchHotPayload(url: string, signal: AbortSignal, headers?: Record<string, string>): Promise<HotSearchPayload> {
+  const response = await fetch(url, {
+    cache: "no-store",
+    headers,
+    signal
+  });
+  const payload = (await response.json().catch(() => null)) as HotSearchPayload | null;
+  if (!response.ok || !payload) {
+    throw new Error(payload?.message || `热点接口请求失败：${response.status}`);
+  }
+  return payload;
 }
 
 function readHotRadarCache(): HotRadarCache | null {
