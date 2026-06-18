@@ -22,6 +22,7 @@ import {
 
 import type { MatchData } from "@/data/matches";
 import { copyToClipboard } from "@/lib/download";
+import { buildChartCopy, buildTeamRadarData } from "@/lib/services/matchDetailPresentation";
 import { getSportTheme, type SportTheme } from "@/lib/sport-theme";
 
 export function InsightCharts({ match, theme = getSportTheme("football") }: { match: MatchData; theme?: SportTheme }) {
@@ -33,33 +34,19 @@ export function InsightCharts({ match, theme = getSportTheme("football") }: { ma
     { name: "射门", [match.teamA]: match.stats.teamA.shots, [match.teamB]: match.stats.teamB.shots },
     { name: "射正", [match.teamA]: match.stats.teamA.shotsOnTarget, [match.teamB]: match.stats.teamB.shotsOnTarget }
   ];
-  const radarPlayer = match.keyPlayers[0];
-  const isTeamSubject = radarPlayer.role === "球队";
-  const playerRadar = [
-    { metric: "进球", value: radarPlayer.goals * 30 + 40 },
-    { metric: "射门", value: radarPlayer.shots * 12 },
-    { metric: "关键传球", value: radarPlayer.keyPasses * 18 },
-    { metric: "对抗", value: radarPlayer.duelsWon * 12 },
-    { metric: "评分", value: radarPlayer.rating * 10 }
-  ];
+  const teamRadar = buildTeamRadarData(match);
+  const chartCopy = buildChartCopy(match);
   const historyData = match.historicalMeetings.map((item, index) => ({
     name: item.year,
     场次: index + 1
   }));
-  const radarTitle = isTeamSubject ? "球队表现雷达：这条比赛线是否站得住" : "关键球员雷达：人物叙事是否站得住";
-  const radarOperation = isTeamSubject
-    ? `${radarPlayer.name}射门 ${radarPlayer.shots} 次、进球 ${radarPlayer.goals} 个。雷达图适合放在球队走势段，说明这条内容线是否有数据支撑。`
-    : `${radarPlayer.name}评分 ${radarPlayer.rating}，进球 ${radarPlayer.goals}，关键传球 ${radarPlayer.keyPasses}。雷达图适合放在人物叙事段，证明主角不是靠单一镜头成立。`;
-  const radarQuote = isTeamSubject
-    ? `${radarPlayer.name}这条内容线不能只看比分，要看它在射门、控球和关键事件里的位置。`
-    : `${radarPlayer.name}的价值不只在进球，也在他把比赛叙事串了起来。`;
 
   return (
     <div className="grid gap-5 xl:grid-cols-2">
       <ChartCard
         title="控球率对比：谁真正掌握比赛时间？"
-        operation={`${match.teamA}控球率为 ${match.stats.teamA.possession}%，${match.teamB}为 ${match.stats.teamB.possession}%。运营上不要只写谁控球更多，要解释控球是否转化成真正威胁。`}
-        quote="控球率只是比赛的时间分配，射正和关键事件更接近真实威胁。"
+        operation={chartCopy.possession.operation}
+        quote={chartCopy.possession.quote}
         theme={theme}
       >
         <ResponsiveContainer width="100%" height={250}>
@@ -75,8 +62,8 @@ export function InsightCharts({ match, theme = getSportTheme("football") }: { ma
 
       <ChartCard
         title="射门 / 射正：比赛机会密度怎么讲"
-        operation={`${match.teamA}射门 ${match.stats.teamA.shots} 次、射正 ${match.stats.teamA.shotsOnTarget} 次；${match.teamB}射门 ${match.stats.teamB.shots} 次、射正 ${match.stats.teamB.shotsOnTarget} 次。这个图适合解释场面热闹和真实威胁的差别。`}
-        quote="别只看射门数，真正决定内容角度的是射正率和机会质量。"
+        operation={chartCopy.shots.operation}
+        quote={chartCopy.shots.quote}
         theme={theme}
       >
         <ResponsiveContainer width="100%" height={250}>
@@ -93,17 +80,19 @@ export function InsightCharts({ match, theme = getSportTheme("football") }: { ma
       </ChartCard>
 
       <ChartCard
-        title={radarTitle}
-        operation={radarOperation}
-        quote={radarQuote}
+        title="球队表现雷达：两队强弱项一眼对比"
+        operation={chartCopy.radar.operation}
+        quote={chartCopy.radar.quote}
         theme={theme}
       >
         <ResponsiveContainer width="100%" height={270}>
-          <RadarChart data={playerRadar}>
+          <RadarChart data={teamRadar}>
             <PolarGrid stroke="rgba(148,163,184,.3)" />
             <PolarAngleAxis dataKey="metric" tick={{ fill: "#475569", fontSize: 12 }} />
-            <PolarRadiusAxis tick={false} axisLine={false} />
-            <Radar dataKey="value" stroke={theme.chartA} fill={theme.chartA} fillOpacity={0.25} />
+            <PolarRadiusAxis tick={false} axisLine={false} domain={[0, 100]} />
+            <Radar name={match.teamA} dataKey={match.teamA} stroke={theme.chartA} fill={theme.chartA} fillOpacity={0.22} />
+            <Radar name={match.teamB} dataKey={match.teamB} stroke={theme.chartB} fill={theme.chartB} fillOpacity={0.18} />
+            <Legend />
             <Tooltip />
           </RadarChart>
         </ResponsiveContainer>
@@ -111,8 +100,8 @@ export function InsightCharts({ match, theme = getSportTheme("football") }: { ma
 
       <ChartCard
         title="赛事背景：这场比赛如何放进内容上下文"
-        operation={`${match.teamA}和${match.teamB}当前有 ${match.historicalMeetings.length} 条可用背景记录。它适合放在长文或 B站视频中段，用来补充赛程、场馆和历史语境。`}
-        quote="背景信息不是本场比赛的答案，但能帮助观众理解这场球为什么值得被拆解。"
+        operation={chartCopy.context.operation}
+        quote={chartCopy.context.quote}
         theme={theme}
       >
         <ResponsiveContainer width="100%" height={250}>

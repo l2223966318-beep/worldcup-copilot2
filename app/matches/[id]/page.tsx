@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -22,11 +22,14 @@ import { reviewRisk } from "@/lib/ai/risk";
 import { extractMatchSignals, type MatchSignal } from "@/lib/ai/signals";
 import { generateTopics, type TopicIdea } from "@/lib/ai/topics";
 import { copyToClipboard, downloadTextFile } from "@/lib/download";
+import { HOT_RADAR_CACHE_KEY, type HotRadarCache } from "@/lib/hot/hotTopicWorkflow";
+import type { HotItem, HotSearchPayload, HotTopic } from "@/lib/hot/types";
 import { analyzeMatch, getMatchDetail } from "@/lib/project-api";
 import { createRuleBasedAnalysis } from "@/lib/services/analysisService";
 import { createPlatformDraft } from "@/lib/services/contentService";
 import { createContentPackage, createPackageMarkdown, createPackageText } from "@/lib/services/exportService";
 import { localizeMatchStatus, localizeRoundName, localizeTeamName, localizeVenueText } from "@/lib/services/footballNames";
+import { buildDraftReviewFlow, buildMatchHotspotShortlist } from "@/lib/services/matchDetailPresentation";
 import { appendHistoryRecord, writeReviewDraft, writeWorkflowState } from "@/lib/services/workflowStore";
 import { worldCupMatchToMatchData } from "@/lib/sports/adapters";
 import { useWorldCupQuery } from "@/lib/sports/client";
@@ -73,6 +76,7 @@ const platformMeta: Record<PlatformKey, { title: string; positioning: string; ac
 
 export default function MatchAnalysisPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const fixtureId = params.id;
   const { payload, loading, error } = useWorldCupQuery<WorldCupMatch>(
     `/api/worldcup/matches/${fixtureId}`,
@@ -101,6 +105,10 @@ export default function MatchAnalysisPage() {
   const [manualAnalysis, setManualAnalysis] = useState<AnalysisResult | null>(null);
   const [manualDraft, setManualDraft] = useState<PlatformDraft | null>(null);
   const [workflowNotice, setWorkflowNotice] = useState("");
+  const [matchHotItems, setMatchHotItems] = useState<HotItem[]>([]);
+  const [hotspotLoading, setHotspotLoading] = useState(false);
+  const [hotspotError, setHotspotError] = useState("");
+  const [draftForReview, setDraftForReview] = useState("");
 
   const localContent = useMemo(() => generatePlatformContent(match, selectedTopic), [match, selectedTopic]);
   const content = useMemo(() => {
@@ -112,8 +120,6 @@ export default function MatchAnalysisPage() {
     return localContent;
   }, [aiEnhancement, localContent, selectedTopic.id]);
   const selectedText = useMemo(() => buildSelectedContent(content, ["bilibili", "weibo", "xiaohongshu", "douyin", "article"]), [content]);
-  const risk = useMemo(() => reviewRisk(selectedText), [selectedText]);
-  const markdown = useMemo(() => buildMarkdown(match.name, selectedTopic, content, risk.advice), [content, match.name, risk.advice, selectedTopic]);
   const matchContext = useMemo(
     () => buildMatchContext(match, matchSignals, payload?.sourceStatus ?? "fallback"),
     [match, matchSignals, payload?.sourceStatus]
@@ -122,6 +128,14 @@ export default function MatchAnalysisPage() {
   const activeWorkflowDraft = useMemo(
     () => manualDraft ?? createPlatformDraft(toWorkflowPlatform(activePlatform), matchContext, workflowTopic, manualAnalysis ?? createRuleBasedAnalysis(matchContext)),
     [activePlatform, manualAnalysis, manualDraft, matchContext, workflowTopic]
+  );
+  const reviewSourceText = draftForReview.trim() || activeWorkflowDraft.body;
+  const reviewResult = useMemo(() => reviewRisk(reviewSourceText), [reviewSourceText]);
+  const reviewFlow = useMemo(() => buildDraftReviewFlow(reviewSourceText, match, reviewResult), [match, reviewResult, reviewSourceText]);
+  const markdown = useMemo(() => buildMarkdown(match.name, selectedTopic, content, reviewFlow.result.advice), [content, match.name, reviewFlow.result.advice, selectedTopic]);
+  const matchHotspots = useMemo(
+    () => buildMatchHotspotShortlist({ match, signals: matchSignals, hotItems: matchHotItems }),
+    [match, matchHotItems, matchSignals]
   );
 
   useEffect(() => {
@@ -155,6 +169,41 @@ export default function MatchAnalysisPage() {
 
     return () => controller.abort();
   }, [baselineTopics, match]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const query = `${match.teamA} ${match.teamB} ${match.name} 世界杯 足球`;
+    setHotspotLoading(true);
+    setHotspotError("");
+
+    fetch(`/api/hot/search?q=${encodeURIComponent(query)}`, {
+      cache: "no-store",
+      headers: getStoredHotSearchHeaders(),
+      signal: controller.signal
+    })
+      .then((response) => response.json())
+      .then((payload: HotSearchPayload) => {
+        if (controller.signal.aborted) return;
+        if (payload.sourceStatus === "error") {
+          setHotspotError(payload.message || "热点源暂不可用，已保留本场事件信号。");
+          setMatchHotItems([]);
+          return;
+        }
+        setMatchHotItems(payload.data ?? []);
+        setHotspotError(payload.message ?? "");
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted) {
+          setHotspotError(error instanceof Error ? error.message : "热点源请求失败，已保留本场事件信号。");
+          setMatchHotItems([]);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setHotspotLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [match.id, match.name, match.teamA, match.teamB]);
 
   useEffect(() => {
     if (!topics.some((topic) => topic.id === selectedTopicId)) {
@@ -208,6 +257,7 @@ export default function MatchAnalysisPage() {
     const draft = createPlatformDraft(toWorkflowPlatform(activePlatform), matchContext, workflowTopic, analysisSnapshot);
     setManualAnalysis(analysisSnapshot);
     setManualDraft(draft);
+    setDraftForReview(draft.body);
     writeWorkflowState({
       currentMatch: matchContext,
       analysisResult: analysisSnapshot,
@@ -219,14 +269,49 @@ export default function MatchAnalysisPage() {
   }
 
   function handleSendToReview() {
-    writeReviewDraft(activeWorkflowDraft.body);
+    writeReviewDraft(reviewSourceText);
     writeWorkflowState({
       currentMatch: matchContext,
       selectedTopic: workflowTopic,
       selectedPlatform: activeWorkflowDraft.platform,
-      generatedContent: activeWorkflowDraft
+      generatedContent: { ...activeWorkflowDraft, body: reviewSourceText }
     });
     showWorkflowNotice("已送入风险审稿模块。");
+  }
+
+  function openHotspotWorkflow(hotspot: ReturnType<typeof buildMatchHotspotShortlist>[number]) {
+    if (typeof window !== "undefined") {
+      const topic: HotTopic = {
+        id: hotspot.id,
+        rank: hotspot.rank,
+        title: hotspot.title,
+        summary: hotspot.summary,
+        heat: hotspot.heat,
+        platform: hotspot.platform,
+        source: hotspot.source,
+        valueScore: hotspot.valueScore,
+        relevanceScore: hotspot.valueScore,
+        leverageValue: hotspot.valueScore >= 75 ? "高价值" : "可观察",
+        tags: [match.teamA, match.teamB, match.stage, "比赛详情页"],
+        updatedAt: new Date().toISOString(),
+        url: hotspot.url,
+        relatedMatches: [match.name],
+        contentAngles: [
+          `从“${hotspot.title}”切入，先确认热点来源，再回到${match.teamA} vs ${match.teamB}的比赛事实。`,
+          "生成内容前先拆清：已知事实、待核验信息、平台适配和风险边界。"
+        ]
+      };
+      const cached = readHotRadarCache();
+      const topics = [topic, ...(cached?.topics ?? []).filter((item) => item.id !== topic.id)];
+      const nextCache: HotRadarCache = {
+        topics,
+        lastUpdatedAt: new Date().toISOString(),
+        sourceStatus: cached?.sourceStatus ?? "cache",
+        message: "来自比赛详情页热点短榜。"
+      };
+      window.localStorage.setItem(HOT_RADAR_CACHE_KEY, JSON.stringify(nextCache));
+    }
+    router.push(`/hot-topics/${encodeURIComponent(hotspot.id)}?mode=generate`);
   }
 
   function buildCurrentPackage() {
@@ -237,10 +322,10 @@ export default function MatchAnalysisPage() {
       selectedTopic: workflowTopic,
       platformDraft: activeWorkflowDraft,
       reviewResult: {
-        level: risk.level,
-        score: risk.score,
-        findings: risk.findings.map((finding) => ({ type: finding.type, sentence: finding.sentence, rewrite: finding.rewrite })),
-        advice: risk.advice
+        level: reviewFlow.result.level,
+        score: reviewFlow.result.score,
+        findings: reviewFlow.result.findings.map((finding) => ({ type: finding.type, sentence: finding.sentence, rewrite: finding.rewrite })),
+        advice: reviewFlow.result.advice
       }
     });
   }
@@ -268,92 +353,6 @@ export default function MatchAnalysisPage() {
 
       <AiBrainStatus loading={aiLoading} enhancement={aiEnhancement} theme={theme} />
 
-      <section className="rounded-[32px] border bg-white p-5 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-semibold text-slate-950">完整功能链路</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-500">
-              按顺序执行：赛事分析 → 选题 → 平台文案 → 风险审稿 → 内容包导出。没有 API Key 时使用本地规则兜底。
-            </p>
-            {workflowNotice ? <p className="mt-2 text-sm font-semibold text-emerald-700">{workflowNotice}</p> : null}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <ActionButton onClick={handleGenerateAnalysis} theme={theme} variant="secondary">
-              <Sparkles className="h-4 w-4" />
-              生成赛事分析
-            </ActionButton>
-            <ActionButton onClick={handleGenerateTopics} theme={theme} variant="secondary">
-              生成选题
-            </ActionButton>
-            <ActionButton onClick={handleGeneratePlatformDraft} theme={theme}>
-              生成{platformMeta[activePlatform].title}文案
-            </ActionButton>
-            <Link href="/risk-review" onClick={handleSendToReview} className="inline-flex h-11 items-center justify-center gap-2 rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5">
-              送入审稿
-            </Link>
-            <ActionButton
-              onClick={() => {
-                appendHistoryRecord({
-                  kind: "workflow",
-                  matchId: match.id,
-                  title: match.name,
-                  score: match.score,
-                  stage: match.stage,
-                  platforms: ["内容包 JSON"],
-                  route: `/matches/${match.id}`,
-                  summary: workflowTopic.title,
-                  sourceStatus: matchContext.matchInfo.sourceStatus
-                });
-                downloadTextFile(`${match.id}-content-package.json`, JSON.stringify(buildCurrentPackage(), null, 2), "application/json;charset=utf-8");
-                showWorkflowNotice("内容包 JSON 已导出，并写入历史记录。");
-              }}
-              theme={theme}
-              variant="secondary"
-            >
-              <Download className="h-4 w-4" />
-              导出 JSON
-            </ActionButton>
-            <ActionButton
-              onClick={() => {
-                appendHistoryRecord({
-                  kind: "workflow",
-                  matchId: match.id,
-                  title: match.name,
-                  score: match.score,
-                  stage: match.stage,
-                  platforms: ["内容包 TXT"],
-                  route: `/matches/${match.id}`,
-                  summary: workflowTopic.title,
-                  sourceStatus: matchContext.matchInfo.sourceStatus
-                });
-                downloadTextFile(`${match.id}-content-package.txt`, createPackageText(buildCurrentPackage()), "text/plain;charset=utf-8");
-                showWorkflowNotice("内容包 TXT 已导出，并写入历史记录。");
-              }}
-              theme={theme}
-              variant="secondary"
-            >
-              导出 TXT
-            </ActionButton>
-          </div>
-        </div>
-        {manualAnalysis ? (
-          <div className="mt-5 grid gap-3 lg:grid-cols-3">
-            <div className="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-              <div className="font-semibold text-slate-950">赛事总结</div>
-              <p className="mt-2">{manualAnalysis.summary}</p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-              <div className="font-semibold text-slate-950">胜负原因</div>
-              <p className="mt-2">{manualAnalysis.winLossReason}</p>
-            </div>
-            <div className="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">
-              <div className="font-semibold text-slate-950">传播看点</div>
-              <p className="mt-2">{manualAnalysis.communicationAngles.join(" / ")}</p>
-            </div>
-          </div>
-        ) : null}
-      </section>
-
       <section>
         <SectionTitle eyebrow="OPS CONCLUSION" title="运营结论" description="让运营人员 10 秒内知道这场比赛值不值得做、先做什么、要避开什么坑。" />
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -380,48 +379,40 @@ export default function MatchAnalysisPage() {
       </section>
 
       <section className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
-        <SectionTitle eyebrow="FIELD SIGNALS" title="场上热点信号" description="选题不只来自比分和技术统计，更优先来自能被观众记住、讨论和转发的场上瞬间。" />
-        <div className="mt-6 grid gap-4 lg:grid-cols-3">
-          {matchSignals.slice(0, 6).map((signal) => (
-            <MatchSignalCard
-              key={signal.id}
-              signal={signal}
-              theme={theme}
-              copied={copied === `signal-${signal.id}`}
-              onCopy={() => handleCopy(`signal-${signal.id}`, signal.topicSeed)}
-            />
-          ))}
+        <SectionTitle eyebrow="FIELD SIGNALS" title="场上热点信号" description="把外部热榜和本场事件合并成短榜，按热度与比赛相关性排序，像热搜一样先看最值得处理的内容。" />
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+          <span>{hotspotLoading ? "正在同步热点源..." : `已筛出 ${matchHotspots.length} 条比赛相关热点`}</span>
+          {hotspotError ? <span className="font-semibold text-amber-700">{hotspotError}</span> : null}
         </div>
-      </section>
-
-      <section>
-        <SectionTitle eyebrow="TOPIC ENGINE" title="内容角度推荐" description="先判断这场球值不值得做，再决定优先发到哪里。" />
-        <div className="mt-6 grid gap-5 lg:grid-cols-[1.15fr_0.85fr_0.85fr]">
-          {topics.map((topic, index) => (
-            <TopicRecommendationCard
-              key={topic.id}
-              topic={topic}
+        <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          {matchHotspots.map((hotspot) => (
+            <MatchHotspotCard
+              key={hotspot.id}
+              hotspot={hotspot}
               theme={theme}
-              featured={index === 0}
-              selected={selectedTopic.id === topic.id}
-              onSelect={() => setSelectedTopicId(topic.id)}
-              onCopy={() => handleCopy(`topic-${topic.id}`, topic.title)}
-              copied={copied === `topic-${topic.id}`}
+              copied={copied === `hotspot-${hotspot.id}`}
+              onCopy={() => handleCopy(`hotspot-${hotspot.id}`, `${hotspot.title}\n${hotspot.summary}`)}
+              onUse={() => openHotspotWorkflow(hotspot)}
             />
           ))}
         </div>
       </section>
 
       <section className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
-        <SectionTitle eyebrow="PLATFORM OUTPUT" title="多平台分发工作台" description="平台不是换皮，B站、微博、小红书、公众号有不同的内容任务。" />
-        <div className="mt-6 grid gap-4 lg:grid-cols-4">
+        <SectionTitle eyebrow="PLATFORM OUTPUT" title="多平台分发工作台" description="先选择平台，再生成当前平台内容；生成后可直接进入审稿和导出。" />
+        {workflowNotice ? <p className="mt-3 text-sm font-semibold text-emerald-700">{workflowNotice}</p> : null}
+        <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           {(Object.keys(platformLabels) as PlatformKey[]).map((platform) => (
             <PlatformOutputCard
               key={platform}
               platform={platform}
               active={activePlatform === platform}
               theme={theme}
-              onClick={() => setActivePlatform(platform)}
+              onClick={() => {
+                setActivePlatform(platform);
+                setManualDraft(null);
+                setDraftForReview("");
+              }}
             />
           ))}
         </div>
@@ -429,6 +420,7 @@ export default function MatchAnalysisPage() {
           className="mt-5"
           platform={activePlatform}
           content={content}
+          draft={manualDraft}
           theme={theme}
           copied={copied}
           onCopy={handleCopy}
@@ -452,21 +444,70 @@ export default function MatchAnalysisPage() {
       </section>
 
       <section className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
-        <SectionTitle eyebrow="RISK REVIEW" title="发布风险审稿" description="风险提示清楚但不过度吓人，重点给运营可执行的稳妥表达。" />
-        <div className="mt-6 grid gap-4 lg:grid-cols-5">
-          {workflow.risks.map(({ title, level, advice }) => (
-            <RiskCard
-              key={title}
-              title={title}
-              level={level}
-              advice={advice}
-              applied={rewriteApplied === title}
-              onApply={() => {
-                setRewriteApplied(title);
-                window.setTimeout(() => setRewriteApplied(null), 1600);
-              }}
+        <SectionTitle eyebrow="RISK REVIEW" title="发布风险审稿" description="按真实发布流程处理：先看稿件，再审核风险句，最后给可回填的改写版本。" />
+        <div className="mt-6 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+          <div className="rounded-[28px] border bg-slate-50 p-5" style={{ borderColor: theme.border }}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold" style={{ color: theme.primary }}>待审稿件</div>
+                <p className="mt-1 text-sm text-slate-500">默认读取当前生成稿件，也可以直接粘贴运营准备发布的版本。</p>
+              </div>
+              <ActionButton onClick={handleSendToReview} theme={theme} variant="secondary">
+                送入独立审稿页
+              </ActionButton>
+            </div>
+            <textarea
+              value={reviewSourceText}
+              onChange={(event) => setDraftForReview(event.target.value)}
+              className="mt-4 min-h-64 w-full resize-y rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-7 text-slate-800 outline-none focus:border-emerald-300"
             />
-          ))}
+            <div className="mt-4 flex flex-wrap gap-2">
+              <ActionButton onClick={() => setDraftForReview(activeWorkflowDraft.body)} theme={theme} variant="secondary">
+                读取当前生成稿件
+              </ActionButton>
+              <ActionButton onClick={() => setDraftForReview(reviewFlow.rewriteSuggestion)} theme={theme}>
+                应用改写建议
+              </ActionButton>
+              <ActionButton onClick={() => handleCopy("review-rewrite", reviewFlow.rewriteSuggestion)} theme={theme} variant="secondary">
+                <Clipboard className="h-4 w-4" />
+                {copied === "review-rewrite" ? "已复制" : "复制改写"}
+              </ActionButton>
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div className="rounded-[28px] border bg-white p-5" style={{ borderColor: theme.border }}>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full px-3 py-1 text-xs font-black text-white" style={{ backgroundColor: reviewFlow.result.level === "高" ? "#e11d48" : reviewFlow.result.level === "中" ? "#d97706" : theme.primary }}>
+                  {reviewFlow.result.level}风险
+                </span>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">分数 {reviewFlow.result.score}</span>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{reviewFlow.result.advice}</span>
+              </div>
+              <h3 className="mt-4 text-xl font-semibold text-slate-950">审核结果</h3>
+              <div className="mt-4 space-y-3">
+                {reviewFlow.riskPoints.map((item) => (
+                  <div key={item} className="rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">{item}</div>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-[28px] border bg-white p-5" style={{ borderColor: theme.border }}>
+              <h3 className="text-xl font-semibold text-slate-950">改写建议</h3>
+              <p className="mt-3 whitespace-pre-line rounded-2xl p-4 text-sm leading-7 text-slate-700" style={{ backgroundColor: theme.background }}>
+                {reviewFlow.rewriteSuggestion}
+              </p>
+            </div>
+            <div className="rounded-[28px] border bg-white p-5" style={{ borderColor: theme.border }}>
+              <h3 className="text-xl font-semibold text-slate-950">发布前检查</h3>
+              <div className="mt-3 space-y-2">
+                {reviewFlow.checklist.map((item) => (
+                  <div key={item} className="flex gap-2 text-sm leading-6 text-slate-600">
+                    <Check className="mt-1 h-4 w-4 shrink-0 text-emerald-600" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -776,6 +817,58 @@ function MatchSignalCard({
   );
 }
 
+function MatchHotspotCard({
+  hotspot,
+  theme,
+  copied,
+  onCopy,
+  onUse
+}: {
+  hotspot: ReturnType<typeof buildMatchHotspotShortlist>[number];
+  theme: SportTheme;
+  copied: boolean;
+  onCopy: () => void;
+  onUse: () => void;
+}) {
+  return (
+    <article className="rounded-[28px] border bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-[0_18px_48px_rgba(15,23,42,0.08)]" style={{ borderColor: hotspot.rank <= 3 ? theme.primary : theme.border }}>
+      <div className="flex items-start gap-4">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-black text-white" style={{ backgroundColor: hotspot.rank <= 3 ? theme.primary : theme.secondary }}>
+          {hotspot.rank}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap gap-2">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{hotspot.platform || "全网"}</span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{hotspot.source}</span>
+            <span className="rounded-full px-3 py-1 text-xs font-semibold text-white" style={{ backgroundColor: theme.primary }}>
+              热度 {hotspot.heat ?? hotspot.valueScore}
+            </span>
+          </div>
+          <h3 className="mt-4 text-xl font-semibold leading-tight text-slate-950">{hotspot.title}</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{hotspot.summary}</p>
+          <div className="mt-4 rounded-2xl p-4 text-sm leading-6" style={{ backgroundColor: theme.background, color: theme.secondary }}>
+            {hotspot.matchReason}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <ActionButton onClick={onUse} theme={theme}>
+              {hotspot.actionText}
+            </ActionButton>
+            <ActionButton onClick={onCopy} theme={theme} variant="secondary">
+              <Clipboard className="h-4 w-4" />
+              {copied ? "已复制" : "复制热点"}
+            </ActionButton>
+            {hotspot.url ? (
+              <a href={hotspot.url} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5">
+                打开来源
+              </a>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function TopicRecommendationCard({ topic, theme, featured, selected, copied, onSelect, onCopy }: { topic: TopicIdea; theme: SportTheme; featured?: boolean; selected: boolean; copied: boolean; onSelect: () => void; onCopy: () => void }) {
   return (
     <article
@@ -824,38 +917,48 @@ function PlatformOutputCard({ platform, active, theme, onClick }: { platform: Pl
   );
 }
 
-function PlatformPreview({ className, platform, content, theme, copied, onCopy, onExport, onRegenerate }: { className?: string; platform: PlatformKey; content: PlatformContent; theme: SportTheme; copied: string | null; onCopy: (key: string, value: string) => void; onExport: () => void; onRegenerate: () => void }) {
+function PlatformPreview({ className, platform, content, draft, theme, copied, onCopy, onExport, onRegenerate }: { className?: string; platform: PlatformKey; content: PlatformContent; draft: PlatformDraft | null; theme: SportTheme; copied: string | null; onCopy: (key: string, value: string) => void; onExport: () => void; onRegenerate: () => void }) {
   const preview = getPlatformPreview(platform, content);
+  const generatedText = draft?.body ?? "";
   return (
     <div className={`rounded-[28px] border bg-white p-5 ${className ?? ""}`} style={{ borderColor: theme.border }}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="text-sm font-semibold" style={{ color: theme.primary }}>{platformMeta[platform].title} 生成预览</div>
-          <h3 className="mt-2 text-2xl font-semibold text-slate-950">{preview.title}</h3>
+          <div className="text-sm font-semibold" style={{ color: theme.primary }}>{platformMeta[platform].title} 内容生成</div>
+          <h3 className="mt-2 text-2xl font-semibold text-slate-950">{draft ? draft.title : preview.title}</h3>
+          <p className="mt-2 text-sm leading-6 text-slate-500">{platformMeta[platform].positioning}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <ActionButton onClick={() => onCopy(`platform-${platform}`, preview.fullText)} theme={theme} variant="secondary">
-            <Clipboard className="h-4 w-4" />
-            {copied === `platform-${platform}` ? "已复制" : "复制"}
-          </ActionButton>
-          <ActionButton onClick={onExport} theme={theme} variant="secondary">
-            <Download className="h-4 w-4" />
-            导出
-          </ActionButton>
           <ActionButton onClick={onRegenerate} theme={theme} variant="secondary">
             <RefreshCcw className="h-4 w-4" />
-            {copied === "regen" ? "已重新生成" : "重新生成"}
+            {draft ? "重新生成" : platformMeta[platform].action}
           </ActionButton>
+          {draft ? (
+            <>
+              <ActionButton onClick={() => onCopy(`platform-${platform}`, generatedText)} theme={theme} variant="secondary">
+                <Clipboard className="h-4 w-4" />
+                {copied === `platform-${platform}` ? "已复制" : "复制"}
+              </ActionButton>
+              <ActionButton onClick={onExport} theme={theme} variant="secondary">
+                <Download className="h-4 w-4" />
+                导出
+              </ActionButton>
+            </>
+          ) : null}
         </div>
       </div>
-      <div className="mt-5 grid gap-3 lg:grid-cols-2">
-        {preview.items.map((item) => (
-          <div key={item.label} className="rounded-2xl bg-slate-50 p-4">
-            <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">{item.label}</div>
-            <p className="mt-2 text-sm leading-7 text-slate-700">{item.value}</p>
-          </div>
-        ))}
-      </div>
+      {draft ? (
+        <div className="mt-5 whitespace-pre-line rounded-2xl bg-slate-50 p-5 text-sm leading-7 text-slate-700">{generatedText}</div>
+      ) : (
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {preview.items.slice(0, 2).map((item) => (
+            <div key={item.label} className="rounded-2xl bg-slate-50 p-4">
+              <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">{item.label}</div>
+              <p className="mt-2 text-sm leading-7 text-slate-700">{item.value}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1051,6 +1154,30 @@ function getStoredDeepseekKey() {
     return settings?.deepseekKey?.trim() ?? "";
   } catch {
     return "";
+  }
+}
+
+function getStoredHotSearchHeaders() {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_STORAGE_KEY);
+    const settings = raw ? (JSON.parse(raw) as { tavilyKey?: string; topHubDataKey?: string }) : null;
+    const headers: Record<string, string> = {};
+    if (settings?.tavilyKey?.trim()) headers["x-worldcup-tavily-key"] = settings.tavilyKey.trim();
+    if (settings?.topHubDataKey?.trim()) headers["x-worldcup-tophubdata-key"] = settings.topHubDataKey.trim();
+    return headers;
+  } catch {
+    return {};
+  }
+}
+
+function readHotRadarCache(): HotRadarCache | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(HOT_RADAR_CACHE_KEY);
+    return raw ? (JSON.parse(raw) as HotRadarCache) : null;
+  } catch {
+    return null;
   }
 }
 
