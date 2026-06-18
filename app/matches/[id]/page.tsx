@@ -48,12 +48,23 @@ const platformLabels = {
 const SETTINGS_STORAGE_KEY = "worldcup.datasource.settings";
 
 type PlatformKey = keyof typeof platformLabels;
+type PublishGoalKey = keyof typeof publishGoals;
+type PlatformFit = "主推" | "可做" | "谨慎";
 
 type OpportunityScores = {
   heat: number;
   emotion: number;
   narrative: number;
   longTail: number;
+};
+
+type PlatformDecision = {
+  fit: PlatformFit;
+  score: number;
+  reason: string;
+  defaultGoal: PublishGoalKey;
+  deliverable: string;
+  caution: string;
 };
 
 type AiWorkflowEnhancement = {
@@ -73,6 +84,15 @@ const platformMeta: Record<PlatformKey, { title: string; positioning: string; ac
   douyin: { title: "抖音", positioning: "短视频口播、前三秒钩子、节奏分镜", action: "生成抖音口播" },
   article: { title: "公众号", positioning: "深度评论、历史纵深、长文沉淀", action: "生成公众号长文" }
 };
+
+const publishGoals = {
+  quickHot: { label: "快速蹭热" },
+  deepReview: { label: "深度复盘" },
+  debate: { label: "争议讨论" },
+  playerStory: { label: "球员故事" },
+  dataRead: { label: "数据解读" },
+  emotionClose: { label: "情绪收口" }
+} as const;
 
 export default function MatchAnalysisPage() {
   const params = useParams<{ id: string }>();
@@ -100,6 +120,7 @@ export default function MatchAnalysisPage() {
   const selectedTopic = topics.find((topic) => topic.id === selectedTopicId) ?? topics[0];
   const workflow = useMemo(() => buildMatchWorkflow(match, topics[0], analysis, aiEnhancement), [aiEnhancement, analysis, match, topics]);
   const [activePlatform, setActivePlatform] = useState<PlatformKey>("bilibili");
+  const [activePublishGoal, setActivePublishGoal] = useState<PublishGoalKey>("deepReview");
   const [copied, setCopied] = useState<string | null>(null);
   const [rewriteApplied, setRewriteApplied] = useState<string | null>(null);
   const [manualAnalysis, setManualAnalysis] = useState<AnalysisResult | null>(null);
@@ -125,9 +146,11 @@ export default function MatchAnalysisPage() {
     [match, matchSignals, payload?.sourceStatus]
   );
   const workflowTopic = useMemo(() => topicToWorkflowTopic(selectedTopic), [selectedTopic]);
+  const platformDecisions = useMemo(() => buildPlatformDecisions(match, matchSignals, selectedTopic), [match, matchSignals, selectedTopic]);
+  const activePlatformDecision = platformDecisions[activePlatform];
   const activeWorkflowDraft = useMemo(
-    () => manualDraft ?? createPlatformDraft(toWorkflowPlatform(activePlatform), matchContext, workflowTopic, manualAnalysis ?? createRuleBasedAnalysis(matchContext)),
-    [activePlatform, manualAnalysis, manualDraft, matchContext, workflowTopic]
+    () => manualDraft ?? addPublishBrief(createPlatformDraft(toWorkflowPlatform(activePlatform), matchContext, workflowTopic, manualAnalysis ?? createRuleBasedAnalysis(matchContext)), activePublishGoal, activePlatformDecision),
+    [activePlatform, activePlatformDecision, activePublishGoal, manualAnalysis, manualDraft, matchContext, workflowTopic]
   );
   const reviewSourceText = draftForReview.trim() || activeWorkflowDraft.body;
   const reviewResult = useMemo(() => reviewRisk(reviewSourceText), [reviewSourceText]);
@@ -256,7 +279,7 @@ export default function MatchAnalysisPage() {
 
   function handleGeneratePlatformDraft() {
     const analysisSnapshot = manualAnalysis ?? createRuleBasedAnalysis(matchContext);
-    const draft = createPlatformDraft(toWorkflowPlatform(activePlatform), matchContext, workflowTopic, analysisSnapshot);
+    const draft = addPublishBrief(createPlatformDraft(toWorkflowPlatform(activePlatform), matchContext, workflowTopic, analysisSnapshot), activePublishGoal, activePlatformDecision);
     setManualAnalysis(analysisSnapshot);
     setManualDraft(draft);
     setDraftForReview(draft.body);
@@ -401,7 +424,7 @@ export default function MatchAnalysisPage() {
       </section>
 
       <section className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
-        <SectionTitle eyebrow="PLATFORM OUTPUT" title="多平台分发工作台" description="先选择平台，再生成当前平台内容；生成后可直接进入审稿和导出。" />
+        <SectionTitle eyebrow="PLATFORM OUTPUT" title="多平台分发工作台" />
         {workflowNotice ? <p className="mt-3 text-sm font-semibold text-emerald-700">{workflowNotice}</p> : null}
         <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-5">
           {(Object.keys(platformLabels) as PlatformKey[]).map((platform) => (
@@ -409,9 +432,11 @@ export default function MatchAnalysisPage() {
               key={platform}
               platform={platform}
               active={activePlatform === platform}
+              decision={platformDecisions[platform]}
               theme={theme}
               onClick={() => {
                 setActivePlatform(platform);
+                setActivePublishGoal(platformDecisions[platform].defaultGoal);
                 setManualDraft(null);
                 setDraftForReview("");
               }}
@@ -423,6 +448,13 @@ export default function MatchAnalysisPage() {
           platform={activePlatform}
           content={content}
           draft={manualDraft}
+          decision={activePlatformDecision}
+          activeGoal={activePublishGoal}
+          onGoalChange={(goal) => {
+            setActivePublishGoal(goal);
+            setManualDraft(null);
+            setDraftForReview("");
+          }}
           theme={theme}
           copied={copied}
           onCopy={handleCopy}
@@ -720,12 +752,12 @@ function FieldPattern({ theme }: { theme: SportTheme }) {
   );
 }
 
-function SectionTitle({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
+function SectionTitle({ eyebrow, title, description }: { eyebrow: string; title: string; description?: string }) {
   return (
     <div>
       <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{eyebrow}</div>
       <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{title}</h2>
-      <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p>
+      {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p> : null}
     </div>
   );
 }
@@ -906,33 +938,89 @@ function TopicRecommendationCard({ topic, theme, featured, selected, copied, onS
   );
 }
 
-function PlatformOutputCard({ platform, active, theme, onClick }: { platform: PlatformKey; active: boolean; theme: SportTheme; onClick: () => void }) {
+function PlatformOutputCard({
+  platform,
+  active,
+  decision,
+  theme,
+  onClick
+}: {
+  platform: PlatformKey;
+  active: boolean;
+  decision: PlatformDecision;
+  theme: SportTheme;
+  onClick: () => void;
+}) {
   const meta = platformMeta[platform];
+  const fitTone = platformFitTone(decision.fit, theme);
   return (
     <button
       onClick={onClick}
-      className="rounded-[26px] border bg-white p-5 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-[0_20px_56px_rgba(15,23,42,0.08)]"
+      className="rounded-[26px] border bg-white p-4 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-[0_20px_56px_rgba(15,23,42,0.08)]"
       style={{ borderColor: active ? theme.primary : theme.border, backgroundColor: active ? theme.background : "#fff" }}
     >
-      <div className="text-xl font-semibold text-slate-950">{meta.title}</div>
-      <p className="mt-3 min-h-12 text-sm leading-6 text-slate-600">{meta.positioning}</p>
-      <div className="mt-5 inline-flex rounded-full px-3 py-1 text-xs font-semibold text-white" style={{ backgroundColor: active ? theme.primary : "#0f172a" }}>
-        {meta.action}
+      <div className="flex items-start justify-between gap-3">
+        <div className="text-xl font-semibold text-slate-950">{meta.title}</div>
+        <span className="rounded-full px-2.5 py-1 text-xs font-black" style={fitTone}>
+          {decision.fit}
+        </span>
+      </div>
+      <div className="mt-3 flex items-end gap-2">
+        <span className="text-3xl font-black" style={{ color: theme.primary }}>{decision.score}</span>
+        <span className="mb-1 text-xs font-semibold text-slate-400">适配分</span>
+      </div>
+      <p className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-slate-600">{decision.reason}</p>
+      <div className="mt-4 flex flex-wrap gap-1.5">
+        <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200">
+          {publishGoals[decision.defaultGoal].label}
+        </span>
+        <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-white" style={{ backgroundColor: active ? theme.primary : "#0f172a" }}>
+          {meta.action.replace("生成", "")}
+        </span>
       </div>
     </button>
   );
 }
 
-function PlatformPreview({ className, platform, content, draft, theme, copied, onCopy, onExport, onRegenerate }: { className?: string; platform: PlatformKey; content: PlatformContent; draft: PlatformDraft | null; theme: SportTheme; copied: string | null; onCopy: (key: string, value: string) => void; onExport: () => void; onRegenerate: () => void }) {
+function PlatformPreview({
+  className,
+  platform,
+  content,
+  draft,
+  decision,
+  activeGoal,
+  onGoalChange,
+  theme,
+  copied,
+  onCopy,
+  onExport,
+  onRegenerate
+}: {
+  className?: string;
+  platform: PlatformKey;
+  content: PlatformContent;
+  draft: PlatformDraft | null;
+  decision: PlatformDecision;
+  activeGoal: PublishGoalKey;
+  onGoalChange: (goal: PublishGoalKey) => void;
+  theme: SportTheme;
+  copied: string | null;
+  onCopy: (key: string, value: string) => void;
+  onExport: () => void;
+  onRegenerate: () => void;
+}) {
   const preview = getPlatformPreview(platform, content);
   const generatedText = draft?.body ?? "";
   return (
     <div className={`rounded-[28px] border bg-white p-5 ${className ?? ""}`} style={{ borderColor: theme.border }}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="text-sm font-semibold" style={{ color: theme.primary }}>{platformMeta[platform].title} 内容生成</div>
-          <h3 className="mt-2 text-2xl font-semibold text-slate-950">{draft ? draft.title : preview.title}</h3>
-          <p className="mt-2 text-sm leading-6 text-slate-500">{platformMeta[platform].positioning}</p>
+          <div className="text-sm font-semibold" style={{ color: theme.primary }}>{platformMeta[platform].title}</div>
+          <h3 className="mt-2 text-2xl font-semibold text-slate-950">{draft ? draft.title : `${publishGoals[activeGoal].label} · ${preview.title}`}</h3>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{decision.fit} {decision.score}</span>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{decision.deliverable}</span>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <ActionButton onClick={onRegenerate} theme={theme} variant="secondary">
@@ -953,20 +1041,135 @@ function PlatformPreview({ className, platform, content, draft, theme, copied, o
           ) : null}
         </div>
       </div>
+      <div className="mt-5 flex flex-wrap gap-2">
+        {(Object.keys(publishGoals) as PublishGoalKey[]).map((goal) => (
+          <button
+            key={goal}
+            type="button"
+            onClick={() => onGoalChange(goal)}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 transition ${activeGoal === goal ? "text-white shadow-sm" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"}`}
+            style={activeGoal === goal ? { backgroundColor: theme.primary, boxShadow: `0 10px 24px ${theme.heroGlow}` } : undefined}
+          >
+            {publishGoals[goal].label}
+          </button>
+        ))}
+      </div>
       {draft ? (
         <div className="mt-5 whitespace-pre-line rounded-2xl bg-slate-50 p-5 text-sm leading-7 text-slate-700">{generatedText}</div>
       ) : (
-        <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          {preview.items.slice(0, 2).map((item) => (
-            <div key={item.label} className="rounded-2xl bg-slate-50 p-4">
-              <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">{item.label}</div>
-              <p className="mt-2 text-sm leading-7 text-slate-700">{item.value}</p>
-            </div>
-          ))}
+        <div className="mt-5 grid gap-3 lg:grid-cols-3">
+          <PreviewTile label="交付物" value={decision.deliverable} />
+          <PreviewTile label="注意点" value={decision.caution} />
+          <PreviewTile label={preview.items[0]?.label ?? "素材"} value={preview.items[0]?.value ?? decision.reason} />
         </div>
       )}
     </div>
   );
+}
+
+function PreviewTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-slate-50 p-4">
+      <div className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">{label}</div>
+      <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-700">{value}</p>
+    </div>
+  );
+}
+
+function buildPlatformDecisions(match: MatchData, signals: MatchSignal[], topic: TopicIdea): Record<PlatformKey, PlatformDecision> {
+  const eventCount = match.keyEvents.length;
+  const playerCount = match.keyPlayers.length;
+  const scoreParts = match.score.match(/\d+/g)?.map(Number) ?? [];
+  const goalTotal = scoreParts.reduce((sum, item) => sum + item, 0);
+  const shotGap = Math.abs(match.stats.teamA.shots - match.stats.teamB.shots);
+  const onTargetTotal = match.stats.teamA.shotsOnTarget + match.stats.teamB.shotsOnTarget;
+  const signalValue = Math.max(...signals.map((signal) => signal.contentValue), 0);
+  const hasPenalty = Boolean(match.penaltyScore) || match.keyEvents.some((event) => event.type.includes("点"));
+  const hasLateEvent = match.keyEvents.some((event) => /8\d|9\d|加时|点球|终场/.test(event.minute));
+
+  const deepScore = clampPlatformScore(58 + eventCount * 4 + playerCount * 3 + Math.min(shotGap, 12) + (hasPenalty ? 8 : 0));
+  const weiboScore = clampPlatformScore(56 + goalTotal * 5 + (hasLateEvent ? 10 : 0) + Math.round(signalValue / 8));
+  const xhsScore = clampPlatformScore(52 + playerCount * 5 + Math.min(onTargetTotal, 12) + (topic.category.includes("人物") ? 8 : 0));
+  const douyinScore = clampPlatformScore(46 + goalTotal * 6 + (hasLateEvent ? 12 : 0) + (eventCount >= 4 ? 8 : 0));
+  const articleScore = clampPlatformScore(60 + eventCount * 3 + match.historicalMeetings.length * 4 + Math.min(shotGap, 10));
+
+  return {
+    bilibili: {
+      fit: scoreToFit(deepScore),
+      score: deepScore,
+      reason: eventCount >= 3 ? "事件线够完整，适合做复盘。" : "信息偏基础，适合做短复盘。",
+      defaultGoal: "deepReview",
+      deliverable: "标题、封面、结构、开头口播",
+      caution: "别只剪比分，先补证据。"
+    },
+    weibo: {
+      fit: scoreToFit(weiboScore),
+      score: weiboScore,
+      reason: goalTotal >= 3 || hasLateEvent ? "有讨论点，适合快速承接。" : "热度一般，适合观点短评。",
+      defaultGoal: hasLateEvent ? "debate" : "quickHot",
+      deliverable: "短评、话题、评论区引导",
+      caution: "争议表达要留核验口。"
+    },
+    xiaohongshu: {
+      fit: scoreToFit(xhsScore),
+      score: xhsScore,
+      reason: playerCount >= 2 ? "人物和数据都能拆成卡片。" : "适合做基础看球解释。",
+      defaultGoal: playerCount >= 2 ? "playerStory" : "dataRead",
+      deliverable: "封面、卡片结构、正文",
+      caution: "少用绝对判断，多用解释。"
+    },
+    douyin: {
+      fit: scoreToFit(douyinScore),
+      score: douyinScore,
+      reason: goalTotal >= 3 || hasLateEvent ? "有短视频钩子。" : "缺少强瞬间，先谨慎。",
+      defaultGoal: goalTotal >= 3 || hasLateEvent ? "quickHot" : "emotionClose",
+      deliverable: "3秒钩子、15秒/30秒口播",
+      caution: "没有画面版权时用数据卡。"
+    },
+    article: {
+      fit: scoreToFit(articleScore),
+      score: articleScore,
+      reason: match.historicalMeetings.length ? "有历史纵深，适合沉淀。" : "可做赛后长文。",
+      defaultGoal: "deepReview",
+      deliverable: "标题、导语、结构、结尾",
+      caution: "长文要标清数据来源。"
+    }
+  };
+}
+
+function addPublishBrief(draft: PlatformDraft, goal: PublishGoalKey, decision: PlatformDecision): PlatformDraft {
+  const brief = {
+    title: "发布任务",
+    content: [
+      `任务：${publishGoals[goal].label}`,
+      `平台判断：${decision.fit} ${decision.score}`,
+      `交付物：${decision.deliverable}`,
+      `注意点：${decision.caution}`
+    ].join("\n")
+  };
+  const sections = [brief, ...draft.sections];
+  return {
+    ...draft,
+    title: `${publishGoals[goal].label}｜${draft.title}`,
+    sections,
+    body: sections.map((section) => `【${section.title}】\n${section.content}`).join("\n\n")
+  };
+}
+
+function scoreToFit(score: number): PlatformFit {
+  if (score >= 78) return "主推";
+  if (score >= 62) return "可做";
+  return "谨慎";
+}
+
+function clampPlatformScore(score: number) {
+  return Math.max(45, Math.min(96, score));
+}
+
+function platformFitTone(fit: PlatformFit, theme: SportTheme) {
+  if (fit === "主推") return { backgroundColor: theme.primary, color: "#fff" };
+  if (fit === "可做") return { backgroundColor: "#ecfdf5", color: "#047857" };
+  return { backgroundColor: "#fff7ed", color: "#c2410c" };
 }
 
 function RiskCard({ title, level, advice, applied, onApply }: { title: string; level: string; advice: string; applied: boolean; onApply: () => void }) {
