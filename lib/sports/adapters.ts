@@ -9,6 +9,7 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
   const awayTeam = localizeTeamName(match.awayTeam.name);
   const competition = localizeCompetitionName(match.competition);
   const round = localizeRoundName(match.round);
+  const coverageNote = buildCoverageNote(match);
 
   return {
     id: match.id,
@@ -20,7 +21,7 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
     teamB: awayTeam,
     score: match.score.home !== null && match.score.away !== null ? `${match.score.home}-${match.score.away}` : "vs",
     penaltyScore: match.score.penalty,
-    summary: `${homeTeam} vs ${awayTeam}，状态：${localizeMatchStatus(match.statusText)}。当前数据来自${sourceProviderName(match.source.provider)}，适合用于赛后内容角度、平台分发和风险审稿。`,
+    summary: `${homeTeam} vs ${awayTeam}，状态：${localizeMatchStatus(match.statusText)}。当前数据来自${sourceProviderName(match.source.provider)}。${coverageNote}`,
     stats: {
       teamA: homeStats,
       teamB: awayStats
@@ -59,9 +60,9 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
       : [
           {
             minute: "-",
-            team: homeTeam,
+            team: "数据源",
             type: "终场",
-            description: "当前接口暂未返回事件数据，可先基于比分、状态和技术统计进行内容判断。"
+            description: "当前 Sportradar 基础覆盖未返回事件流；可基于比分、状态和基础统计做内容判断，但不要编造进球过程、判罚、伤病或球员发言。"
           }
         ],
     historicalMeetings: [
@@ -73,6 +74,23 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
       }
     ]
   };
+}
+
+function buildCoverageNote(match: WorldCupMatch) {
+  const hasEvents = match.events.length > 0;
+  const hasOnlyBasicStats = match.statistics.every((statistic) =>
+    statistic.values.every((entry) => entry.type === "Goals" || entry.type === "Data Coverage")
+  );
+
+  if (!hasEvents && hasOnlyBasicStats) {
+    return "当前覆盖主要包含赛程、比分和基础进球数据，未返回事件流和完整技术统计；内容生产应明确需二次核验，不要推断具体场上细节。";
+  }
+
+  if (!hasEvents) {
+    return "当前接口未返回事件流；可先基于比分、状态和已返回技术统计做内容判断，具体进球过程和判罚仍需补充来源。";
+  }
+
+  return "已返回事件流，可结合比分、状态和事件时间线做内容判断。";
 }
 
 function statisticsToTeamStats(statistics: MatchStatistic[], teamName: string): TeamStats {

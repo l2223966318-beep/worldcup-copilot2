@@ -26,7 +26,7 @@ import { analyzeMatch, getMatchDetail } from "@/lib/project-api";
 import { createRuleBasedAnalysis } from "@/lib/services/analysisService";
 import { createPlatformDraft } from "@/lib/services/contentService";
 import { createContentPackage, createPackageMarkdown, createPackageText } from "@/lib/services/exportService";
-import { localizeMatchStatus, localizeRoundName, localizeTeamName } from "@/lib/services/footballNames";
+import { localizeMatchStatus, localizeRoundName, localizeTeamName, localizeVenueText } from "@/lib/services/footballNames";
 import { appendHistoryRecord, writeReviewDraft, writeWorkflowState } from "@/lib/services/workflowStore";
 import { worldCupMatchToMatchData } from "@/lib/sports/adapters";
 import { useWorldCupQuery } from "@/lib/sports/client";
@@ -535,8 +535,11 @@ function MatchHero({
   const round = sourceMatch ? localizeRoundName(sourceMatch.round) : match.stage;
   const statusText = sourceMatch ? localizeMatchStatus(sourceMatch.statusText) : (match.isExample ? "经典样例" : "真实数据");
   const kickoffTime = sourceMatch?.kickoffTime ?? match.time;
-  const venue = [sourceMatch?.venue.name, sourceMatch?.venue.city].filter(Boolean).join("｜");
+  const venue = [sourceMatch?.venue.name, sourceMatch?.venue.city].filter(Boolean).map(localizeVenueText).join("｜");
   const dataTag = sourceMatch ? sourceProviderTag(sourceMatch.source.provider) : match.isExample ? "经典样例" : "运营数据";
+  const hasBasicCoverageOnly = sourceMatch?.source.provider === "sportradar" && !sourceMatch.events.length && sourceMatch.statistics.every((statistic) =>
+    statistic.values.every((entry) => entry.type === "Goals" || entry.type === "Data Coverage")
+  );
   const actionTitle = `优先做${primaryTopic.recommendedFormat}`;
   const actionBody = `先用“${primaryTopic.title}”建立内容主线，再用控球、射门、射正和 xG 做证据层，最后按 B站深度、微博讨论、小红书解释卡分发。`;
 
@@ -564,7 +567,18 @@ function MatchHero({
             {round}｜{statusText}｜{formatSourceDate(kickoffTime)}
             {venue ? `｜${venue}` : ""}
           </p>
-          <SourceStatusLine status={sourceStatus} lastUpdated={lastUpdated} loading={loading} error={error} />
+          <SourceStatusLine
+            status={sourceStatus}
+            provider={sourceMatch?.source.provider}
+            lastUpdated={lastUpdated}
+            loading={loading}
+            error={error}
+          />
+          {hasBasicCoverageOnly ? (
+            <div className="mt-3 max-w-3xl rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-6 text-amber-800">
+              当前 Sportradar trial/basic 只返回赛程、比分和基础进球覆盖，暂未返回事件流与完整技术统计。AI 分析会按“需补充事件源”处理，不会自动推断进球过程、判罚或伤病。
+            </div>
+          ) : null}
           <div className="mt-8 rounded-3xl border bg-white/82 p-5 shadow-sm backdrop-blur" style={{ borderColor: theme.border }}>
             <div className="text-sm font-semibold" style={{ color: theme.secondary }}>推荐动作</div>
             <p className="mt-2 text-2xl font-semibold leading-tight text-slate-950">{actionTitle}</p>
@@ -592,18 +606,20 @@ function MatchHero({
 
 function SourceStatusLine({
   status,
+  provider,
   lastUpdated,
   loading,
   error
 }: {
   status: SourceStatus;
+  provider?: WorldCupMatch["source"]["provider"];
   lastUpdated?: string;
   loading?: boolean;
   error?: string;
 }) {
   return (
     <div className="mt-4 inline-flex flex-wrap items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-xs font-semibold text-slate-600 shadow-sm">
-      <span>数据来源：{loading ? "加载中" : sourceLabel(status)}</span>
+      <span>数据来源：{loading ? "加载中" : sourceLabel(status, provider)}</span>
       {lastUpdated ? <span>最后更新：{formatSourceDate(lastUpdated)}</span> : null}
       {error ? <span className="text-amber-700">请求提示：{error}</span> : null}
     </div>
@@ -1135,14 +1151,23 @@ function matchRefreshPolicy(payload: WorldCupPayload<WorldCupMatch>) {
   return getMatchRefreshMs(payload.data);
 }
 
-function sourceLabel(status: SourceStatus) {
-  const labels: Record<SourceStatus, string> = {
-    live: "真实 API 数据",
-    fallback: "示例数据",
-    cache: "缓存数据",
-    error: "请求失败"
+function sourceLabel(status: SourceStatus, provider?: WorldCupMatch["source"]["provider"]) {
+  const providerName = providerSourceName(provider);
+  if (status === "live") return providerName ? `${providerName} 实时数据` : "真实 API 数据";
+  if (status === "cache") return providerName ? `${providerName} 缓存数据` : "缓存数据";
+  if (status === "fallback") return "示例数据";
+  return "请求失败";
+}
+
+function providerSourceName(provider?: WorldCupMatch["source"]["provider"]) {
+  const labels: Partial<Record<WorldCupMatch["source"]["provider"], string>> = {
+    sportradar: "Sportradar",
+    "api-football": "API-Football",
+    "worldcup26-free": "免费赛程源",
+    "thestatsapi-fixtures": "TheStatsAPI",
+    mock: "经典样例"
   };
-  return labels[status];
+  return provider ? labels[provider] : undefined;
 }
 
 function sourceProviderTag(provider: WorldCupMatch["source"]["provider"]) {

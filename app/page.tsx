@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, CheckCircle2, CircleDot, Flame, Palette, ShieldAlert, Sparkles, Trophy } from "lucide-react";
 
 import { HotTopicRadarPanel } from "@/components/worldcup/hot-topic-radar-panel";
-import { localizeCompetitionName, localizeMatchStatus, localizeRoundName, localizeTeamName } from "@/lib/services/footballNames";
+import { localizeCompetitionName, localizeMatchStatus, localizeRoundName, localizeTeamName, localizeVenueText } from "@/lib/services/footballNames";
 import { filterMatchesByQuery, queryLooksLikeMatchSearch } from "@/lib/services/matchSearchService";
 import { useWorldCupQuery } from "@/lib/sports/client";
 import type { SourceStatus, WorldCupMatch } from "@/lib/sports/types";
@@ -156,7 +156,13 @@ export default function DashboardPage() {
           <section id="opportunity-pool">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <SectionTitle eyebrow="今日机会池" title="今日赛事内容机会池" description="数据来自内部服务端接口，足球数据密钥不会暴露给浏览器。" />
-              <SourceBadge status={activeStatus} lastUpdated={activePayload?.lastUpdated} loading={loading || (useFullFixturePool && allLoading)} error={error} />
+              <SourceBadge
+                status={activeStatus}
+                provider={readPayloadProvider(activePayload?.data)}
+                lastUpdated={activePayload?.lastUpdated}
+                loading={loading || (useFullFixturePool && allLoading)}
+                error={error}
+              />
             </div>
             <div className="mt-5 grid gap-3 rounded-[24px] border border-slate-200 bg-white p-4 md:grid-cols-4">
               <label className="block">
@@ -455,7 +461,7 @@ function OpportunityMatchCard({
           <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{statusText}</span>
           <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{round}</span>
           <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">风险：{risk}</span>
-          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">数据：{sourceLabel(sourceStatus)}</span>
+          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">数据：{sourceLabel(sourceStatus, match.source.provider)}</span>
         </div>
         <p className="mt-3 text-sm leading-6 text-slate-600">推荐内容主线：{opportunity.reason}</p>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -484,20 +490,25 @@ function OpportunityMatchCard({
 }
 
 function localizeVenue(value?: string) {
-  if (!value) return "场馆待确认";
-  return value
-    .replace(/Houston, TX, USA/i, "休斯敦，美国")
-    .replace(/United States/i, "美国")
-    .replace(/USA/i, "美国")
-    .replace(/New York\/New Jersey \(East Rutherford\)/i, "纽约/新泽西")
-    .replace(/Miami \(Miami Gardens\)/i, "迈阿密")
-    .replace(/Houston Stadium/i, "休斯敦体育场");
+  return localizeVenueText(value);
 }
 
-function SourceBadge({ status, lastUpdated, loading, error }: { status: SourceStatus; lastUpdated?: string; loading?: boolean; error?: string }) {
+function SourceBadge({
+  status,
+  provider,
+  lastUpdated,
+  loading,
+  error
+}: {
+  status: SourceStatus;
+  provider?: WorldCupMatch["source"]["provider"];
+  lastUpdated?: string;
+  loading?: boolean;
+  error?: string;
+}) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600 shadow-sm">
-      <div className="font-semibold text-slate-950">数据来源：{loading ? "加载中" : sourceLabel(status)}</div>
+      <div className="font-semibold text-slate-950">数据来源：{loading ? "加载中" : sourceLabel(status, provider)}</div>
       <div className="mt-1 text-xs text-slate-500">
         {lastUpdated ? `最后更新：${formatDate(lastUpdated)}` : "等待接口返回"}
         {error ? `｜${error}` : ""}
@@ -685,14 +696,27 @@ function dedupeSignals(signals: string[]) {
   return Array.from(new Set(signals));
 }
 
-function sourceLabel(status: SourceStatus) {
-  const labels: Record<SourceStatus, string> = {
-    live: "真实接口数据",
-    fallback: "示例数据",
-    cache: "缓存数据",
-    error: "请求失败"
+function sourceLabel(status: SourceStatus, provider?: WorldCupMatch["source"]["provider"]) {
+  const providerName = providerSourceName(provider);
+  if (status === "live") return providerName ? `${providerName} 实时数据` : "真实接口数据";
+  if (status === "cache") return providerName ? `${providerName} 缓存数据` : "缓存数据";
+  if (status === "fallback") return "示例数据";
+  return "请求失败";
+}
+
+function providerSourceName(provider?: WorldCupMatch["source"]["provider"]) {
+  const labels: Partial<Record<WorldCupMatch["source"]["provider"], string>> = {
+    sportradar: "Sportradar",
+    "api-football": "API-Football",
+    "worldcup26-free": "免费赛程源",
+    "thestatsapi-fixtures": "TheStatsAPI",
+    mock: "经典样例"
   };
-  return labels[status];
+  return provider ? labels[provider] : undefined;
+}
+
+function readPayloadProvider(data?: WorldCupMatch[]) {
+  return data?.find((item) => item.source?.provider)?.source.provider;
 }
 
 function formatDate(value: string) {
