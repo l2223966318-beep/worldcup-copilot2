@@ -18,6 +18,48 @@ export type SourceDebugResult = {
   fallbackHint: string;
 };
 
+type SportradarSeasonCandidate = {
+  id?: string;
+  name?: string;
+  year?: string;
+  start_date?: string;
+  end_date?: string;
+  competition_id?: string;
+};
+
+type SportradarCompetitionCandidate = {
+  id?: string;
+  name?: string;
+  gender?: string;
+  category?: {
+    id?: string;
+    name?: string;
+  };
+};
+
+export type SourceSeasonDebugResult = {
+  configured: SourceDebugResult["configured"];
+  seasons: {
+    attempted: boolean;
+    ok: boolean;
+    status?: number;
+    endpoint?: string;
+    itemCount?: number;
+    candidates: SportradarSeasonCandidate[];
+    message?: string;
+  };
+  competitions: {
+    attempted: boolean;
+    ok: boolean;
+    status?: number;
+    endpoint?: string;
+    itemCount?: number;
+    candidates: SportradarCompetitionCandidate[];
+    message?: string;
+  };
+  hint: string;
+};
+
 export async function getSportradarSourceDebug(): Promise<SourceDebugResult> {
   const accessLevel = process.env.SPORTRADAR_ACCESS_LEVEL?.trim() || "trial";
   const languageCode = process.env.SPORTRADAR_LANGUAGE_CODE?.trim() || "en";
@@ -93,7 +135,116 @@ export async function getSportradarSourceDebug(): Promise<SourceDebugResult> {
   }
 }
 
+export async function getSportradarSeasonDebug(): Promise<SourceSeasonDebugResult> {
+  const accessLevel = process.env.SPORTRADAR_ACCESS_LEVEL?.trim() || "trial";
+  const languageCode = process.env.SPORTRADAR_LANGUAGE_CODE?.trim() || "en";
+  const apiKey = process.env.SPORTRADAR_API_KEY?.trim();
+  const competitionId = process.env.SPORTRADAR_WORLD_CUP_COMPETITION_ID?.trim();
+  const seasonId = process.env.SPORTRADAR_WORLD_CUP_SEASON_ID?.trim();
+  const baseUrl = `https://api.sportradar.com/soccer/${accessLevel}/v4/${languageCode}`;
+
+  const result: SourceSeasonDebugResult = {
+    configured: {
+      apiKey: Boolean(apiKey),
+      accessLevel,
+      languageCode,
+      competitionId: Boolean(competitionId),
+      seasonId: Boolean(seasonId)
+    },
+    seasons: {
+      attempted: false,
+      ok: false,
+      candidates: []
+    },
+    competitions: {
+      attempted: false,
+      ok: false,
+      candidates: []
+    },
+    hint: "Use the season id and competition_id from the exact FIFA World Cup 2026 candidate. Qualification candidates are not the final tournament."
+  };
+
+  if (!apiKey) {
+    result.hint = "SPORTRADAR_API_KEY is not configured in the current deployment.";
+    return result;
+  }
+
+  const [seasonsResult, competitionsResult] = await Promise.all([
+    fetchSportradarDebugEndpoint<{ seasons?: SportradarSeasonCandidate[] }>(
+      `${baseUrl}/seasons.json`,
+      apiKey
+    ),
+    fetchSportradarDebugEndpoint<{ competitions?: SportradarCompetitionCandidate[] }>(
+      `${baseUrl}/competitions.json`,
+      apiKey
+    )
+  ]);
+
+  result.seasons.attempted = true;
+  result.seasons.endpoint = `${baseUrl}/seasons.json`;
+  result.seasons.status = seasonsResult.status;
+  result.seasons.ok = seasonsResult.ok;
+  result.seasons.message = seasonsResult.message;
+  if (seasonsResult.payload?.seasons) {
+    result.seasons.itemCount = seasonsResult.payload.seasons.length;
+    result.seasons.candidates = seasonsResult.payload.seasons
+      .filter((item) => isWorldCupCandidate([item.name, item.year, item.competition_id].join(" ")))
+      .slice(0, 80);
+  }
+
+  result.competitions.attempted = true;
+  result.competitions.endpoint = `${baseUrl}/competitions.json`;
+  result.competitions.status = competitionsResult.status;
+  result.competitions.ok = competitionsResult.ok;
+  result.competitions.message = competitionsResult.message;
+  if (competitionsResult.payload?.competitions) {
+    result.competitions.itemCount = competitionsResult.payload.competitions.length;
+    result.competitions.candidates = competitionsResult.payload.competitions
+      .filter((item) => isWorldCupCandidate([item.name, item.category?.name].join(" ")))
+      .slice(0, 80);
+  }
+
+  if (!result.seasons.candidates.length && !result.competitions.candidates.length) {
+    result.hint = "This Sportradar key can connect, but the trial feed did not expose a FIFA World Cup final-tournament season candidate. Use qualification IDs only if the app should show qualifiers, or ask Sportradar support to confirm World Cup 2026 Soccer API entitlement.";
+  }
+
+  return result;
+}
+
 function isWorldCupSchedule(schedule: unknown) {
   const text = JSON.stringify(schedule).toLowerCase();
   return text.includes("world cup") || text.includes("fifa");
+}
+
+function isWorldCupCandidate(value: string) {
+  const text = value.toLowerCase();
+  return text.includes("world cup") || text.includes("fifa") || /\bwc\b/.test(text);
+}
+
+async function fetchSportradarDebugEndpoint<T>(endpoint: string, apiKey: string) {
+  const url = new URL(endpoint);
+  url.searchParams.set("api_key", apiKey);
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        accept: "application/json",
+        "x-api-key": apiKey
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000)
+    });
+
+    if (!response.ok) {
+      const message = await response.text().then((body) => body.slice(0, 240)).catch(() => "");
+      console.error("[sportradar-season-debug]", response.status, message);
+      return { ok: false, status: response.status, message, payload: undefined as T | undefined };
+    }
+
+    return { ok: true, status: response.status, payload: (await response.json()) as T };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown Sportradar request error.";
+    console.error("[sportradar-season-debug]", message);
+    return { ok: false, message, payload: undefined as T | undefined };
+  }
 }
