@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-type SourceKey = "tavily" | "topHubData" | "xiaohongshu" | "deepseek" | "openai";
+type SourceKey = "tavily" | "topHubData" | "dailyHot" | "xiaohongshu" | "deepseek" | "openai";
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, message: "缺少数据源类型。" }, { status: 400 });
   }
 
-  if (!apiKey && source !== "xiaohongshu") {
+  if (!apiKey && source !== "xiaohongshu" && source !== "dailyHot") {
     return NextResponse.json({
       ok: false,
       mode: "demo",
@@ -55,6 +55,13 @@ async function testSource(source: SourceKey, apiKey: string, body: { sourceUrl?:
     });
     if (!response.ok) throw new Error(`榜眼数据返回 ${response.status}`);
     return { ok: true, mode: "live", message: "今日热榜 / 榜眼数据连接成功。" };
+  }
+
+  if (source === "dailyHot") {
+    const baseUrl = (body.sourceUrl?.trim() || process.env.DAILY_HOT_API_BASE || "https://api-hot.imsyy.top").replace(/\/$/, "");
+    const response = await fetchWithTimeout(`${baseUrl}/weibo`, { headers: { Accept: "application/json" } });
+    if (!response.ok) throw new Error(`DailyHotApi 返回 ${response.status}`);
+    return { ok: true, mode: "live", message: "DailyHotApi 连接成功。" };
   }
 
   if (source === "xiaohongshu") {

@@ -257,10 +257,11 @@ function getStoredHotSourceHeaders() {
   if (typeof window === "undefined") return {};
   try {
     const raw = window.localStorage.getItem("worldcup.datasource.settings");
-    const settings = raw ? (JSON.parse(raw) as { tavilyKey?: string; topHubDataKey?: string; xhsHotUrl?: string; xhsHotKey?: string }) : null;
+    const settings = raw ? (JSON.parse(raw) as { tavilyKey?: string; topHubDataKey?: string; dailyHotBaseUrl?: string; xhsHotUrl?: string; xhsHotKey?: string }) : null;
     const headers: Record<string, string> = {};
     if (settings?.tavilyKey?.trim()) headers["x-worldcup-tavily-key"] = settings.tavilyKey.trim();
     if (settings?.topHubDataKey?.trim()) headers["x-worldcup-tophubdata-key"] = settings.topHubDataKey.trim();
+    if (settings?.dailyHotBaseUrl?.trim()) headers["x-worldcup-dailyhot-base"] = settings.dailyHotBaseUrl.trim();
     if (settings?.xhsHotUrl?.trim()) headers["x-worldcup-xhs-url"] = settings.xhsHotUrl.trim();
     if (settings?.xhsHotKey?.trim()) headers["x-worldcup-xhs-key"] = settings.xhsHotKey.trim();
     return headers;

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import type { HotItem, HotSearchPayload } from "@/lib/hot/types";
+import { fetchDailyHotFeed, normalizeDailyHotBaseUrl } from "@/lib/hot/dailyHotClient";
+import { normalizeDailyHotPayload } from "@/lib/hot/normalizers";
 import { scoreHotItem } from "@/lib/hot/valueScoring";
 import { fetchXiaohongshuHotItems } from "@/lib/hot/xiaohongshuClient";
 
@@ -62,7 +64,9 @@ export async function GET(request: Request) {
   const baseUrl = process.env.UAPIPRO_BASE_URL?.trim();
   const endpoint = process.env.UAPIPRO_HOT_ENDPOINT?.trim();
   const clientXhs = readClientXhsConfig(request);
-  const cacheKey = `hot:${source}:${scope}:${limit}:${baseUrl ?? ""}:${endpoint ?? ""}:${clientXhs.cacheKey}`;
+  const clientDailyHot = readClientDailyHotConfig(request);
+  const dailyHotBaseUrl = normalizeDailyHotBaseUrl(clientDailyHot.baseUrl);
+  const cacheKey = `hot:${source}:${scope}:${limit}:${baseUrl ?? ""}:${endpoint ?? ""}:${clientXhs.cacheKey}:${dailyHotBaseUrl}`;
 
   const cached = hotCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
@@ -71,8 +75,9 @@ export async function GET(request: Request) {
 
   const hotTypes = getRequestedTypes(source);
   const canUseXhsOnly = hotTypes.includes("xiaohongshu") && Boolean(clientXhs.apiUrl || process.env.XHS_HOT_API_URL);
+  const canUseDailyHot = hotTypes.some((type) => type !== "xiaohongshu");
 
-  if ((!baseUrl || !endpoint) && !canUseXhsOnly) {
+  if ((!baseUrl || !endpoint) && !canUseXhsOnly && !canUseDailyHot) {
     if (useMock) {
       return NextResponse.json(createPayload("fallback", createMockItems(limit), MESSAGE.mockUnconfigured));
     }
@@ -88,7 +93,9 @@ export async function GET(request: Request) {
         });
       }
 
-      if (!baseUrl || !endpoint) return Promise.resolve({ items: [] });
+      if (!baseUrl || !endpoint) {
+        return fetchDailyHotItems({ baseUrl: dailyHotBaseUrl, type, limit: requestLimit });
+      }
       return fetchUApiHotItems({ apiKey, baseUrl, endpoint, type, limit: requestLimit }).then((items): HotFetchResult => ({ items }));
     });
     const settled = await Promise.allSettled(tasks);
@@ -154,6 +161,17 @@ async function fetchUApiHotItems({
   return extractHotArray(raw).map((item, index) => normalizeUApiHotItem(item, index, getPayloadType(raw) || type));
 }
 
+async function fetchDailyHotItems({ baseUrl, type, limit }: { baseUrl: string; type: string; limit: number }): Promise<HotFetchResult> {
+  const feed = await fetchDailyHotFeed(type, { baseUrl });
+  const items = normalizeDailyHotPayload(feed.payload, {
+    query: "世界杯 足球 体育",
+    platform: dailyHotPlatformName(feed.platform),
+    source: "DailyHotApi"
+  }).slice(0, limit);
+
+  return { items };
+}
+
 async function fetchWithTimeout(url: URL, init: RequestInit) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), HOT_REQUEST_TIMEOUT_MS);
@@ -187,6 +205,11 @@ function readClientXhsConfig(request: Request) {
     apiKey,
     cacheKey: `${apiUrl ?? ""}:${Boolean(apiKey)}`
   };
+}
+
+function readClientDailyHotConfig(request: Request) {
+  const baseUrl = request.headers.get("x-worldcup-dailyhot-base")?.trim() || undefined;
+  return { baseUrl };
 }
 
 function buildUApiUrl(baseUrl: string, endpoint: string, type: string, limit: number) {
@@ -375,6 +398,20 @@ function normalizeSourceName(source: string) {
   if (/baidu|\u767e\u5ea6/i.test(source)) return "\u767e\u5ea6";
   if (/toutiao|\u5934\u6761/i.test(source)) return "\u5934\u6761";
   return source || MESSAGE.unknownSource;
+}
+
+function dailyHotPlatformName(platform: string) {
+  const labels: Record<string, string> = {
+    weibo: "\u5fae\u535a",
+    douyin: "\u6296\u97f3",
+    bilibili: "B\u7ad9",
+    baidu: "\u767e\u5ea6",
+    zhihu: "\u77e5\u4e4e",
+    hupu: "\u864e\u6251",
+    toutiao: "\u5934\u6761",
+    kuaishou: "\u5feb\u624b"
+  };
+  return labels[platform] ?? platform;
 }
 
 function clampLimit(value: string | null) {

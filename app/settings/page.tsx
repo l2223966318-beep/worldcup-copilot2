@@ -3,11 +3,12 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, PlugZap, Save, XCircle } from "lucide-react";
 
-type SourceKey = "tavily" | "topHubData" | "xiaohongshu" | "deepseek" | "openai";
+type SourceKey = "tavily" | "topHubData" | "dailyHot" | "xiaohongshu" | "deepseek" | "openai";
 
 type SettingsState = {
   tavilyKey: string;
   topHubDataKey: string;
+  dailyHotBaseUrl: string;
   xhsHotUrl: string;
   xhsHotKey: string;
   deepseekKey: string;
@@ -21,6 +22,7 @@ const STORAGE_KEY = "worldcup.datasource.settings";
 const sourceRows: Array<{ key: SourceKey; label: string; field: keyof SettingsState; hint: string }> = [
   { key: "tavily", label: "Tavily", field: "tavilyKey", hint: "用于全网热点搜索和事件补充。" },
   { key: "topHubData", label: "今日热榜 / 榜眼数据", field: "topHubDataKey", hint: "用于接入微博、抖音、B站等热榜数据源。" },
+  { key: "dailyHot", label: "DailyHotApi", field: "dailyHotBaseUrl", hint: "用于接入自部署聚合热榜，支持微博、抖音、B站、知乎等，不包含小红书。" },
   { key: "xiaohongshu", label: "小红书热点源", field: "xhsHotKey", hint: "只读取小红书站内热点接口或第三方小红书热榜源，不用公开搜索结果代替。" },
   { key: "deepseek", label: "DeepSeek", field: "deepseekKey", hint: "用于赛事分析、选题和内容生成增强。" },
   { key: "openai", label: "OpenAI", field: "openaiKey", hint: "可作为 DeepSeek 之外的模型配置空间。" }
@@ -29,6 +31,7 @@ const sourceRows: Array<{ key: SourceKey; label: string; field: keyof SettingsSt
 const defaultSettings: SettingsState = {
   tavilyKey: "",
   topHubDataKey: "",
+  dailyHotBaseUrl: "",
   xhsHotUrl: "",
   xhsHotKey: "",
   deepseekKey: "",
@@ -71,7 +74,7 @@ export default function SettingsPage() {
 
   async function testConnection(row: (typeof sourceRows)[number]) {
     setTesting(row.key);
-    const apiKey = String(settings[row.field] ?? "");
+    const apiKey = row.key === "dailyHot" ? "" : String(settings[row.field] ?? "");
     try {
       const response = await fetch("/api/settings/test-source", {
         method: "POST",
@@ -79,7 +82,7 @@ export default function SettingsPage() {
         body: JSON.stringify({
           source: row.key,
           apiKey,
-          sourceUrl: row.key === "xiaohongshu" ? settings.xhsHotUrl : undefined
+          sourceUrl: row.key === "xiaohongshu" ? settings.xhsHotUrl : row.key === "dailyHot" ? settings.dailyHotBaseUrl : undefined
         })
       });
       const result = (await response.json()) as { ok: boolean; message: string; mode?: string };
@@ -118,15 +121,22 @@ export default function SettingsPage() {
                 <StatusPill status={status} />
               </div>
               <label className="mt-4 block">
-                <span className="text-xs font-semibold text-slate-500">{row.key === "xiaohongshu" ? "接口 Key（可选）" : "API Key"}</span>
+                <span className="text-xs font-semibold text-slate-500">
+                  {row.key === "xiaohongshu" ? "接口 Key（可选）" : row.key === "dailyHot" ? "Base URL" : "API Key"}
+                </span>
                 <input
-                  type="password"
+                  type={row.key === "dailyHot" ? "url" : "password"}
                   value={String(settings[row.field] ?? "")}
                   onChange={(event) => updateField(row.field, event.target.value)}
-                  placeholder="留空则使用环境变量或 demo 模式"
+                  placeholder={row.key === "dailyHot" ? "例如：https://your-dailyhot-api.vercel.app" : "留空则使用环境变量或 demo 模式"}
                   className="mt-2 h-12 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 text-sm text-slate-800 outline-none focus:border-emerald-300 focus:bg-white"
                 />
               </label>
+              {row.key === "dailyHot" ? (
+                <p className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-600">
+                  这里填 DailyHotApi 根地址，系统会读取 /weibo、/douyin、/bilibili 等接口；它不是小红书热点源。
+                </p>
+              ) : null}
               {row.key === "xiaohongshu" ? (
                 <div className="mt-3 space-y-3">
                   <label className="block">

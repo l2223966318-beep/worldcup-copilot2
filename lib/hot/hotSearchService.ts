@@ -10,6 +10,7 @@ const cache = new Map<string, { expiresAt: number; payload: HotSearchPayload }>(
 type HotSearchOptions = {
   tavilyApiKey?: string;
   topHubDataApiKey?: string;
+  dailyHotBaseUrl?: string;
 };
 
 export async function searchHotSignals(query: string, options: HotSearchOptions = {}): Promise<HotSearchPayload> {
@@ -29,7 +30,7 @@ export async function searchHotSignals(query: string, options: HotSearchOptions 
   const [topHubResult, tavilyResult, dailyHotResult] = await Promise.allSettled([
     fetchTopHubDataSearch(normalizedQuery, options.topHubDataApiKey),
     fetchTavilySearch(normalizedQuery, options.tavilyApiKey),
-    fetchDailyHotFeeds()
+    fetchDailyHotFeeds({ baseUrl: options.dailyHotBaseUrl })
   ]);
 
   if (topHubResult.status === "fulfilled" && topHubResult.value.ok) {
@@ -93,7 +94,8 @@ export async function searchHotSignals(query: string, options: HotSearchOptions 
 function buildCacheKey(query: string, options: HotSearchOptions) {
   const sourceKey = [
     options.tavilyApiKey ? "tavily:client" : "tavily:env",
-    options.topHubDataApiKey ? "tophub:client" : "tophub:env"
+    options.topHubDataApiKey ? "tophub:client" : "tophub:env",
+    options.dailyHotBaseUrl ? `dailyhot:${options.dailyHotBaseUrl}` : "dailyhot:env"
   ].join("|");
   return `${query}::${sourceKey}`;
 }

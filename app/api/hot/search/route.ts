@@ -13,7 +13,8 @@ export async function GET(request: Request) {
   try {
     payload = await searchHotSignals(query, {
       tavilyApiKey: readClientApiKey(request, "x-worldcup-tavily-key"),
-      topHubDataApiKey: readClientApiKey(request, "x-worldcup-tophubdata-key")
+      topHubDataApiKey: readClientApiKey(request, "x-worldcup-tophubdata-key"),
+      dailyHotBaseUrl: readClientApiKey(request, "x-worldcup-dailyhot-base")
     });
   } catch (error) {
     payload = createRouteFallbackPayload(query, error);
