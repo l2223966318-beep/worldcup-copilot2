@@ -191,6 +191,8 @@
 
 .worldcup-hero-field {
   background:
+    repeating-linear-gradient(90deg, rgba(22, 163, 74, 0.22) 0 58px, rgba(21, 128, 61, 0.12) 58px 116px),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.045) 0 2px, transparent 2px 16px),
     linear-gradient(90deg, transparent 0 46%, rgba(255, 255, 255, 0.16) 46% 46.25%, transparent 46.25% 53.75%, rgba(255, 255, 255, 0.16) 53.75% 54%, transparent 54%),
     radial-gradient(ellipse at 50% 120%, rgba(34, 197, 94, 0.28), transparent 42%),
     linear-gradient(180deg, transparent 0%, rgba(15, 118, 110, 0.2) 72%, rgba(20, 83, 45, 0.58) 100%);
@@ -215,6 +217,19 @@
   top: 18%;
   transform: translateX(-50%);
   width: 18rem;
+}
+
+.worldcup-hero-field::after {
+  background:
+    radial-gradient(ellipse at center, transparent 0 30%, rgba(187, 247, 208, 0.18) 30.5% 31%, transparent 31.5%),
+    linear-gradient(90deg, transparent 0 12%, rgba(255, 255, 255, 0.16) 12% 12.2%, transparent 12.2% 87.8%, rgba(255, 255, 255, 0.16) 87.8% 88%, transparent 88%);
+  bottom: 12%;
+  content: "";
+  height: 80%;
+  left: 6%;
+  opacity: 0.55;
+  position: absolute;
+  right: 6%;
 }
 
 .worldcup-hero-light {
@@ -267,8 +282,10 @@
 
 .worldcup-hero-copy {
   animation: worldcup-copy-in 920ms cubic-bezier(0.22, 1, 0.36, 1) 260ms both;
+  min-width: 0;
   position: relative;
   text-shadow: 0 18px 60px rgba(0, 0, 0, 0.46);
+  width: 100%;
   z-index: 4;
 }
 
@@ -338,13 +355,80 @@
 
 .worldcup-ball-aura {
   background:
-    radial-gradient(circle, rgba(34, 197, 94, 0.38), rgba(20, 184, 166, 0.18) 42%, transparent 68%),
-    radial-gradient(circle, rgba(245, 158, 11, 0.28), transparent 58%);
+    radial-gradient(circle, rgba(34, 197, 94, 0.46), rgba(20, 184, 166, 0.2) 38%, transparent 68%),
+    radial-gradient(circle at 66% 45%, rgba(249, 115, 22, 0.42), transparent 48%);
   border-radius: 999px;
   filter: blur(8px);
   height: min(48vw, 34rem);
   position: absolute;
   width: min(48vw, 34rem);
+}
+
+.worldcup-flame-orbit {
+  animation: worldcup-flame-orbit 2.8s linear infinite;
+  border-radius: 999px;
+  height: min(42vw, 29rem);
+  position: absolute;
+  transform-style: preserve-3d;
+  width: min(42vw, 29rem);
+  z-index: 3;
+}
+
+.worldcup-flame-orbit::before {
+  background: conic-gradient(from 24deg, transparent 0 62%, rgba(251, 191, 36, 0.18), rgba(249, 115, 22, 0.6), rgba(239, 68, 68, 0.2), transparent 82% 100%);
+  border-radius: inherit;
+  content: "";
+  filter: blur(8px);
+  inset: 0;
+  opacity: 0.92;
+  position: absolute;
+}
+
+.worldcup-flame {
+  background:
+    radial-gradient(circle at 35% 28%, #fff7ad 0 12%, #fbbf24 24%, #f97316 48%, rgba(239, 68, 68, 0.62) 66%, transparent 76%);
+  border-radius: 58% 42% 63% 37% / 64% 52% 48% 36%;
+  filter: blur(0.2px);
+  height: 3.9rem;
+  position: absolute;
+  transform-origin: center;
+  width: 2.1rem;
+}
+
+.worldcup-flame-one {
+  right: 1.5rem;
+  top: 5.5rem;
+  transform: rotate(54deg);
+}
+
+.worldcup-flame-two {
+  bottom: 3rem;
+  left: 3.2rem;
+  opacity: 0.72;
+  transform: rotate(218deg) scale(0.72);
+}
+
+.worldcup-flame-three {
+  bottom: 6rem;
+  right: 0.8rem;
+  opacity: 0.86;
+  transform: rotate(118deg) scale(0.86);
+}
+
+.worldcup-heat-wave {
+  animation: worldcup-heat-pulse 2.4s ease-out infinite;
+  border: 1px solid rgba(251, 191, 36, 0.32);
+  border-radius: 999px;
+  box-shadow: 0 0 40px rgba(249, 115, 22, 0.18);
+  height: min(36vw, 25rem);
+  position: absolute;
+  width: min(36vw, 25rem);
+  z-index: 2;
+}
+
+.worldcup-heat-wave-two {
+  animation-delay: 1.1s;
+  border-color: rgba(34, 197, 94, 0.22);
 }
 
 .worldcup-ball-ring {
@@ -368,18 +452,21 @@
 }
 
 .worldcup-football {
-  animation: worldcup-football-float 5.8s ease-in-out infinite;
+  animation: worldcup-football-float-spin 7.6s linear infinite;
   background:
-    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.95), rgba(226, 232, 240, 0.84) 24%, transparent 25%),
-    radial-gradient(circle at 65% 72%, rgba(34, 197, 94, 0.36), transparent 28%),
+    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.98), rgba(255, 255, 255, 0.72) 18%, transparent 26%),
+    radial-gradient(circle at 68% 72%, rgba(34, 197, 94, 0.34), transparent 27%),
     radial-gradient(circle at 42% 62%, rgba(245, 158, 11, 0.18), transparent 24%),
-    linear-gradient(145deg, #f8fafc, #cbd5e1 52%, #64748b 100%);
+    radial-gradient(circle at 68% 36%, rgba(15, 23, 42, 0.1), transparent 26%),
+    linear-gradient(145deg, #ffffff 0%, #e5e7eb 36%, #b7c2d0 66%, #5b6472 100%);
   border-radius: 999px;
   box-shadow:
     inset -34px -42px 64px rgba(2, 6, 23, 0.44),
-    inset 18px 18px 34px rgba(255, 255, 255, 0.72),
+    inset 16px 14px 30px rgba(255, 255, 255, 0.82),
+    inset 0 0 26px rgba(15, 23, 42, 0.14),
     0 0 64px rgba(34, 197, 94, 0.45),
-    0 34px 92px rgba(0, 0, 0, 0.42);
+    0 0 38px rgba(249, 115, 22, 0.18),
+    0 34px 92px rgba(0, 0, 0, 0.48);
   height: min(30vw, 22rem);
   min-height: 16rem;
   min-width: 16rem;
@@ -390,8 +477,8 @@
 
 .worldcup-football::before {
   background:
-    linear-gradient(54deg, transparent 44%, rgba(15, 23, 42, 0.84) 45% 48%, transparent 49%),
-    linear-gradient(124deg, transparent 45%, rgba(15, 23, 42, 0.78) 46% 49%, transparent 50%),
+    linear-gradient(54deg, transparent 44%, rgba(15, 23, 42, 0.42) 45% 46%, rgba(255,255,255,0.24) 46.4% 47.2%, rgba(15,23,42,0.5) 47.4% 48%, transparent 49%),
+    linear-gradient(124deg, transparent 45%, rgba(15, 23, 42, 0.42) 46% 47%, rgba(255,255,255,0.22) 47.2% 48%, rgba(15,23,42,0.5) 48.2% 49%, transparent 50%),
     radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 0.9) 0 13%, transparent 13.5%),
     radial-gradient(circle at 22% 33%, rgba(15, 23, 42, 0.82) 0 7%, transparent 7.5%),
     radial-gradient(circle at 77% 34%, rgba(15, 23, 42, 0.74) 0 7%, transparent 7.5%),
@@ -404,20 +491,33 @@
 }
 
 .worldcup-football::after {
-  background: radial-gradient(circle at 28% 18%, rgba(255, 255, 255, 0.74), transparent 24%);
+  background:
+    radial-gradient(circle at 28% 18%, rgba(255, 255, 255, 0.78), transparent 23%),
+    repeating-radial-gradient(circle at 46% 52%, rgba(15, 23, 42, 0.055) 0 1px, transparent 1px 8px),
+    linear-gradient(110deg, transparent 0 38%, rgba(255, 255, 255, 0.2) 45%, transparent 54% 100%);
   content: "";
   inset: 0;
-  mix-blend-mode: screen;
+  mix-blend-mode: soft-light;
   position: absolute;
 }
 
 .worldcup-football-panel {
-  background: rgba(15, 23, 42, 0.86);
+  background:
+    radial-gradient(circle at 28% 22%, rgba(51, 65, 85, 0.92), rgba(15, 23, 42, 0.98) 66%),
+    #0f172a;
   clip-path: polygon(50% 0, 96% 35%, 78% 92%, 22% 92%, 4% 35%);
   height: 4.2rem;
   position: absolute;
   width: 4.2rem;
   z-index: 2;
+}
+
+.worldcup-football-panel::after {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  clip-path: inherit;
+  content: "";
+  inset: 5px;
+  position: absolute;
 }
 
 .worldcup-football-panel-one {
@@ -448,6 +548,40 @@
   bottom: 20%;
   right: 25%;
   transform: rotate(-12deg) scale(0.58);
+}
+
+.worldcup-football-stitch {
+  background: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.38) 0 4px, transparent 4px 10px);
+  border-radius: 999px;
+  height: 2px;
+  opacity: 0.55;
+  position: absolute;
+  width: 5.2rem;
+  z-index: 3;
+}
+
+.worldcup-football-stitch-one {
+  left: 27%;
+  top: 39%;
+  transform: rotate(40deg);
+}
+
+.worldcup-football-stitch-two {
+  right: 25%;
+  top: 40%;
+  transform: rotate(-38deg);
+}
+
+.worldcup-football-stitch-three {
+  bottom: 31%;
+  left: 31%;
+  transform: rotate(-28deg);
+}
+
+.worldcup-football-stitch-four {
+  bottom: 33%;
+  right: 28%;
+  transform: rotate(30deg);
 }
 
 @keyframes holo-spin {
@@ -555,6 +689,47 @@
   }
 }
 
+@keyframes worldcup-football-float-spin {
+  0% {
+    transform: translateY(0) rotateZ(0deg) rotateY(0deg);
+  }
+  25% {
+    transform: translateY(-10px) rotateZ(92deg) rotateY(5deg);
+  }
+  50% {
+    transform: translateY(-16px) rotateZ(184deg) rotateY(0deg);
+  }
+  75% {
+    transform: translateY(-8px) rotateZ(276deg) rotateY(-5deg);
+  }
+  100% {
+    transform: translateY(0) rotateZ(360deg) rotateY(0deg);
+  }
+}
+
+@keyframes worldcup-flame-orbit {
+  from {
+    transform: rotateZ(0deg) rotateX(64deg);
+  }
+  to {
+    transform: rotateZ(360deg) rotateX(64deg);
+  }
+}
+
+@keyframes worldcup-heat-pulse {
+  0% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  42% {
+    opacity: 0.86;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+}
+
 @keyframes worldcup-particle-rise {
   0%,
   100% {
@@ -583,6 +758,14 @@
     min-height: 100svh;
   }
 
+  .worldcup-hero-layout {
+    align-content: center;
+    gap: 0.85rem;
+    min-height: calc(100svh - 4rem);
+    padding-bottom: 0.85rem;
+    padding-top: 1rem;
+  }
+
   .worldcup-hero-light {
     opacity: 0.24;
     width: 34%;
@@ -593,32 +776,56 @@
   }
 
   .worldcup-ball-stage {
-    min-height: 17rem;
+    min-height: 11.2rem;
     order: -1;
     transform: none;
   }
 
   .worldcup-ball-aura,
-  .worldcup-ball-ring {
-    height: 16rem;
-    width: 16rem;
+  .worldcup-ball-ring,
+  .worldcup-flame-orbit,
+  .worldcup-heat-wave {
+    height: 11.2rem;
+    width: 11.2rem;
+  }
+
+  .worldcup-flame {
+    height: 1.9rem;
+    width: 1rem;
   }
 
   .worldcup-football {
-    height: 12rem;
-    min-height: 12rem;
-    min-width: 12rem;
-    width: 12rem;
+    height: 8.6rem;
+    min-height: 8.6rem;
+    min-width: 8.6rem;
+    width: 8.6rem;
   }
 
   .worldcup-football-panel {
-    height: 3rem;
-    width: 3rem;
+    height: 2.4rem;
+    width: 2.4rem;
   }
 
   .worldcup-hero-cta {
+    flex: 1 1 100%;
+    font-size: 0.84rem;
     height: 3rem;
+    min-width: 0;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
     width: 100%;
+  }
+
+  .worldcup-hero-actions {
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1.25rem;
+  }
+
+  .worldcup-hero-copy p {
+    font-size: 0.95rem;
+    line-height: 1.65;
+    max-width: 100%;
   }
 }
 
