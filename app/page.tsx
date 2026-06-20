@@ -263,13 +263,13 @@ function ImmersiveWorldCupHero() {
         ))}
       </div>
 
-      <div className="worldcup-hero-layout relative z-10 mx-auto grid min-h-[100svh] w-full max-w-7xl items-center gap-8 px-4 py-12 md:py-14 lg:grid-cols-[minmax(0,0.92fr)_minmax(360px,1.08fr)] lg:px-8">
+      <div className="worldcup-hero-layout relative z-10 mx-auto grid min-h-[100svh] w-full max-w-7xl items-center gap-7 px-4 py-12 md:py-14 lg:grid-cols-[minmax(0,0.86fr)_minmax(420px,1.14fr)] lg:px-8">
         <div className="worldcup-hero-copy">
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-emerald-100 shadow-[0_0_34px_rgba(34,197,94,0.2)] backdrop-blur">
             <Trophy className="h-4 w-4 text-amber-300" />
-            世界杯内容中枢
+            WorldCup Copilot
           </div>
-          <h1 className="mt-7 max-w-4xl text-4xl font-black leading-[0.96] tracking-tight text-white sm:text-5xl md:text-6xl lg:text-6xl xl:text-7xl">
+          <h1 className="mt-7 max-w-3xl text-4xl font-black leading-[0.94] tracking-tight text-white sm:text-5xl md:text-6xl lg:text-6xl xl:text-[4.75rem]">
             <span className="block">把每一场比赛</span>
             <span className="block">变成高光时刻</span>
           </h1>
@@ -289,6 +289,7 @@ function ImmersiveWorldCupHero() {
 
         <div className="worldcup-ball-stage" aria-hidden="true">
           <div className="worldcup-ball-aura" />
+          <div className="worldcup-fire-tail" />
           <div className="worldcup-flame-orbit">
             <span className="worldcup-flame worldcup-flame-one" />
             <span className="worldcup-flame worldcup-flame-two" />
