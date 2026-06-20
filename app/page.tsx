@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { CSSProperties, MouseEvent } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, Palette, Trophy } from "lucide-react";
 
@@ -49,22 +50,6 @@ export default function DashboardPage() {
   const hasFilters = Boolean(matchSearchQuery.trim() || dateFilter || statusFilter !== "all" || competitionFilter !== "all");
   const isMockMode = activeStatus === "fallback";
   const isNoDataState = !loading && !error && !hasFilters && filteredMatches.length === 0;
-  const priorityMatches = filteredMatches.filter((item) => {
-    const grade = getOpportunityGrade(item);
-    return grade === "S" || grade === "A";
-  });
-  const watchMatches = filteredMatches.filter((item) => getOpportunityGrade(item) === "B");
-  const lowPriorityMatches = filteredMatches.filter((item) => getOpportunityGrade(item) === "C");
-  const heroOpsState = getOpsState({
-    loading,
-    error,
-    filteredCount: filteredMatches.length,
-    priorityCount: priorityMatches.length,
-    watchCount: watchMatches.length,
-    lowCount: lowPriorityMatches.length,
-    status: activeStatus
-  });
-
   useEffect(() => {
     setSportType(readSavedSportType());
   }, []);
@@ -101,47 +86,11 @@ export default function DashboardPage() {
   }, [applyGlobalSearch]);
 
   return (
-    <div className="relative mx-auto flex max-w-7xl flex-col gap-6 pb-16">
+    <div className="relative flex flex-col gap-8 pb-16">
       <ThemeSideSelector active={sportType} onChange={selectSportTheme} />
-      <section className={`relative overflow-hidden rounded-[32px] border bg-gradient-to-br ${theme.gradient} p-5 shadow-[0_20px_70px_rgba(15,23,42,0.07)] lg:p-7`} style={{ borderColor: theme.border }}>
-        <HeroPattern theme={theme} />
-        <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_320px] lg:items-center">
-          <div>
-            <h1 className="max-w-4xl text-4xl font-black leading-tight tracking-tight text-slate-950 lg:text-6xl">
-              WorldCup Copilot
-            </h1>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Link
-                href="#opportunity-pool"
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold text-white shadow-lg transition hover:-translate-y-0.5"
-                style={{ backgroundColor: theme.primary, boxShadow: `0 18px 38px ${theme.heroGlow}` }}
-              >
-                查看今日比赛池
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                href="/matches/argentina-france-2022-final"
-                className="inline-flex h-10 items-center justify-center rounded-full border border-white bg-white/85 px-4 text-sm font-semibold text-slate-900 shadow-sm transition hover:-translate-y-0.5"
-              >
-                查看经典样例
-              </Link>
-            </div>
-          </div>
-          <div className="rounded-[26px] border bg-white/85 p-4 shadow-lg shadow-slate-900/10 backdrop-blur" style={{ borderColor: theme.border }}>
-            <div className="flex items-center gap-3">
-              <Trophy className="h-5 w-5" style={{ color: theme.primary }} />
-              <div className="text-base font-semibold text-slate-950">今日运营建议</div>
-            </div>
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <HeroMetric label="优先做" value={heroOpsState.metrics.priority} theme={theme} />
-              <HeroMetric label="观望" value={heroOpsState.metrics.watch} theme={theme} />
-              <HeroMetric label="不投入" value={heroOpsState.metrics.low} theme={theme} />
-            </div>
-          </div>
-        </div>
-      </section>
+      <ImmersiveWorldCupHero />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(360px,2fr)]">
+      <div className="mx-auto grid w-full max-w-7xl items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(360px,2fr)]">
         <div className="min-w-0 space-y-8">
           <section id="opportunity-pool">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -236,7 +185,9 @@ export default function DashboardPage() {
 
         </div>
 
-        <HotTopicRadarPanel theme={theme} matches={matches} />
+        <div id="hot-moments" className="scroll-mt-24">
+          <HotTopicRadarPanel theme={theme} matches={matches} />
+        </div>
       </div>
     </div>
   );
@@ -259,18 +210,6 @@ function readHotSourceHeaders() {
   return headers;
 }
 
-function HeroPattern({ theme }: { theme: SportTheme }) {
-  return (
-    <div className="pointer-events-none absolute inset-0 opacity-70">
-      <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 78% 18%, ${theme.heroGlow}, transparent 300px)` }} />
-      <div className="absolute left-[6%] top-[16%] h-[68%] w-[88%] rounded-[44px] border-2 border-white/55" />
-      <div className="absolute left-1/2 top-[16%] h-[68%] w-px bg-white/55" />
-      <div className="absolute left-[43%] top-[34%] h-40 w-40 rounded-full border-2 border-white/55" />
-      <div className="absolute bottom-0 left-0 right-0 h-28 bg-[linear-gradient(135deg,rgba(255,255,255,.28)_25%,transparent_25%,transparent_50%,rgba(255,255,255,.28)_50%,rgba(255,255,255,.28)_75%,transparent_75%)] bg-[length:30px_30px] opacity-20" />
-    </div>
-  );
-}
-
 function SectionTitle({ eyebrow, title, description }: { eyebrow?: string; title: string; description?: string }) {
   return (
     <div>
@@ -281,14 +220,110 @@ function SectionTitle({ eyebrow, title, description }: { eyebrow?: string; title
   );
 }
 
-function HeroMetric({ label, value, theme }: { label: string; value: string | number; theme: SportTheme }) {
+function ImmersiveWorldCupHero() {
+  function handlePointerMove(event: MouseEvent<HTMLElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width - 0.5;
+    const y = (event.clientY - rect.top) / rect.height - 0.5;
+    event.currentTarget.style.setProperty("--hero-x", x.toFixed(3));
+    event.currentTarget.style.setProperty("--hero-y", y.toFixed(3));
+  }
+
+  function handlePointerLeave(event: MouseEvent<HTMLElement>) {
+    event.currentTarget.style.setProperty("--hero-x", "0");
+    event.currentTarget.style.setProperty("--hero-y", "0");
+  }
+
   return (
-    <div className="rounded-2xl bg-white p-3 text-center shadow-sm">
-      <div className="text-2xl font-black" style={{ color: theme.primary }}>{value}</div>
-      <div className="mt-0.5 text-[11px] font-semibold text-slate-500">{label}</div>
-    </div>
+    <section
+      className="worldcup-immersive-hero -mx-4 -mt-5 min-h-[100svh] overflow-hidden text-white lg:-mx-8"
+      onMouseMove={handlePointerMove}
+      onMouseLeave={handlePointerLeave}
+      style={{ "--hero-x": 0, "--hero-y": 0 } as CSSProperties}
+      aria-label="WorldCup Copilot immersive opening"
+    >
+      <div className="worldcup-hero-sky" />
+      <div className="worldcup-hero-noise" />
+      <div className="worldcup-hero-field" />
+      <div className="worldcup-hero-light worldcup-hero-light-left" />
+      <div className="worldcup-hero-light worldcup-hero-light-right" />
+      <div className="worldcup-hero-particles" aria-hidden="true">
+        {heroParticles.map((particle, index) => (
+          <span
+            key={`${particle.left}-${particle.top}-${index}`}
+            className="worldcup-hero-particle"
+            style={{
+              "--particle-left": `${particle.left}%`,
+              "--particle-top": `${particle.top}%`,
+              "--particle-size": `${particle.size}px`,
+              "--particle-delay": `${particle.delay}s`,
+              "--particle-depth": particle.depth
+            } as CSSProperties}
+          />
+        ))}
+      </div>
+
+      <div className="relative z-10 mx-auto grid min-h-[100svh] w-full max-w-7xl items-center gap-8 px-4 py-12 md:py-14 lg:grid-cols-[minmax(0,0.92fr)_minmax(360px,1.08fr)] lg:px-8">
+        <div className="worldcup-hero-copy">
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-emerald-100 shadow-[0_0_34px_rgba(34,197,94,0.2)] backdrop-blur">
+            <Trophy className="h-4 w-4 text-amber-300" />
+            WorldCup Copilot
+          </div>
+          <h1 className="mt-7 max-w-4xl text-4xl font-black leading-[0.96] tracking-tight text-white sm:text-5xl md:text-6xl lg:text-6xl xl:text-7xl">
+            <span className="block">Turn Every Match</span>
+            <span className="block">Into a Moment</span>
+          </h1>
+          <p className="mt-6 max-w-2xl text-base leading-7 text-slate-200 md:text-lg">
+            WorldCup Copilot transforms live matches, hot moments, and match data into platform-ready content ideas.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link href="#opportunity-pool" className="worldcup-hero-cta worldcup-hero-cta-primary">
+              Enter Match Center
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+            <Link href="#hot-moments" className="worldcup-hero-cta worldcup-hero-cta-secondary">
+              View Hot Moments
+            </Link>
+          </div>
+        </div>
+
+        <div className="worldcup-ball-stage" aria-hidden="true">
+          <div className="worldcup-ball-aura" />
+          <div className="worldcup-ball-ring worldcup-ball-ring-one" />
+          <div className="worldcup-ball-ring worldcup-ball-ring-two" />
+          <div className="worldcup-football">
+            <span className="worldcup-football-panel worldcup-football-panel-one" />
+            <span className="worldcup-football-panel worldcup-football-panel-two" />
+            <span className="worldcup-football-panel worldcup-football-panel-three" />
+            <span className="worldcup-football-panel worldcup-football-panel-four" />
+            <span className="worldcup-football-panel worldcup-football-panel-five" />
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
+
+const heroParticles = [
+  { left: 8, top: 28, size: 3, delay: 0.1, depth: 28 },
+  { left: 14, top: 72, size: 5, delay: 1.4, depth: 36 },
+  { left: 20, top: 18, size: 4, delay: 2.1, depth: 18 },
+  { left: 27, top: 58, size: 2, delay: 0.8, depth: 32 },
+  { left: 34, top: 34, size: 6, delay: 2.8, depth: 20 },
+  { left: 41, top: 77, size: 3, delay: 1.2, depth: 42 },
+  { left: 49, top: 21, size: 4, delay: 3.2, depth: 24 },
+  { left: 56, top: 63, size: 5, delay: 0.4, depth: 38 },
+  { left: 62, top: 38, size: 3, delay: 2.4, depth: 26 },
+  { left: 69, top: 16, size: 6, delay: 1.8, depth: 34 },
+  { left: 74, top: 82, size: 4, delay: 3.5, depth: 22 },
+  { left: 81, top: 44, size: 2, delay: 1.1, depth: 46 },
+  { left: 87, top: 24, size: 5, delay: 2.7, depth: 30 },
+  { left: 92, top: 70, size: 3, delay: 0.6, depth: 40 },
+  { left: 11, top: 48, size: 2, delay: 3.8, depth: 16 },
+  { left: 47, top: 88, size: 5, delay: 2.0, depth: 28 },
+  { left: 66, top: 55, size: 2, delay: 4.1, depth: 48 },
+  { left: 91, top: 36, size: 4, delay: 1.7, depth: 18 }
+] as const;
 
 function ThemeSideSelector({
   active,
@@ -301,7 +336,7 @@ function ThemeSideSelector({
   const activeTheme = sportThemes[active];
 
   return (
-    <div className="fixed bottom-5 left-4 z-40">
+    <div className="fixed bottom-5 right-24 z-40 hidden md:block">
       {open ? (
         <div className="mb-3 w-56 rounded-[22px] border border-slate-200 bg-white/95 p-2 shadow-[0_18px_50px_rgba(15,23,42,0.14)] backdrop-blur">
           <div className="flex items-center justify-between px-2 pb-2">
