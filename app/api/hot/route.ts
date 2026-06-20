@@ -62,8 +62,7 @@ export async function GET(request: Request) {
   const baseUrl = process.env.UAPIPRO_BASE_URL?.trim();
   const endpoint = process.env.UAPIPRO_HOT_ENDPOINT?.trim();
   const clientXhs = readClientXhsConfig(request);
-  const clientTavilyKey = readClientApiKey(request, "x-worldcup-tavily-key");
-  const cacheKey = `hot:${source}:${scope}:${limit}:${baseUrl ?? ""}:${endpoint ?? ""}:${clientXhs.cacheKey}:${Boolean(clientTavilyKey)}`;
+  const cacheKey = `hot:${source}:${scope}:${limit}:${baseUrl ?? ""}:${endpoint ?? ""}:${clientXhs.cacheKey}`;
 
   const cached = hotCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
@@ -71,7 +70,7 @@ export async function GET(request: Request) {
   }
 
   const hotTypes = getRequestedTypes(source);
-  const canUseXhsOnly = hotTypes.includes("xiaohongshu") && (clientXhs.apiUrl || clientXhs.apiKey || clientTavilyKey || process.env.XHS_HOT_API_URL || process.env.TAVILY_API_KEY);
+  const canUseXhsOnly = hotTypes.includes("xiaohongshu") && Boolean(clientXhs.apiUrl || process.env.XHS_HOT_API_URL);
 
   if ((!baseUrl || !endpoint) && !canUseXhsOnly) {
     if (useMock) {
@@ -85,9 +84,7 @@ export async function GET(request: Request) {
       if (type === "xiaohongshu") {
         return fetchXiaohongshuHotItems(requestLimit, {
           apiUrl: clientXhs.apiUrl,
-          apiKey: clientXhs.apiKey,
-          tavilyApiKey: clientTavilyKey,
-          queries: clientXhs.queries
+          apiKey: clientXhs.apiKey
         });
       }
 
@@ -181,28 +178,14 @@ function buildUApiHeaders(apiKey?: string) {
   return headers;
 }
 
-function readClientApiKey(request: Request, headerName: string) {
-  const value = request.headers.get(headerName)?.trim();
-  return value || undefined;
-}
-
 function readClientXhsConfig(request: Request) {
   const apiUrl = request.headers.get("x-worldcup-xhs-url")?.trim() || undefined;
   const apiKey = request.headers.get("x-worldcup-xhs-key")?.trim() || undefined;
-  const rawQueries = request.headers.get("x-worldcup-xhs-queries")?.trim();
-  const queries = rawQueries
-    ? decodeURIComponent(rawQueries)
-        .split(/\n|,/)
-        .map((item) => item.trim())
-        .filter(Boolean)
-        .slice(0, 5)
-    : undefined;
 
   return {
     apiUrl,
     apiKey,
-    queries,
-    cacheKey: `${apiUrl ?? ""}:${Boolean(apiKey)}:${queries?.join("|") ?? ""}`
+    cacheKey: `${apiUrl ?? ""}:${Boolean(apiKey)}`
   };
 }
 

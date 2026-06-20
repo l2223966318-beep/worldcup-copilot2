@@ -1,21 +1,12 @@
 import type { HotItem } from "@/lib/hot/types";
-import { fetchTavilySearch } from "@/lib/hot/tavilyClient";
 
 type AnyRecord = Record<string, unknown>;
-
-const DEFAULT_QUERIES = [
-  "site:xiaohongshu.com 世界杯 足球 热点",
-  "site:xiaohongshu.com 西班牙 佛得角 世界杯",
-  "小红书 世界杯 足球 热点"
-];
 
 export async function fetchXiaohongshuHotItems(
   limit: number,
   options: {
     apiUrl?: string;
     apiKey?: string;
-    tavilyApiKey?: string;
-    queries?: string[];
   } = {}
 ): Promise<{ items: HotItem[]; message?: string }> {
   const configuredUrl = options.apiUrl?.trim() || process.env.XHS_HOT_API_URL?.trim();
@@ -31,29 +22,9 @@ export async function fetchXiaohongshuHotItems(
     }
   }
 
-  const tavilyKey = options.tavilyApiKey?.trim() || process.env.TAVILY_API_KEY?.trim();
-  if (!tavilyKey) {
-    return { items: [], message: "暂未配置小红书热点源：未设置 XHS_HOT_API_URL，也未配置 Tavily 搜索密钥。" };
-  }
-
-  const queries = options.queries?.length ? options.queries : DEFAULT_QUERIES;
-  const results: HotItem[] = [];
-  for (const query of queries) {
-    try {
-      const response = await fetchTavilySearch(query, tavilyKey);
-      if (!response.ok) continue;
-      results.push(...normalizeTavilyXhsPayload(response.payload, query, limit));
-    } catch (error) {
-      console.error("[hot-api] XHS public search failed", {
-        query,
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-  }
-
   return {
-    items: dedupe(results).slice(0, limit),
-    message: results.length ? "小红书热点来自公开搜索结果，不代表小红书官方热榜。" : "小红书公开搜索暂未返回可用结果。"
+    items: [],
+    message: "暂未配置小红书实时热点源：请设置 XHS_HOT_API_URL 或在设置页填写小红书热点接口 URL。"
   };
 }
 
@@ -71,27 +42,6 @@ async function fetchConfiguredXhsSource(url: string, apiKey: string | undefined,
   if (!response.ok) throw new Error(`小红书配置源返回 ${response.status}`);
   const payload = await response.json();
   return extractArray(payload).map((item, index) => normalizeXhsItem(item, index, "小红书配置源"));
-}
-
-function normalizeTavilyXhsPayload(payload: unknown, query: string, limit: number) {
-  return extractArray(asRecord(payload).results ?? payload)
-    .slice(0, limit)
-    .map((item, index) => {
-      const record = asRecord(item);
-      const title = pickString(record, ["title", "name"]) || query;
-      const summary = pickString(record, ["content", "snippet", "summary", "description"]) || "公开搜索结果，仅能确认该话题存在讨论，具体事实需二次核验。";
-      const url = pickString(record, ["url", "link", "href"]);
-      return createItem({
-        idSeed: `xhs-search:${url || title}`,
-        title,
-        summary,
-        url,
-        source: "小红书公开搜索",
-        platform: "小红书",
-        rank: index + 1,
-        raw: item
-      });
-    });
 }
 
 function normalizeXhsItem(item: unknown, index: number, source: string) {
@@ -140,7 +90,7 @@ function createItem(input: {
     publishedAt: input.publishedAt,
     time: input.publishedAt,
     relevance: 50,
-    tags: ["小红书", "公开搜索"],
+    tags: ["小红书", "实时热点"],
     raw: input.raw
   };
 }

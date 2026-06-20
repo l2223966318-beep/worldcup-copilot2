@@ -257,13 +257,12 @@ function getStoredHotSourceHeaders() {
   if (typeof window === "undefined") return {};
   try {
     const raw = window.localStorage.getItem("worldcup.datasource.settings");
-    const settings = raw ? (JSON.parse(raw) as { tavilyKey?: string; topHubDataKey?: string; xhsHotUrl?: string; xhsHotKey?: string; xhsHotQueries?: string }) : null;
+    const settings = raw ? (JSON.parse(raw) as { tavilyKey?: string; topHubDataKey?: string; xhsHotUrl?: string; xhsHotKey?: string }) : null;
     const headers: Record<string, string> = {};
     if (settings?.tavilyKey?.trim()) headers["x-worldcup-tavily-key"] = settings.tavilyKey.trim();
     if (settings?.topHubDataKey?.trim()) headers["x-worldcup-tophubdata-key"] = settings.topHubDataKey.trim();
     if (settings?.xhsHotUrl?.trim()) headers["x-worldcup-xhs-url"] = settings.xhsHotUrl.trim();
     if (settings?.xhsHotKey?.trim()) headers["x-worldcup-xhs-key"] = settings.xhsHotKey.trim();
-    if (settings?.xhsHotQueries?.trim()) headers["x-worldcup-xhs-queries"] = encodeURIComponent(settings.xhsHotQueries.trim());
     return headers;
   } catch {
     return {};
@@ -309,7 +308,7 @@ function normalizeHotTopics(items: HotItem[], matches: WorldCupMatch[], updatedA
 }
 
 function normalizeSource(source: string): HotTopic["source"] {
-  if (/小红书公开搜索|小红书配置源/i.test(source)) return source;
+  if (/小红书配置源|小红书热点源/i.test(source)) return source;
   if (/微博|抖音|B站|哔哩|知乎|百度|头条|今日热榜|榜眼数据/i.test(source)) return "今日热榜";
   if (/tavily|全网搜索/i.test(source)) return "全网搜索";
   if (/fallback|ai|AI筛选|演示数据/i.test(source)) return "AI筛选";
