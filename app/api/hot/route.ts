@@ -202,7 +202,7 @@ function readClientXhsConfig(request: Request) {
   const apiUrl = request.headers.get("x-worldcup-xhs-url")?.trim() || undefined;
   const apiKey = request.headers.get("x-worldcup-xhs-key")?.trim() || undefined;
   const redfoxApiKey = request.headers.get("x-worldcup-redfox-key")?.trim() || undefined;
-  const redfoxCategory = request.headers.get("x-worldcup-redfox-xhs-category")?.trim() || undefined;
+  const redfoxCategory = decodeHeaderValue(request.headers.get("x-worldcup-redfox-xhs-category")) || undefined;
 
   return {
     apiUrl,
@@ -211,6 +211,16 @@ function readClientXhsConfig(request: Request) {
     redfoxCategory,
     cacheKey: `${apiUrl ?? ""}:${Boolean(apiKey)}:${Boolean(redfoxApiKey)}:${redfoxCategory ?? ""}`
   };
+}
+
+function decodeHeaderValue(value: string | null) {
+  const text = value?.trim();
+  if (!text) return "";
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
 }
 
 function readClientDailyHotConfig(request: Request) {

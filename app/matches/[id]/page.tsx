@@ -1428,7 +1428,7 @@ function getStoredHotSearchHeaders() {
     if (settings?.xhsHotUrl?.trim()) headers["x-worldcup-xhs-url"] = settings.xhsHotUrl.trim();
     if (settings?.xhsHotKey?.trim()) headers["x-worldcup-xhs-key"] = settings.xhsHotKey.trim();
     if (settings?.redfoxApiKey?.trim()) headers["x-worldcup-redfox-key"] = settings.redfoxApiKey.trim();
-    if (settings?.redfoxXhsCategory?.trim()) headers["x-worldcup-redfox-xhs-category"] = settings.redfoxXhsCategory.trim();
+    if (settings?.redfoxXhsCategory?.trim()) headers["x-worldcup-redfox-xhs-category"] = encodeURIComponent(settings.redfoxXhsCategory.trim());
     return headers;
   } catch {
     return {};
