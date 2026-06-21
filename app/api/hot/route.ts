@@ -56,6 +56,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const source = searchParams.get("source") || "all";
   const scope = searchParams.get("scope") || "sports";
+  const xhsQuery = searchParams.get("xhsQuery")?.trim() || "";
   const limit = clampLimit(searchParams.get("limit"));
   const requestLimit = scope === "all" ? limit : Math.min(100, Math.max(limit * 5, 50));
   const useMock = process.env.NEXT_PUBLIC_USE_MOCK === "true";
@@ -66,7 +67,7 @@ export async function GET(request: Request) {
   const clientXhs = readClientXhsConfig(request);
   const clientDailyHot = readClientDailyHotConfig(request);
   const dailyHotBaseUrl = normalizeDailyHotBaseUrl(clientDailyHot.baseUrl);
-  const cacheKey = `hot:${source}:${scope}:${limit}:${baseUrl ?? ""}:${endpoint ?? ""}:${clientXhs.cacheKey}:${dailyHotBaseUrl}`;
+  const cacheKey = `hot:${source}:${scope}:${limit}:${xhsQuery}:${baseUrl ?? ""}:${endpoint ?? ""}:${clientXhs.cacheKey}:${dailyHotBaseUrl}`;
 
   const cached = hotCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
@@ -91,7 +92,8 @@ export async function GET(request: Request) {
           apiUrl: clientXhs.apiUrl,
           apiKey: clientXhs.apiKey,
           redfoxApiKey: clientXhs.redfoxApiKey,
-          redfoxCategory: clientXhs.redfoxCategory
+          redfoxCategory: clientXhs.redfoxCategory,
+          redfoxQuery: xhsQuery
         });
       }
 

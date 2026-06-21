@@ -190,7 +190,7 @@ export default function MatchAnalysisPage() {
     setHotspotError("");
 
     Promise.allSettled([
-      fetchHotPayload("/api/hot?source=all&scope=sports&limit=50", controller.signal, getStoredHotSearchHeaders()),
+      fetchHotPayload(`/api/hot?source=all&scope=sports&limit=50&xhsQuery=${encodeURIComponent(query)}`, controller.signal, getStoredHotSearchHeaders()),
       fetchHotPayload(`/api/hot/search?q=${encodeURIComponent(query)}`, controller.signal, getStoredHotSearchHeaders())
     ])
       .then((results) => {
