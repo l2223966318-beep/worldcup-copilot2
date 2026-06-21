@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import type { CSSProperties, MouseEvent } from "react";
-import { useCallback, useEffect, useState } from "react";
-import { ArrowRight, Palette, Trophy } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowRight, Palette, Pause, Play, Trophy, Volume2, VolumeX } from "lucide-react";
 
 import { HotTopicRadarPanel } from "@/components/worldcup/hot-topic-radar-panel";
 import { localizeCompetitionName, localizeMatchStatus, localizeRoundName, localizeTeamName, localizeVenueText } from "@/lib/services/footballNames";
@@ -227,6 +227,10 @@ function SectionTitle({ eyebrow, title, description }: { eyebrow?: string; title
 }
 
 function ImmersiveWorldCupHero() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoPaused, setVideoPaused] = useState(false);
+  const [videoMuted, setVideoMuted] = useState(true);
+
   function handlePointerMove(event: MouseEvent<HTMLElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width - 0.5;
@@ -240,6 +244,36 @@ function ImmersiveWorldCupHero() {
     event.currentTarget.style.setProperty("--hero-y", "0");
   }
 
+  function scrollToSection(sectionId: string) {
+    const target = document.getElementById(sectionId);
+    if (!target) return;
+    window.scrollTo({
+      top: target.getBoundingClientRect().top + window.scrollY,
+      left: 0,
+      behavior: "smooth"
+    });
+  }
+
+  async function toggleVideoPlayback() {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) {
+      await video.play();
+      setVideoPaused(false);
+      return;
+    }
+    video.pause();
+    setVideoPaused(true);
+  }
+
+  function toggleVideoMute() {
+    const video = videoRef.current;
+    if (!video) return;
+    const nextMuted = !video.muted;
+    video.muted = nextMuted;
+    setVideoMuted(nextMuted);
+  }
+
   return (
     <section
       className="worldcup-immersive-hero -mx-4 -mt-5 min-h-[100svh] overflow-hidden text-white lg:-mx-8"
@@ -248,30 +282,24 @@ function ImmersiveWorldCupHero() {
       style={{ "--hero-x": 0, "--hero-y": 0 } as CSSProperties}
       aria-label="WorldCup Copilot 世界杯沉浸开屏"
     >
-      <div className="worldcup-hero-sky" />
-      <div className="worldcup-hero-noise" />
-      <div className="worldcup-hero-field" />
-      <div className="worldcup-hero-light worldcup-hero-light-left" />
-      <div className="worldcup-hero-light worldcup-hero-light-right" />
-      <div className="worldcup-hero-particles" aria-hidden="true">
-        {heroParticles.map((particle, index) => (
-          <span
-            key={`${particle.left}-${particle.top}-${index}`}
-            className="worldcup-hero-particle"
-            style={{
-              "--particle-left": `${particle.left}%`,
-              "--particle-top": `${particle.top}%`,
-              "--particle-size": `${particle.size}px`,
-              "--particle-delay": `${particle.delay}s`,
-              "--particle-depth": particle.depth
-            } as CSSProperties}
-          />
-        ))}
-      </div>
+      <video
+        ref={videoRef}
+        className="worldcup-hero-video"
+        autoPlay
+        loop
+        muted={videoMuted}
+        playsInline
+        preload="metadata"
+        onPause={() => setVideoPaused(true)}
+        onPlay={() => setVideoPaused(false)}
+      >
+        <source src="/videos/worldcup-hero.mp4" type="video/mp4" />
+      </video>
+      <div className="worldcup-hero-video-overlay" />
 
-      <div className="worldcup-hero-layout relative z-10 mx-auto grid min-h-[100svh] w-full max-w-7xl items-center gap-7 px-4 py-12 md:py-14 lg:grid-cols-[minmax(0,0.86fr)_minmax(420px,1.14fr)] lg:px-8">
+      <div className="worldcup-hero-layout relative z-10 mx-auto flex min-h-[100svh] w-full max-w-7xl items-center px-4 py-12 md:py-14 lg:px-8">
         <div className="worldcup-hero-copy">
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-white/10 px-4 py-2 text-xs font-black uppercase tracking-[0.22em] text-emerald-100 shadow-[0_0_34px_rgba(34,197,94,0.2)] backdrop-blur">
+          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-white/10 px-4 py-2 text-xs font-black tracking-[0.16em] text-emerald-100 shadow-[0_0_34px_rgba(34,197,94,0.2)] backdrop-blur">
             <Trophy className="h-4 w-4 text-amber-300" />
             WorldCup Copilot
           </div>
@@ -283,65 +311,28 @@ function ImmersiveWorldCupHero() {
             WorldCup Copilot 将实时赛况、场上热点和比赛数据，转成可直接进入平台分发的选题与内容方案。
           </p>
           <div className="worldcup-hero-actions mt-8 flex flex-wrap gap-3">
-            <Link href="#opportunity-pool" className="worldcup-hero-cta worldcup-hero-cta-primary">
+            <button type="button" onClick={() => scrollToSection("opportunity-pool")} className="worldcup-hero-cta worldcup-hero-cta-primary">
               进入赛事中心
               <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link href="#hot-moments" className="worldcup-hero-cta worldcup-hero-cta-secondary">
+            </button>
+            <button type="button" onClick={() => scrollToSection("hot-moments")} className="worldcup-hero-cta worldcup-hero-cta-secondary">
               查看热点时刻
-            </Link>
+            </button>
           </div>
         </div>
 
-        <div className="worldcup-ball-stage" aria-hidden="true">
-          <div className="worldcup-ball-aura" />
-          <div className="worldcup-fire-tail" />
-          <div className="worldcup-flame-orbit">
-            <span className="worldcup-flame worldcup-flame-one" />
-            <span className="worldcup-flame worldcup-flame-two" />
-            <span className="worldcup-flame worldcup-flame-three" />
-          </div>
-          <div className="worldcup-heat-wave worldcup-heat-wave-one" />
-          <div className="worldcup-heat-wave worldcup-heat-wave-two" />
-          <div className="worldcup-ball-ring worldcup-ball-ring-one" />
-          <div className="worldcup-ball-ring worldcup-ball-ring-two" />
-          <div className="worldcup-football">
-            <span className="worldcup-football-panel worldcup-football-panel-one" />
-            <span className="worldcup-football-panel worldcup-football-panel-two" />
-            <span className="worldcup-football-panel worldcup-football-panel-three" />
-            <span className="worldcup-football-panel worldcup-football-panel-four" />
-            <span className="worldcup-football-panel worldcup-football-panel-five" />
-            <span className="worldcup-football-stitch worldcup-football-stitch-one" />
-            <span className="worldcup-football-stitch worldcup-football-stitch-two" />
-            <span className="worldcup-football-stitch worldcup-football-stitch-three" />
-            <span className="worldcup-football-stitch worldcup-football-stitch-four" />
-          </div>
+        <div className="worldcup-hero-media-controls" aria-label="开屏视频控制">
+          <button type="button" onClick={toggleVideoPlayback} className="worldcup-hero-control" aria-label={videoPaused ? "播放视频" : "暂停视频"}>
+            {videoPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+          </button>
+          <button type="button" onClick={toggleVideoMute} className="worldcup-hero-control" aria-label={videoMuted ? "打开声音" : "静音"}>
+            {videoMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          </button>
         </div>
       </div>
     </section>
   );
 }
-
-const heroParticles = [
-  { left: 8, top: 28, size: 3, delay: 0.1, depth: 28 },
-  { left: 14, top: 72, size: 5, delay: 1.4, depth: 36 },
-  { left: 20, top: 18, size: 4, delay: 2.1, depth: 18 },
-  { left: 27, top: 58, size: 2, delay: 0.8, depth: 32 },
-  { left: 34, top: 34, size: 6, delay: 2.8, depth: 20 },
-  { left: 41, top: 77, size: 3, delay: 1.2, depth: 42 },
-  { left: 49, top: 21, size: 4, delay: 3.2, depth: 24 },
-  { left: 56, top: 63, size: 5, delay: 0.4, depth: 38 },
-  { left: 62, top: 38, size: 3, delay: 2.4, depth: 26 },
-  { left: 69, top: 16, size: 6, delay: 1.8, depth: 34 },
-  { left: 74, top: 82, size: 4, delay: 3.5, depth: 22 },
-  { left: 81, top: 44, size: 2, delay: 1.1, depth: 46 },
-  { left: 87, top: 24, size: 5, delay: 2.7, depth: 30 },
-  { left: 92, top: 70, size: 3, delay: 0.6, depth: 40 },
-  { left: 11, top: 48, size: 2, delay: 3.8, depth: 16 },
-  { left: 47, top: 88, size: 5, delay: 2.0, depth: 28 },
-  { left: 66, top: 55, size: 2, delay: 4.1, depth: 48 },
-  { left: 91, top: 36, size: 4, delay: 1.7, depth: 18 }
-] as const;
 
 function ThemeSideSelector({
   active,
