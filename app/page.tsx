@@ -423,7 +423,7 @@ function OpportunityMatchCard({
 
   return (
     <article
-      className="grid gap-4 rounded-[28px] border p-4 shadow-[0_18px_50px_rgba(15,23,42,0.055)] transition hover:-translate-y-1 hover:shadow-[0_26px_76px_rgba(15,23,42,0.1)] md:p-5 lg:grid-cols-[74px_minmax(0,1fr)]"
+      className="grid gap-4 overflow-hidden rounded-[28px] border p-4 shadow-[0_18px_50px_rgba(15,23,42,0.055)] transition hover:-translate-y-1 hover:shadow-[0_26px_76px_rgba(15,23,42,0.1)] md:p-5 lg:grid-cols-[74px_minmax(0,1fr)]"
       style={heatTone}
     >
       <div className="flex items-center gap-3 lg:block">
@@ -667,29 +667,36 @@ function priorityColor(priority: string, theme: SportTheme) {
 function matchHeatTone(score: number, theme: SportTheme): CSSProperties {
   if (score >= 85) {
     return {
-      background: "linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(236,253,245,0.98) 48%, rgba(255,247,237,0.92) 100%)",
-      borderColor: "rgba(16, 185, 129, 0.34)",
-      boxShadow: `0 22px 64px rgba(15,23,42,0.07), 0 0 44px ${theme.heroGlow}`
+      background:
+        "radial-gradient(circle at 88% 50%, rgba(16,185,129,0.52) 0%, rgba(16,185,129,0.22) 24%, transparent 50%), radial-gradient(circle at 10% 0%, rgba(251,191,36,0.28) 0%, transparent 36%), linear-gradient(112deg, transparent 0%, transparent 58%, rgba(255,255,255,0.56) 58.4%, transparent 60.4%), linear-gradient(118deg, rgba(255,255,255,0.98) 0%, rgba(236,253,245,0.96) 42%, rgba(187,247,208,0.9) 73%, rgba(255,247,237,0.94) 100%)",
+      borderColor: "rgba(16, 185, 129, 0.72)",
+      boxShadow: `0 22px 64px rgba(15,23,42,0.09), 0 0 68px ${theme.heroGlow}`
     };
   }
 
   if (score >= 70) {
     return {
-      background: "linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(240,253,244,0.95) 58%, rgba(240,249,255,0.9) 100%)",
-      borderColor: "rgba(34, 197, 94, 0.26)"
+      background:
+        "radial-gradient(circle at 90% 52%, rgba(34,197,94,0.42) 0%, rgba(34,197,94,0.18) 27%, transparent 50%), radial-gradient(circle at 12% 0%, rgba(56,189,248,0.22) 0%, transparent 34%), linear-gradient(112deg, transparent 0%, transparent 60%, rgba(255,255,255,0.48) 60.4%, transparent 62.4%), linear-gradient(118deg, rgba(255,255,255,0.98) 0%, rgba(240,253,244,0.95) 46%, rgba(187,247,208,0.8) 78%, rgba(240,249,255,0.94) 100%)",
+      borderColor: "rgba(34, 197, 94, 0.58)",
+      boxShadow: "0 20px 58px rgba(15,23,42,0.072), 0 0 44px rgba(34,197,94,0.17)"
     };
   }
 
   if (score >= 55) {
     return {
-      background: "linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 62%, rgba(236,253,245,0.72) 100%)",
-      borderColor: theme.border
+      background:
+        "radial-gradient(circle at 91% 54%, rgba(20,184,166,0.34) 0%, rgba(20,184,166,0.14) 28%, transparent 52%), radial-gradient(circle at 10% 0%, rgba(59,130,246,0.14) 0%, transparent 34%), linear-gradient(112deg, transparent 0%, transparent 62%, rgba(255,255,255,0.42) 62.4%, transparent 64.4%), linear-gradient(118deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.94) 50%, rgba(204,251,241,0.7) 100%)",
+      borderColor: "rgba(20, 184, 166, 0.44)",
+      boxShadow: "0 18px 50px rgba(15,23,42,0.064), 0 0 36px rgba(20,184,166,0.12)"
     };
   }
 
   return {
-    background: "linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 100%)",
-    borderColor: "rgba(203, 213, 225, 0.88)"
+    background:
+      "radial-gradient(circle at 91% 54%, rgba(59,130,246,0.28) 0%, rgba(59,130,246,0.1) 29%, transparent 52%), radial-gradient(circle at 12% 0%, rgba(148,163,184,0.16) 0%, transparent 34%), linear-gradient(112deg, transparent 0%, transparent 63%, rgba(255,255,255,0.38) 63.4%, transparent 65.4%), linear-gradient(118deg, rgba(255,255,255,0.98) 0%, rgba(248,250,252,0.96) 52%, rgba(219,234,254,0.74) 100%)",
+    borderColor: "rgba(96, 165, 250, 0.38)",
+    boxShadow: "0 18px 48px rgba(15,23,42,0.06), 0 0 34px rgba(59,130,246,0.1)"
   };
 }
 

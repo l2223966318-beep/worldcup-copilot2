@@ -188,7 +188,7 @@ export function HotTopicRadarPanel({
                         热度：{topic.heat ?? topic.relevanceScore ?? "-"}
                         {typeof topic.valueScore === "number" ? `｜价值分：${topic.valueScore}` : ""}
                       </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
                         <button
                           type="button"
                           onClick={(event) => {
