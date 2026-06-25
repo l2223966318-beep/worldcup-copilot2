@@ -294,6 +294,14 @@
   background: rgba(100, 116, 139, 0.5);
 }
 
+.hot-topic-tabs {
+  scrollbar-width: none;
+}
+
+.hot-topic-tabs::-webkit-scrollbar {
+  display: none;
+}
+
 .worldcup-immersive-hero {
   --hero-x: 0;
   --hero-y: 0;

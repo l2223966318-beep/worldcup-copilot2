@@ -104,7 +104,7 @@ export function HotTopicRadarPanel({
 
   return (
     <aside className="lg:sticky lg:top-24">
-      <div className="flex rounded-[28px] border bg-white p-4 shadow-[0_20px_70px_rgba(15,23,42,0.07)] lg:max-h-[calc(100vh-7rem)] lg:flex-col lg:overflow-hidden xl:p-5" style={{ borderColor: theme.border }}>
+      <div className="flex rounded-[28px] border bg-white p-4 shadow-[0_20px_70px_rgba(15,23,42,0.07)] lg:h-[calc(100vh-6.5rem)] lg:flex-col lg:overflow-hidden xl:p-5" style={{ borderColor: theme.border }}>
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-xs font-black tracking-[0.18em] text-slate-400">热点雷达</div>
@@ -134,7 +134,7 @@ export function HotTopicRadarPanel({
           </div>
         ) : null}
 
-        <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
+        <div className="hot-topic-tabs mt-4 flex gap-2 overflow-x-auto pb-2 pr-3">
           {tabs.map((tab) => (
             <button
               key={tab}
@@ -150,7 +150,7 @@ export function HotTopicRadarPanel({
           ))}
         </div>
 
-        <div className="hot-topic-scroll mt-4 space-y-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+        <div className="hot-topic-scroll mt-3 space-y-3 border-t border-slate-100 pt-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
           {filteredTopics.length ? (
             filteredTopics.slice(0, 12).map((topic, index) => {
               const isFeaturedAll = activeTab === "全部" && index < 3;
