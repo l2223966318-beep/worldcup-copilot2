@@ -182,7 +182,7 @@ export function HotTopicRadarPanel({
                           target="_blank"
                           rel="noreferrer"
                           onClick={(event) => event.stopPropagation()}
-                          className={`line-clamp-2 text-base font-black leading-6 text-slate-950 transition ${isFeaturedAll ? "hover:text-violet-700" : "hover:text-emerald-700"}`}
+                          className={`line-clamp-2 text-base font-black leading-6 text-slate-950 transition ${isFeaturedAll ? "hover:text-slate-700" : "hover:text-emerald-700"}`}
                         >
                           {topic.title}
                         </a>
@@ -207,7 +207,7 @@ export function HotTopicRadarPanel({
                             openTopic(topic);
                           }}
                           className={`inline-flex h-8 items-center rounded-full px-3.5 text-xs font-semibold ring-1 transition hover:-translate-y-0.5 ${
-                            isFeaturedAll ? "bg-white/80 text-slate-800 ring-white/80 backdrop-blur hover:bg-white" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                            isFeaturedAll ? "bg-white/75 text-slate-800 ring-slate-200/70 backdrop-blur hover:bg-white" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
                           }`}
                         >
                           查看详情
