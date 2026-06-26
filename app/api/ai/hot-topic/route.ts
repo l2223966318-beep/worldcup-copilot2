@@ -22,7 +22,7 @@ type AiCacheEntry = {
 };
 
 const HOT_TOPIC_AI_CACHE_TTL_MS = Number(process.env.HOT_TOPIC_AI_CACHE_TTL_MS ?? 10 * 60_000);
-const HOT_TOPIC_AI_TIMEOUT_MS = Number(process.env.HOT_TOPIC_AI_TIMEOUT_MS ?? 30_000);
+const HOT_TOPIC_AI_TIMEOUT_MS = Number(process.env.HOT_TOPIC_AI_TIMEOUT_MS ?? 20_000);
 const aiCache = new Map<string, AiCacheEntry>();
 
 type HotTopicAiPayload = {

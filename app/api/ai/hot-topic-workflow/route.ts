@@ -47,8 +47,8 @@ type AuditCacheEntry = {
 };
 
 const HOT_WORKFLOW_AI_CACHE_TTL_MS = Number(process.env.HOT_WORKFLOW_AI_CACHE_TTL_MS ?? 10 * 60_000);
-const HOT_WORKFLOW_GENERATE_TIMEOUT_MS = Number(process.env.HOT_WORKFLOW_GENERATE_TIMEOUT_MS ?? 35_000);
-const HOT_WORKFLOW_AUDIT_TIMEOUT_MS = Number(process.env.HOT_WORKFLOW_AUDIT_TIMEOUT_MS ?? 30_000);
+const HOT_WORKFLOW_GENERATE_TIMEOUT_MS = Number(process.env.HOT_WORKFLOW_GENERATE_TIMEOUT_MS ?? 24_000);
+const HOT_WORKFLOW_AUDIT_TIMEOUT_MS = Number(process.env.HOT_WORKFLOW_AUDIT_TIMEOUT_MS ?? 20_000);
 const generateCache = new Map<string, GenerateCacheEntry>();
 const auditCache = new Map<string, AuditCacheEntry>();
 

@@ -19,11 +19,11 @@ type DeepSeekResponse = {
 
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_FAST_MODEL = "deepseek-v4-flash";
-const DEFAULT_QUALITY_MODEL = "deepseek-v4-pro";
+const DEFAULT_QUALITY_MODEL = "deepseek-v4-flash";
 const DEFAULT_TIMEOUT_MS = 18_000;
-const DEFAULT_QUALITY_TIMEOUT_MS = 35_000;
+const DEFAULT_QUALITY_TIMEOUT_MS = 24_000;
 const DEFAULT_FAST_MAX_TOKENS = 4096;
-const DEFAULT_QUALITY_MAX_TOKENS = 8192;
+const DEFAULT_QUALITY_MAX_TOKENS = 4096;
 
 export type DeepSeekJsonResult<T> =
   | { ok: true; data: T; model: string }

@@ -60,7 +60,7 @@ export async function reviewDraftWithAi(input: {
         })
       }
     ],
-    { timeoutMs: 35_000, apiKey: input.apiKey, quality: "quality", reasoningEffort: "high" }
+    { timeoutMs: 24_000, apiKey: input.apiKey, quality: "quality", reasoningEffort: "high" }
   );
 
   if (!result.ok) {
