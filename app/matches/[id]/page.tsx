@@ -436,18 +436,9 @@ export default function MatchAnalysisPage() {
       </section>
 
       <section className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
-        <SectionTitle eyebrow="DATA TO ANGLE" title="核心数据如何转成内容角度" description="数据不是为了摆出来，而是帮助运营判断这场比赛应该怎么讲。" />
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
-          {workflow.dataAngles.map((item) => (
-            <DataAngleCard key={item.label} {...item} theme={theme} />
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
         <SectionTitle eyebrow="CHART INSIGHTS" title="图表服务内容创作" description="每张图表都配运营解释和可复制金句，用来快速变成脚本、标题或长文段落。" />
         <div className="mt-6">
-          <InsightCharts match={match} theme={theme} />
+          <InsightCharts match={match} theme={theme} dataAngles={workflow.dataAngles} />
         </div>
       </section>
 
@@ -854,20 +845,6 @@ function ConclusionCard({ title, body, theme, featured = false }: { title: strin
     >
       <div className="text-sm font-semibold" style={{ color: theme.primary }}>{title}</div>
       <p className="mt-3 text-sm font-medium leading-relaxed text-slate-700"><HighlightedText text={body} /></p>
-    </div>
-  );
-}
-
-function DataAngleCard({ label, value, compare, explain, angle, theme }: { label: string; value: string; compare: string; explain: string; angle: string; theme: SportTheme }) {
-  return (
-    <div className="rounded-[28px] border bg-white p-5 shadow-sm transition hover:-translate-y-1" style={{ borderColor: theme.border }}>
-      <div className="text-sm font-semibold text-slate-500">{label}</div>
-      <div className="mt-3 text-4xl font-black tracking-tight" style={{ color: theme.strongText }}>{value}</div>
-      <div className="mt-1 text-sm font-semibold" style={{ color: theme.primary }}>{compare}</div>
-      <p className="mt-4 text-sm leading-relaxed text-slate-700"><HighlightedText text={explain} /></p>
-      <div className="mt-4 rounded-2xl p-3 text-sm font-medium leading-relaxed" style={{ backgroundColor: theme.background, color: theme.secondary }}>
-        内容转化：<HighlightedText text={angle} />
-      </div>
     </div>
   );
 }

@@ -7,8 +7,6 @@ import {
   BarChart,
   CartesianGrid,
   Legend,
-  Line,
-  LineChart,
   PolarAngleAxis,
   PolarGrid,
   PolarRadiusAxis,
@@ -26,7 +24,23 @@ import { HighlightedText } from "@/components/ui/readable-text";
 import { buildChartCopy, buildTeamRadarData } from "@/lib/services/matchDetailPresentation";
 import { getSportTheme, type SportTheme } from "@/lib/sport-theme";
 
-export function InsightCharts({ match, theme = getSportTheme("football") }: { match: MatchData; theme?: SportTheme }) {
+type DataAngle = {
+  label: string;
+  value: string;
+  compare: string;
+  explain: string;
+  angle: string;
+};
+
+export function InsightCharts({
+  match,
+  theme = getSportTheme("football"),
+  dataAngles = []
+}: {
+  match: MatchData;
+  theme?: SportTheme;
+  dataAngles?: DataAngle[];
+}) {
   const possessionData = [
     { team: match.teamA, value: match.stats.teamA.possession },
     { team: match.teamB, value: match.stats.teamB.possession }
@@ -37,11 +51,6 @@ export function InsightCharts({ match, theme = getSportTheme("football") }: { ma
   ];
   const teamRadar = buildTeamRadarData(match);
   const chartCopy = buildChartCopy(match);
-  const hasEnoughHistory = match.historicalMeetings.length >= 2;
-  const historyData = match.historicalMeetings.map((item, index) => ({
-    name: item.year,
-    场次: index + 1
-  }));
 
   return (
     <div className="grid gap-5 xl:grid-cols-2">
@@ -134,70 +143,38 @@ export function InsightCharts({ match, theme = getSportTheme("football") }: { ma
         </ResponsiveContainer>
       </ChartCard>
 
-      <ChartCard
-        title="赛事背景：这场比赛如何放进内容上下文"
-        operation={chartCopy.context.operation}
-        quote={chartCopy.context.quote}
-        theme={theme}
-      >
-        {hasEnoughHistory ? (
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={historyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,.22)" />
-              <XAxis dataKey="name" stroke="#64748b" />
-              <YAxis stroke="#64748b" />
-              <Tooltip />
-              <Line type="monotone" dataKey="场次" stroke={theme.chartB} strokeWidth={3} dot={{ r: 5, fill: theme.chartB }} />
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <MatchContextFallback match={match} theme={theme} />
-        )}
-      </ChartCard>
+      {dataAngles.length > 0 ? <DataAnglePanel dataAngles={dataAngles} theme={theme} /> : null}
     </div>
   );
 }
 
-function MatchContextFallback({ match, theme }: { match: MatchData; theme: SportTheme }) {
-  const eventCount = match.keyEvents.filter((event) => event.team !== "数据源").length;
-  const statSignals = [
-    `${match.teamA} 控球 ${match.stats.teamA.possession}%`,
-    `${match.teamB} 控球 ${match.stats.teamB.possession}%`,
-    `射门 ${match.stats.teamA.shots}-${match.stats.teamB.shots}`,
-    `射正 ${match.stats.teamA.shotsOnTarget}-${match.stats.teamB.shotsOnTarget}`
-  ];
-
+function DataAnglePanel({ dataAngles, theme }: { dataAngles: DataAngle[]; theme: SportTheme }) {
   return (
-    <div className="min-h-[250px] rounded-[24px] border bg-white p-5" style={{ borderColor: theme.border }}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-xs font-black tracking-[0.18em] text-slate-400">CONTEXT</div>
-          <div className="mt-2 text-xl font-black text-slate-950">背景数据不足</div>
-        </div>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">未返回历史交锋</span>
+    <div className="rounded-[28px] border bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.06)] transition hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(15,23,42,0.1)]" style={{ borderColor: theme.border }}>
+      <div>
+        <div className="text-xs font-black tracking-[0.18em] text-slate-400">DATA TO ANGLE</div>
+        <h3 className="mt-2 text-lg font-semibold leading-snug" style={{ color: theme.strongText }}>核心数据如何转成内容角度</h3>
+        <p className="mt-2 text-sm leading-6 text-slate-500">数据不是为了摆出来，而是帮助运营判断这场比赛应该怎么讲。</p>
       </div>
-      <p className="mt-4 text-sm leading-7 text-slate-600">
-        当前数据源没有提供两条以上可核验的历史背景记录，因此不展示趋势图。内容判断应优先使用本场比分、赛程阶段、事件和基础统计。
-      </p>
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <ContextMetric label="本场比分" value={match.score} />
-        <ContextMetric label="关键事件" value={eventCount ? `${eventCount} 条` : "待补充"} />
-        {statSignals.slice(0, 2).map((item) => (
-          <ContextMetric key={item} label="基础统计" value={item} />
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        {dataAngles.map((item) => (
+          <DataAngleCard key={item.label} {...item} theme={theme} />
         ))}
       </div>
-      <div className="mt-4 rounded-2xl p-3 text-sm leading-6" style={{ backgroundColor: theme.background, color: theme.secondary }}>
-        可讲方向：先把这场比赛本身讲清楚，不补写未经核验的历史交锋、伤病、内部矛盾或裁判争议。
-      </div>
     </div>
   );
 }
 
-function ContextMetric({ label, value }: { label: string; value: string }) {
+function DataAngleCard({ label, value, compare, explain, angle, theme }: DataAngle & { theme: SportTheme }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-      <div className="text-xs font-semibold text-slate-400">{label}</div>
-      <div className="mt-1 text-sm font-black text-slate-900">{value}</div>
+    <div className="rounded-[28px] border bg-white p-5 shadow-sm transition hover:-translate-y-1" style={{ borderColor: theme.border }}>
+      <div className="text-sm font-semibold text-slate-500">{label}</div>
+      <div className="mt-3 text-4xl font-black tracking-tight" style={{ color: theme.strongText }}>{value}</div>
+      <div className="mt-1 text-sm font-semibold" style={{ color: theme.primary }}>{compare}</div>
+      <p className="mt-4 text-sm leading-relaxed text-slate-700"><HighlightedText text={explain} /></p>
+      <div className="mt-4 rounded-2xl p-3 text-sm font-medium leading-relaxed" style={{ backgroundColor: theme.background, color: theme.secondary }}>
+        内容转化：<HighlightedText text={angle} />
+      </div>
     </div>
   );
 }
