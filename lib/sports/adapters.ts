@@ -122,6 +122,7 @@ function describeMatchEvent(event: WorldCupMatch["events"][number]) {
   const subject = player || localizeTeamName(event.team) || "场上球员";
 
   if (/miss|shot_off_target|off target/.test(normalized)) return `${subject}射门偏出。`;
+  if (/shot on target/.test(normalized)) return `${subject}完成射正。`;
   if (/shot.*saved|save|saved/.test(normalized)) return `${subject}射门被扑出。`;
   if (/penalty/.test(normalized) && /goal|scored/.test(normalized)) return `${subject}点球破门。`;
   if (/own goal|own_goal/.test(normalized)) return `${subject}造成乌龙球。`;

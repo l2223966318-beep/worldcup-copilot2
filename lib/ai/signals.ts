@@ -272,7 +272,8 @@ function isContentWorthyEvent(event: MatchEvent) {
   const text = eventToText(event).toLowerCase();
   if (event.team === "数据源" || isCoverageWarning(text)) return false;
   if (/injury time shown|throw in|goal kick|free kick|offside|corner kick|period start|period score/.test(text)) return false;
-  return /进球|点球|关键扑救|争议|黄牌|红牌|换人|射门|偏出|被扑|错失|miss|save|goal|penalty|card|substitution/.test(text);
+  if (/shot on target|完成射正|射门被扑出|场上球员/.test(text)) return false;
+  return /进球|点球|关键扑救|争议|黄牌|红牌|换人|乌龙|绝杀|扳平|追平|goal|penalty|card|substitution|own goal/.test(text);
 }
 
 function isCoverageWarning(text: string) {
