@@ -180,22 +180,24 @@ export function buildSignalContext(match: MatchData) {
 }
 
 function buildSources(match: MatchData): SignalSource[] {
-  const eventSources = match.keyEvents.map((event, index) => ({
-    minute: event.minute,
-    team: event.team,
-    text: eventToText(event),
-    index
-  }));
+  const eventSources = match.keyEvents
+    .filter(isContentWorthyEvent)
+    .map((event, index) => ({
+      minute: event.minute,
+      team: event.team,
+      text: eventToText(event),
+      index
+    }));
 
-  return [
-    ...eventSources,
-    {
-      minute: "-",
-      team: `${match.teamA}/${match.teamB}`,
-      text: match.summary,
-      index: eventSources.length
-    }
-  ];
+  if (eventSources.length > 0) return eventSources;
+  if (!match.isExample || isCoverageWarning(match.summary)) return [];
+
+  return [{
+    minute: "-",
+    team: `${match.teamA}/${match.teamB}`,
+    text: match.summary,
+    index: eventSources.length
+  }];
 }
 
 function matchSourceToSignals(match: MatchData, source: SignalSource) {
@@ -226,7 +228,7 @@ function buildEventTopicSeed(match: MatchData, event: SignalSource) {
   const description = cleanupEventDescription(event.text, event);
   const player = extractPlayerName(description);
   const minute = event.minute === "-" ? "" : event.minute;
-  const prefix = player ? player : event.team && event.team !== `${match.teamA}/${match.teamB}` ? event.team : match.name;
+  const prefix = readableSignalSubject(player, event, match);
 
   if (/扑救|门将|save/i.test(description)) {
     return `${minute}${prefix}这次扑救，把悬念留到了最后`;
@@ -266,6 +268,28 @@ function cleanupEventDescription(text: string, event: SignalSource) {
     .trim();
 }
 
+function isContentWorthyEvent(event: MatchEvent) {
+  const text = eventToText(event).toLowerCase();
+  if (event.team === "数据源" || isCoverageWarning(text)) return false;
+  if (/injury time shown|throw in|goal kick|free kick|offside|corner kick|period start|period score/.test(text)) return false;
+  return /进球|点球|关键扑救|争议|黄牌|红牌|换人|射门|偏出|被扑|错失|miss|save|goal|penalty|card|substitution/.test(text);
+}
+
+function isCoverageWarning(text: string) {
+  return /数据源|基础覆盖|未返回事件流|不要编造|不要推断|需二次核验|source coverage|data coverage/i.test(text);
+}
+
+function readableSignalSubject(player: string | undefined, event: SignalSource, match: MatchData) {
+  if (player && !isMostlyAscii(player)) return player;
+  if (event.team && event.team !== "场上球员" && event.team !== `${match.teamA}/${match.teamB}`) return event.team;
+  return "";
+}
+
+function isMostlyAscii(text: string) {
+  const letters = text.replace(/[^A-Za-z]/g, "");
+  return letters.length >= Math.max(3, Math.ceil(text.length * 0.5));
+}
+
 function escapeRegExp(text: string) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -286,7 +310,7 @@ function dedupeSignals(signals: MatchSignal[]) {
 }
 
 function buildFallbackSignals(match: MatchData): MatchSignal[] {
-  return match.keyEvents.slice(0, 3).map((event, index) => ({
+  return match.keyEvents.filter(isContentWorthyEvent).slice(0, 3).map((event, index) => ({
     id: `${match.id}-signal-key-${index + 1}`,
     type: "key-moment",
     label: "关键比赛事件",
