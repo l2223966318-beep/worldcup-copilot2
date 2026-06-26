@@ -53,9 +53,9 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
     keyEvents: match.events.length
       ? match.events.map((event) => ({
           minute: event.minute ? `${event.minute}${event.extraMinute ? `+${event.extraMinute}` : ""}'` : "-",
-          team: event.team,
-          type: normalizeEventType(event.type),
-          description: [event.player, event.detail, event.comment].filter(Boolean).join(" / ") || event.type
+          team: localizeTeamName(event.team),
+          type: normalizeEventType(event.type, event.detail),
+          description: describeMatchEvent(event)
         }))
       : [
           {
@@ -114,10 +114,37 @@ function numberStat(statistic: MatchStatistic | undefined, names: string[], fall
   return percentage ? Math.round(parsed) : parsed;
 }
 
-function normalizeEventType(type: string): MatchEvent["type"] {
-  if (type.includes("Goal")) return "进球";
-  if (type.includes("Card")) return "黄牌";
-  if (type.includes("subst")) return "换人";
+function describeMatchEvent(event: WorldCupMatch["events"][number]) {
+  const player = event.player?.trim();
+  const assist = event.assist?.trim();
+  const detail = event.detail?.trim() || event.type;
+  const normalized = `${event.type} ${detail}`.toLowerCase();
+  const subject = player || localizeTeamName(event.team) || "场上球员";
+
+  if (/miss|shot_off_target|off target/.test(normalized)) return `${subject}射门偏出。`;
+  if (/shot.*saved|save|saved/.test(normalized)) return `${subject}射门被扑出。`;
+  if (/penalty/.test(normalized) && /goal|scored/.test(normalized)) return `${subject}点球破门。`;
+  if (/own goal|own_goal/.test(normalized)) return `${subject}造成乌龙球。`;
+  if (/goal|score/.test(normalized)) return assist ? `${subject}破门，${assist}送出助攻。` : `${subject}完成进球。`;
+  if (/yellow/.test(normalized)) return `${subject}吃到黄牌。`;
+  if (/red/.test(normalized)) return `${subject}吃到红牌。`;
+  if (/substitution|subst|change/.test(normalized)) return `${subject}完成换人调整。`;
+
+  return [subject, readableEventDetail(detail)].filter(Boolean).join("，") + "。";
+}
+
+function readableEventDetail(detail: string) {
+  const normalized = detail.trim();
+  if (!normalized || normalized === "event") return "出现关键事件";
+  return normalized.replace(/_/g, " ");
+}
+
+function normalizeEventType(type: string, detail = ""): MatchEvent["type"] {
+  const normalized = `${type} ${detail}`.toLowerCase();
+  if (/goal|score/.test(normalized)) return "进球";
+  if (/card/.test(normalized)) return "黄牌";
+  if (/subst|substitution|change/.test(normalized)) return "换人";
+  if (/save|miss|shot/.test(normalized)) return "关键扑救";
   return "终场";
 }
 

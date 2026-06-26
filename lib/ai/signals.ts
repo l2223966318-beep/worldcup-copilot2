@@ -232,6 +232,10 @@ function buildEventTopicSeed(match: MatchData, event: SignalSource) {
     return `${minute}${prefix}这次扑救，把悬念留到了最后`;
   }
 
+  if (/错失|偏出|没进|miss|off target/i.test(description)) {
+    return `${minute}${prefix}这次机会没进，反而有复盘价值`;
+  }
+
   if (/扳平|追平/.test(description)) {
     return `${minute}${prefix}追平后，比赛才真正开始`;
   }
@@ -267,7 +271,7 @@ function escapeRegExp(text: string) {
 }
 
 function extractPlayerName(text: string) {
-  const match = text.match(/^([\u4e00-\u9fa5A-Za-z·\s]{2,18}?)(?:点球|完成|凌空|补射|反击|禁区|破门|扳回|扳平|追平|低射|头球|扑救)/);
+  const match = text.match(/^([\u4e00-\u9fa5A-Za-z·\s,.'-]{2,28}?)(?:点球|完成|凌空|补射|反击|禁区|破门|扳回|扳平|追平|低射|头球|扑救|射门)/);
   return match?.[1].trim();
 }
 
