@@ -76,14 +76,34 @@ assert.ok(analysis.turningPoints.some((item) => item.includes("乌龙球")));
 const douyin = createPlatformDraft("douyin", matchContext, topic, analysis);
 const bilibili = createPlatformDraft("bilibili", matchContext, topic, analysis);
 const bilibiliTopic = createPlatformDraft("bilibili", matchContext, topic, analysis, { contentType: "topic", topicMode: "playful" });
+const punctuatedTopic = createPlatformDraft(
+  "bilibili",
+  matchContext,
+  { ...topic, reason: `${topic.reason}。` },
+  analysis,
+  { contentType: "topic", topicMode: "playful" }
+);
 assert.equal(supportedPlatforms.includes("douyin"), true);
 assert.equal(contentTypeOptions[0].key, "topic");
 assert.equal(topicModeOptions.some((item) => item.key === "playful"), true);
+assert.deepEqual(
+  contentTypeOptions.map((item) => item.label),
+  ["选题", "标题", "短文案", "视频脚本", "评论区互动", "图文卡片"]
+);
+assert.deepEqual(
+  topicModeOptions.map((item) => item.label),
+  ["专业复盘", "客观资讯", "球迷讨论", "轻松整活", "人物故事", "数据解读", "稳妥表达"]
+);
 assert.notEqual(douyin.body, bilibili.body);
 assert.ok(douyin.body.includes("可直接发布版"));
-assert.ok(bilibiliTopic.body.includes("选题"));
-assert.ok(bilibiliTopic.body.includes("轻松整活"));
-assert.ok(bilibiliTopic.body.includes("动漫角色"));
+const topicSection = bilibiliTopic.sections.find((section) => section.title === "选题角度");
+assert.ok(topicSection);
+assert.equal((topicSection.content.match(/^\d+\./gm) ?? []).length, 5);
+assert.ok(topicSection.content.includes("怎么做："));
+assert.ok(topicSection.content.includes("说明："));
+assert.ok(topicSection.content.includes("动漫"));
+assert.equal(bilibiliTopic.sections.length, 1);
+assert.equal(punctuatedTopic.body.includes("。。"), false);
 
 const pkg = createContentPackage({
   matchContext,

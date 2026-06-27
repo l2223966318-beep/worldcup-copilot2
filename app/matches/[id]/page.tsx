@@ -1037,7 +1037,7 @@ function PlatformPreview({
         <div className="flex flex-wrap gap-2">
           <ActionButton onClick={onRegenerate} theme={theme} variant="secondary">
             <RefreshCcw className="h-4 w-4" />
-            {draftLoading ? "生成中..." : draft ? "重新生成" : platformMeta[platform].action}
+            {draftLoading ? "生成中..." : "生成"}
           </ActionButton>
           {draft ? (
             <>
@@ -1067,7 +1067,7 @@ function PlatformPreview({
           </select>
         </label>
         <label className="text-sm font-semibold text-slate-600">
-          内容类型
+          生成类型
           <select
             value={contentType}
             onChange={(event) => onContentTypeChange(event.target.value as ContentTypeKey)}
@@ -1079,7 +1079,7 @@ function PlatformPreview({
           </select>
         </label>
         <label className="text-sm font-semibold text-slate-600">
-          选题方向
+          风格类型
           <select
             value={topicMode}
             onChange={(event) => onTopicModeChange(event.target.value as TopicModeKey)}

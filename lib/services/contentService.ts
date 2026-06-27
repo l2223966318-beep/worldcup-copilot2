@@ -16,18 +16,18 @@ export const contentTypeOptions: Array<{ key: ContentTypeKey; label: string }> =
   { key: "title", label: "标题" },
   { key: "shortCopy", label: "短文案" },
   { key: "videoScript", label: "视频脚本" },
-  { key: "commentPrompt", label: "评论区互动问题" },
-  { key: "cardStructure", label: "图文卡片结构" }
+  { key: "commentPrompt", label: "评论区互动" },
+  { key: "cardStructure", label: "图文卡片" }
 ];
 
 export const topicModeOptions: Array<{ key: TopicModeKey; label: string }> = [
-  { key: "professional", label: "专业分析" },
+  { key: "professional", label: "专业复盘" },
   { key: "objectiveNews", label: "客观资讯" },
   { key: "fanDiscussion", label: "球迷讨论" },
   { key: "playful", label: "轻松整活" },
-  { key: "playerStory", label: "球员故事" },
+  { key: "playerStory", label: "人物故事" },
   { key: "dataRead", label: "数据解读" },
-  { key: "riskSafe", label: "风险安全版" }
+  { key: "riskSafe", label: "稳妥表达" }
 ];
 
 export function createPlatformDraft(
@@ -83,26 +83,65 @@ function createTypedSections(
 }
 
 function createTopicSections(platform: PlatformKey, match: MatchContext, topic: WorkflowTopic, analysis: AnalysisResult, topicMode: TopicModeKey) {
-  const mode = topicModeMeta(topicMode);
-  const method = topicMethod(topicMode, match, topic, analysis);
-  const platformHint = platform === "bilibili" ? "B站主推" : `${platformLabel(platform)}可做，B站可作为深度版承接`;
-  return threeLayerDraft({
-    direct: [
-      `选题：${method.title}`,
-      `类型：${mode.label}`,
-      `适合平台：${platformHint}`,
-      `核心看点：${method.core}`,
-      `推荐表达：${method.expression}`,
-      `风险提醒：${method.risk}`
-    ].join("\n"),
-    reference: [
-      `依据：${topic.reason}`,
-      `比赛事实：${match.matchInfo.name} ${match.matchInfo.score}`,
-      `事件抓手：${safeTurningPoint(analysis)}`,
-      `制作方式：${method.production}`
-    ].join("\n"),
-    risk: riskText(topic, method.risk)
-  });
+  const angles = buildFallbackTopicAngles(platform, match, topic, analysis, topicMode);
+  return [{
+    title: "选题角度",
+    content: angles.map((angle, index) => [
+      `${index + 1}. ${angle.title}`,
+      `怎么做：${angle.approach}`,
+      `说明：${angle.reason}`
+    ].join("\n")).join("\n\n")
+  }];
+}
+
+type TopicAngle = {
+  title: string;
+  approach: string;
+  reason: string;
+};
+
+function buildFallbackTopicAngles(
+  platform: PlatformKey,
+  match: MatchContext,
+  topic: WorkflowTopic,
+  analysis: AnalysisResult,
+  topicMode: TopicModeKey
+): TopicAngle[] {
+  const mode = topicModeMeta(topicMode).label;
+  const turningPoint = safeTurningPoint(analysis);
+  const platformName = platformLabel(platform);
+  const shots = `${match.matchInfo.teamA}射门${match.stats.teamA.shots}次、射正${match.stats.teamA.shotsOnTarget}次，${match.matchInfo.teamB}射门${match.stats.teamB.shots}次、射正${match.stats.teamB.shotsOnTarget}次`;
+  const player = match.keyPlayers[0]?.name;
+
+  return [
+    {
+      title: `${mode}：拆开讲清${topic.title}`,
+      approach: `围绕当前热点做一条${platformName}内容，只保留事实、关键节点和一个明确结论。`,
+      reason: ensurePublishable(topic.reason || `${match.matchInfo.name}的比赛事实与当前热点可以互相印证`)
+    },
+    {
+      title: `用动漫角色关系重讲${topic.title}`,
+      approach: "把双方球员或比赛关系转成动漫角色定位，再回到真实事件和数据，不虚构剧情。",
+      reason: `当前热点有明确冲突点或转折点，适合用角色关系降低理解门槛。`
+    },
+    {
+      title: `把这场球做成游戏复盘二创`,
+      approach: `用足球游戏里的阵容、任务或关键回合语言重构${turningPoint}，画面只承载表达。`,
+      reason: `游戏化包装能放大当前热点的过程感，但结论仍以本场已知信息为准。`
+    },
+    {
+      title: `一条时间线还原热点怎么发生`,
+      approach: `从比分${match.matchInfo.score}和${turningPoint}切入，按发生顺序拆成三个关键节点。`,
+      reason: "时间线能把热点与比赛进程直接对应，适合快速看懂和赛后复盘。"
+    },
+    {
+      title: player ? `从${player}切入做数据人物双线` : "用数据卡解释热点背后的比赛过程",
+      approach: player
+        ? `一边讲${player}在关键事件中的作用，一边用${shots}补充比赛过程。`
+        : `把${shots}做成对比卡，再解释数据与当前热点之间的关系。`,
+      reason: "人物或数据提供了可核验的第二层信息，能避免内容只复述热点标题。"
+    }
+  ];
 }
 
 function createTitleSections(platform: PlatformKey, match: MatchContext, topic: WorkflowTopic, topicMode: TopicModeKey) {
