@@ -7,6 +7,19 @@ export type TeamStatsSnapshot = {
   yellowCards: number;
 };
 
+export type EvidenceType = "match_stat" | "match_event" | "hot_topic";
+
+export type EvidenceItem = {
+  id: string;
+  type: EvidenceType;
+  text: string;
+  source: string;
+  sourceUrl?: string;
+  occurredAt?: string;
+  minute?: string;
+  relevance: number;
+};
+
 export type MatchContext = {
   id: string;
   matchInfo: {
@@ -26,6 +39,7 @@ export type MatchContext = {
     teamB: TeamStatsSnapshot;
   };
   hotSignals: Array<{ label: string; topicSeed: string; contentValue: number }>;
+  evidence?: EvidenceItem[];
   summary: string;
 };
 
@@ -65,8 +79,21 @@ export type PlatformDraft = {
 export type ReviewResultSnapshot = {
   level: string;
   score: number;
-  findings: Array<{ type: string; sentence: string; rewrite: string }>;
+  findings: Array<{
+    type: string;
+    sentence: string;
+    rewrite: string;
+    reason?: string;
+    evidenceStatus?: "missing" | "overreach" | "risk";
+    evidenceIds?: string[];
+  }>;
   advice: string;
+  evidence?: EvidenceItem[];
+  evidenceSummary?: {
+    checkedClaims: number;
+    supportedClaims: number;
+    unsupportedClaims: number;
+  };
 };
 
 export type ContentPackage = {
@@ -75,6 +102,7 @@ export type ContentPackage = {
   selectedTopic: WorkflowTopic;
   platformDraft: PlatformDraft;
   reviewResult: ReviewResultSnapshot;
+  evidence: EvidenceItem[];
   createdAt: string;
 };
 

@@ -56,6 +56,16 @@ const matchContext = {
     teamB: { possession: 43, shots: 7, shotsOnTarget: 2, corners: 2, fouls: 14, yellowCards: 3, xg: 0.8 }
   },
   hotSignals: [{ label: "开场乌龙球", topicSeed: "乌龙球如何改变比赛走势", contentValue: 92 }],
+  evidence: [
+    {
+      id: "E01",
+      type: "match_event",
+      text: "4' 巴拉圭后卫乌龙球",
+      source: "Sportradar",
+      minute: "4'",
+      relevance: 98
+    }
+  ],
   summary: "美国队大胜，开场乌龙球成为传播热点。"
 };
 
@@ -114,6 +124,9 @@ const pkg = createContentPackage({
 });
 assert.equal(pkg.matchInfo.name, "美国 vs 巴拉圭");
 assert.equal(pkg.platformDraft.platform, "douyin");
-assert.ok(createPackageMarkdown(pkg).includes("可直接发布版"));
+const packageMarkdown = createPackageMarkdown(pkg);
+assert.ok(packageMarkdown.includes("可直接发布版"));
+assert.ok(packageMarkdown.includes("## 证据与来源"));
+assert.ok(packageMarkdown.includes("E01｜Sportradar｜4' 巴拉圭后卫乌龙球"));
 
 console.log("workflow services ok");

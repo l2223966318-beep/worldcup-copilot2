@@ -14,12 +14,13 @@ export function createContentPackage(input: {
     selectedTopic: input.selectedTopic,
     platformDraft: input.platformDraft,
     reviewResult: input.reviewResult,
+    evidence: input.matchContext.evidence ?? input.reviewResult.evidence ?? [],
     createdAt: new Date().toISOString()
   };
 }
 
 export function createPackageMarkdown(contentPackage: ContentPackage) {
-  const { matchInfo, analysis, selectedTopic, platformDraft, reviewResult, createdAt } = contentPackage;
+  const { matchInfo, analysis, selectedTopic, platformDraft, reviewResult, evidence = [], createdAt } = contentPackage;
   return [
     `# ${matchInfo.name} 内容包`,
     "",
@@ -50,7 +51,15 @@ export function createPackageMarkdown(contentPackage: ContentPackage) {
     `- 等级：${reviewResult.level}`,
     `- 分数：${reviewResult.score}`,
     `- 建议：${ensurePublishable(reviewResult.advice)}`,
-    ...reviewResult.findings.map((finding) => `- ${finding.type}：${ensurePublishable(finding.rewrite)}`)
+    ...reviewResult.findings.map((finding) => {
+      const ids = finding.evidenceIds?.length ? `（依据 ${finding.evidenceIds.join("、")}）` : "";
+      return `- ${finding.type}${ids}：${ensurePublishable(finding.rewrite)}`;
+    }),
+    "",
+    "## 证据与来源",
+    ...(evidence.length
+      ? evidence.map((item) => `- ${item.id}｜${item.source}｜${item.text}${item.sourceUrl ? `｜${item.sourceUrl}` : ""}`)
+      : ["- 当前报告未附可核验来源。"])
   ].map((line) => ensurePublishable(line)).join("\n");
 }
 

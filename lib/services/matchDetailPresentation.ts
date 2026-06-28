@@ -2,6 +2,7 @@ import type { MatchData } from "@/data/matches";
 import type { MatchSignal } from "@/lib/ai/signals";
 import type { RiskReviewResult } from "@/lib/ai/risk";
 import type { HotItem, HotSearchPayload } from "@/lib/hot/types";
+import type { ReviewResultSnapshot } from "@/types/workflow";
 
 export type TeamRadarRow = {
   metric: string;
@@ -25,7 +26,7 @@ export type MatchHotspot = {
 
 export type DraftReviewFlow = {
   draft: string;
-  result: Pick<RiskReviewResult, "level" | "score" | "advice" | "findings">;
+  result: ReviewResultSnapshot;
   riskPoints: string[];
   rewriteSuggestion: string;
   checklist: string[];
@@ -98,7 +99,7 @@ export function buildDraftReviewFlow(draft: string, match: MatchData, result?: R
   const review = normalizeReviewResult(result ?? simpleReviewRisk(draft));
   const riskPoints = review.findings.length
     ? review.findings.map((finding) => `${finding.type}：${finding.sentence || finding.reason}`)
-    : ["未命中明显高风险词，但仍需人工核验比分、事件、素材版权和数据来源。"];
+    : ["未发现需要修改的具体句子。"];
   const rewriteSuggestion = buildRewriteSuggestion(draft, match, review);
 
   return {
@@ -291,9 +292,8 @@ function buildRewriteSuggestion(draft: string, match: MatchData, review: DraftRe
     .replace(/黑哨|黑幕|假球|保送/g, "争议判罚")
     .replace(/确认伤退/g, "伤病情况仍需核实");
 
-  const sourceReminder = `\n\n发布前补充：这段内容只基于${match.name}的已知比分、事件和公开数据整理，涉及伤病、判罚、球员动机或平台热度时需人工核验。`;
-  if (!review.findings.length) return `${safer}${sourceReminder}`;
-  return `${safer}\n\n改写方向：保留比赛事实，把情绪词改成“引发讨论”“需要结合数据继续看”，不要直接给球员、球队或裁判下定性结论。${sourceReminder}`;
+  if (!review.findings.length) return safer;
+  return `${safer}\n\n改写方向：保留${match.name}的已知事实，把命中的情绪词改成“引发讨论”，不要直接给球员、球队或裁判下定性结论。`;
 }
 
 function numericHeat(value: unknown) {

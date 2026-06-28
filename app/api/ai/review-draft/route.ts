@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { reviewDraftWithAi } from "@/lib/ai/review-draft";
-import type { MatchContext } from "@/types/workflow";
+import type { EvidenceItem, MatchContext } from "@/types/workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +10,7 @@ export async function POST(request: Request) {
     const body = (await request.json()) as {
       draft?: string;
       matchContext?: MatchContext;
+      evidence?: EvidenceItem[];
       apiKey?: string;
     };
 
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
     return NextResponse.json(await reviewDraftWithAi({
       draft: body.draft,
       matchContext: body.matchContext,
+      evidence: body.evidence,
       apiKey: body.apiKey
     }));
   } catch (error) {

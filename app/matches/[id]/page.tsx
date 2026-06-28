@@ -25,7 +25,8 @@ import type { HotItem, HotSearchPayload } from "@/lib/hot/types";
 import { analyzeMatch, getMatchDetail } from "@/lib/project-api";
 import { createRuleBasedAnalysis } from "@/lib/services/analysisService";
 import { contentTypeOptions, createPlatformDraft, topicModeOptions, type ContentTypeKey, type TopicModeKey } from "@/lib/services/contentService";
-import { createContentPackage, createPackageMarkdown, createPackageText } from "@/lib/services/exportService";
+import { buildEvidencePack, evidenceLabel } from "@/lib/services/evidenceService";
+import { createContentPackage, createPackageMarkdown } from "@/lib/services/exportService";
 import { localizeMatchStatus, localizeRoundName, localizeTeamName, localizeVenueText } from "@/lib/services/footballNames";
 import { buildDraftReviewFlow, buildMatchHotspotShortlist, mergeHotSearchPayloads, type DraftReviewFlow, type MatchHotspot } from "@/lib/services/matchDetailPresentation";
 import { appendHistoryRecord, writeReviewDraft, writeWorkflowState } from "@/lib/services/workflowStore";
@@ -141,6 +142,8 @@ export default function MatchAnalysisPage() {
     () => buildMatchHotspotShortlist({ match, signals: matchSignals, hotItems: matchHotItems }),
     [match, matchHotItems, matchSignals]
   );
+  const evidence = useMemo(() => buildEvidencePack(matchContext, matchHotspots), [matchContext, matchHotspots]);
+  const evidenceContext = useMemo(() => ({ ...matchContext, evidence }), [evidence, matchContext]);
   const selectedHotspot = matchHotspots.find((hotspot) => hotspot.id === selectedHotspotId) ?? matchHotspots[0] ?? null;
   const workflowTopic = useMemo(
     () => selectedHotspot ? hotspotToWorkflowTopic(selectedHotspot, activeTopicMode) : topicToWorkflowTopic(selectedTopic),
@@ -240,12 +243,12 @@ export default function MatchAnalysisPage() {
 
   useEffect(() => {
     writeWorkflowState({
-      currentMatch: matchContext,
+      currentMatch: evidenceContext,
       selectedTopic: workflowTopic,
       selectedPlatform: toWorkflowPlatform(activePlatform),
       dataSourceStatus: matchContext.matchInfo.sourceStatus
     });
-  }, [activePlatform, matchContext, workflowTopic]);
+  }, [activePlatform, evidenceContext, matchContext.matchInfo.sourceStatus, workflowTopic]);
 
   async function handleCopy(key: string, value: string) {
     await copyToClipboard(value);
@@ -262,7 +265,7 @@ export default function MatchAnalysisPage() {
     const result = createRuleBasedAnalysis(matchContext);
     setManualAnalysis(result);
     writeWorkflowState({
-      currentMatch: matchContext,
+      currentMatch: evidenceContext,
       analysisResult: result,
       dataSourceStatus: matchContext.matchInfo.sourceStatus
     });
@@ -272,7 +275,7 @@ export default function MatchAnalysisPage() {
   function handleGenerateTopics() {
     const topicList = topics.map(topicToWorkflowTopic);
     writeWorkflowState({
-      currentMatch: matchContext,
+      currentMatch: evidenceContext,
       topicList,
       selectedTopic: workflowTopic
     });
@@ -313,7 +316,7 @@ export default function MatchAnalysisPage() {
     setManualDraft(draft);
     setAiReviewFlow(null);
     writeWorkflowState({
-      currentMatch: matchContext,
+      currentMatch: evidenceContext,
       analysisResult: analysisSnapshot,
       selectedTopic: workflowTopic,
       selectedPlatform: draft.platform,
@@ -333,7 +336,7 @@ export default function MatchAnalysisPage() {
     }
     writeReviewDraft(draftSnapshot);
     writeWorkflowState({
-      currentMatch: matchContext,
+      currentMatch: evidenceContext,
       selectedTopic: workflowTopic,
       selectedPlatform: activeWorkflowDraft?.platform ?? toWorkflowPlatform(activePlatform),
       generatedContent: activeWorkflowDraft ? { ...activeWorkflowDraft, body: draftSnapshot } : undefined
@@ -347,7 +350,8 @@ export default function MatchAnalysisPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           draft: draftSnapshot,
-          matchContext,
+          matchContext: evidenceContext,
+          evidence,
           apiKey: getStoredDeepseekKey() || undefined
         })
       });
@@ -358,14 +362,16 @@ export default function MatchAnalysisPage() {
         rewriteSuggestion?: string;
         checklist?: string[];
       };
-      if (payload.sourceStatus === "live" && payload.result) {
-        setAiReviewFlow({
+      if ((payload.sourceStatus === "live" || payload.sourceStatus === "fallback") && payload.result) {
+        const nextReviewFlow: DraftReviewFlow = {
           draft: draftSnapshot,
           result: payload.result,
           riskPoints: payload.riskPoints?.length ? payload.riskPoints : localReviewFlow?.riskPoints ?? [],
           rewriteSuggestion: payload.rewriteSuggestion || localReviewFlow?.rewriteSuggestion || draftSnapshot,
           checklist: payload.checklist?.length ? payload.checklist : localReviewFlow?.checklist ?? []
-        });
+        };
+        setAiReviewFlow(nextReviewFlow);
+        writeWorkflowState({ currentMatch: evidenceContext, reviewResult: payload.result });
       } else {
         setAiReviewFlow(null);
       }
@@ -390,16 +396,11 @@ export default function MatchAnalysisPage() {
     if (!activeWorkflowDraft || !reviewFlow) return null;
     const analysisSnapshot = manualAnalysis ?? createRuleBasedAnalysis(matchContext);
     return createContentPackage({
-      matchContext,
+      matchContext: evidenceContext,
       analysis: analysisSnapshot,
       selectedTopic: workflowTopic,
       platformDraft: activeWorkflowDraft,
-      reviewResult: {
-        level: reviewFlow.result.level,
-        score: reviewFlow.result.score,
-        findings: reviewFlow.result.findings.map((finding) => ({ type: finding.type, sentence: finding.sentence, rewrite: finding.rewrite })),
-        advice: reviewFlow.result.advice
-      }
+      reviewResult: reviewFlow.result
     });
   }
 
@@ -594,6 +595,18 @@ export default function MatchAnalysisPage() {
                 </span>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">分数 {reviewFlow.result.score}</span>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{reviewFlow.result.advice}</span>
+                {reviewFlow.result.evidenceSummary ? (
+                  <>
+                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                      已支持 {reviewFlow.result.evidenceSummary.supportedClaims}
+                    </span>
+                    {reviewFlow.result.evidenceSummary.unsupportedClaims > 0 ? (
+                      <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                        缺少依据 {reviewFlow.result.evidenceSummary.unsupportedClaims}
+                      </span>
+                    ) : null}
+                  </>
+                ) : null}
               </div>
               <h3 className="mt-4 text-xl font-semibold text-slate-950">审核结果</h3>
               <div className="mt-4 space-y-3">
@@ -603,6 +616,22 @@ export default function MatchAnalysisPage() {
                   </div>
                 ))}
               </div>
+              {reviewFlow.result.evidence?.length ? (
+                <div className="mt-4 border-t border-slate-100 pt-4">
+                  <div className="text-xs font-semibold text-slate-400">证据与来源</div>
+                  <div className="mt-2 space-y-2">
+                    {reviewFlow.result.evidence.slice(0, 6).map((item) => (
+                      item.sourceUrl ? (
+                        <a key={item.id} href={item.sourceUrl} target="_blank" rel="noreferrer" className="block text-sm leading-6 text-slate-600 hover:text-emerald-700">
+                          {evidenceLabel(item)}
+                        </a>
+                      ) : (
+                        <div key={item.id} className="text-sm leading-6 text-slate-600">{evidenceLabel(item)}</div>
+                      )
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div> : null}
             {reviewFlow ? <div className="card-lift card-lift-light rounded-[28px] border bg-white p-5" style={{ borderColor: theme.border }}>
               <h3 className="text-xl font-semibold text-slate-950">改写建议</h3>
@@ -633,7 +662,9 @@ export default function MatchAnalysisPage() {
             {copied === "all" ? "已复制全部" : "复制全部内容"}
           </ActionButton>
           <ActionButton onClick={async () => {
-            await downloadWordReport(`${match.id}-content-report.docx`, markdown);
+            const contentPackage = buildCurrentPackage();
+            const reportMarkdown = contentPackage ? createPackageMarkdown(contentPackage) : markdown;
+            await downloadWordReport(`${match.id}-content-report.docx`, reportMarkdown);
             appendHistoryRecord({
               kind: "workflow",
               matchId: match.id,
