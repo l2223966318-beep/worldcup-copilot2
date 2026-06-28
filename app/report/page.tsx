@@ -17,6 +17,7 @@ import { copyToClipboard, downloadTextFile } from "@/lib/download";
 import { useLocalStorageState } from "@/lib/local-store";
 import { createContentPackage, createPackageMarkdown, createPackageText } from "@/lib/services/exportService";
 import { appendHistoryRecord, readWorkflowState } from "@/lib/services/workflowStore";
+import { downloadWordReport } from "@/lib/word-export";
 import type { ContentPackage, WorkflowState } from "@/types/workflow";
 
 export default function ReportPage() {
@@ -79,13 +80,13 @@ export default function ReportPage() {
               <Copy className="h-4 w-4" />
               复制 Markdown
             </Button>
-            <Button className="gap-2" onClick={() => {
-              rememberExport(["Markdown 报告"]);
-              downloadTextFile("worldcup-copilot-report.md", markdown, "text/markdown;charset=utf-8");
-              showNotice("Markdown 报告已导出，并写入历史记录。");
+            <Button className="gap-2" onClick={async () => {
+              await downloadWordReport("worldcup-copilot-report.docx", markdown);
+              rememberExport(["Word 报告"]);
+              showNotice("Word 报告已导出，并写入历史记录。");
             }}>
               <Download className="h-4 w-4" />
-              导出 Markdown
+              导出 Word 报告
             </Button>
             <Button variant="secondary" className="gap-2" onClick={() => {
               rememberExport(["TXT 内容包"]);

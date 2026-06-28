@@ -4,7 +4,8 @@ import { Check, Copy, Download } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { copyToClipboard, downloadTextFile } from "@/lib/download";
+import { copyToClipboard } from "@/lib/download";
+import { downloadWordReport } from "@/lib/word-export";
 
 export function ReportActions({ content }: { content: string }) {
   const [copied, setCopied] = useState(false);
@@ -15,8 +16,8 @@ export function ReportActions({ content }: { content: string }) {
     window.setTimeout(() => setCopied(false), 1600);
   }
 
-  function downloadReport() {
-    downloadTextFile("worldcup-copilot-report.md", content, "text/markdown;charset=utf-8");
+  async function downloadReport() {
+    await downloadWordReport("worldcup-copilot-report.docx", content);
   }
 
   return (
@@ -25,9 +26,9 @@ export function ReportActions({ content }: { content: string }) {
         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
         {copied ? "已复制" : "复制报告"}
       </Button>
-      <Button variant="secondary" className="gap-2" onClick={downloadReport}>
+      <Button variant="secondary" className="gap-2" onClick={() => void downloadReport()}>
         <Download className="h-4 w-4" />
-        下载 Markdown
+        下载 Word
       </Button>
     </div>
   );

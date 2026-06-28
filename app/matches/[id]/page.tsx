@@ -20,6 +20,7 @@ import { reviewRisk } from "@/lib/ai/risk";
 import { extractMatchSignals, type MatchSignal } from "@/lib/ai/signals";
 import { generateTopics, type TopicIdea } from "@/lib/ai/topics";
 import { copyToClipboard, downloadTextFile } from "@/lib/download";
+import { downloadWordReport } from "@/lib/word-export";
 import type { HotItem, HotSearchPayload } from "@/lib/hot/types";
 import { analyzeMatch, getMatchDetail } from "@/lib/project-api";
 import { createRuleBasedAnalysis } from "@/lib/services/analysisService";
@@ -631,23 +632,23 @@ export default function MatchAnalysisPage() {
             <Clipboard className="h-4 w-4" />
             {copied === "all" ? "已复制全部" : "复制全部内容"}
           </ActionButton>
-          <ActionButton onClick={() => {
+          <ActionButton onClick={async () => {
+            await downloadWordReport(`${match.id}-content-report.docx`, markdown);
             appendHistoryRecord({
               kind: "workflow",
               matchId: match.id,
               title: match.name,
               score: match.score,
               stage: match.stage,
-              platforms: ["Markdown 报告"],
+              platforms: ["Word 报告"],
               route: `/matches/${match.id}`,
               summary: workflowTopic.title,
               sourceStatus: matchContext.matchInfo.sourceStatus
             });
-            downloadTextFile(`${match.id}-content-report.md`, markdown, "text/markdown;charset=utf-8");
-            showWorkflowNotice("Markdown 报告已导出，并写入历史记录。");
+            showWorkflowNotice("Word 报告已导出，并写入历史记录。");
           }} theme={theme}>
             <Download className="h-4 w-4" />
-            导出 Markdown 报告
+            导出 Word 报告
           </ActionButton>
         </div>
       </section>

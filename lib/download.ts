@@ -2,6 +2,10 @@
 
 export function downloadTextFile(filename: string, content: string, mimeType = "text/plain;charset=utf-8") {
   const blob = new Blob([content], { type: mimeType });
+  downloadBlob(filename, blob);
+}
+
+export function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
 
@@ -10,7 +14,7 @@ export function downloadTextFile(filename: string, content: string, mimeType = "
   document.body.appendChild(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
 export function copyToClipboard(content: string) {
