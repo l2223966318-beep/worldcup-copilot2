@@ -423,7 +423,7 @@ function OpportunityMatchCard({
 
   return (
     <article
-      className="grid gap-4 overflow-hidden rounded-[28px] border p-4 shadow-[0_18px_48px_rgba(15,23,42,0.055)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_70px_rgba(15,23,42,0.09)] md:p-5 lg:grid-cols-[74px_minmax(0,1fr)]"
+      className={`card-lift card-lift-light grid gap-4 overflow-hidden rounded-[28px] border p-4 shadow-[0_18px_48px_rgba(15,23,42,0.055)] md:p-5 lg:grid-cols-[74px_minmax(0,1fr)] ${priority === "A" ? "card-lift-gold" : ""}`}
       style={heatTone}
     >
       <div className="flex items-center gap-3 lg:block">

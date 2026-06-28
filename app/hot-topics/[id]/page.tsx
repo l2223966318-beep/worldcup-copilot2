@@ -452,7 +452,7 @@ function EmptyCard({ children }: { children: ReactNode }) {
 
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.05)]">
+    <section className="card-lift card-lift-light rounded-[30px] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.05)]">
       <h2 className="text-xl font-black text-slate-950">{title}</h2>
       {children}
     </section>
@@ -479,7 +479,7 @@ function InsightGrid({ items, accent }: { items: HotAnalysisResult["overview"]; 
   return (
     <div className="mt-5 grid gap-3 sm:grid-cols-3">
       {items.map((item) => (
-        <div key={`${item.label}-${item.value}`} className={`rounded-[22px] border p-4 ${styles}`}>
+        <div key={`${item.label}-${item.value}`} className={`card-lift card-lift-light rounded-[22px] border p-4 ${styles}`}>
           <div className="text-[11px] font-black tracking-[0.14em] text-slate-400">{item.label}</div>
           <div className="mt-2 text-lg font-black text-slate-950">{item.value}</div>
           <p className="mt-2 text-sm leading-6 text-slate-600">{item.note}</p>

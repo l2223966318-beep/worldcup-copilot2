@@ -86,7 +86,33 @@
   }
 
   .card-lift {
-    @apply transition-all duration-300 hover:-translate-y-0.5;
+    --card-hover-background: rgba(13, 47, 67, 0.84);
+    --card-hover-border: rgba(255, 255, 255, 0.18);
+    --card-hover-shadow:
+      0 18px 42px rgba(2, 6, 23, 0.24),
+      inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    backface-visibility: hidden;
+    transform-origin: center;
+    transition:
+      transform 240ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 240ms cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 240ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .card-lift-light {
+    --card-hover-background: rgba(255, 255, 255, 0.96);
+    --card-hover-border: rgba(34, 197, 94, 0.28);
+    --card-hover-shadow:
+      0 18px 42px rgba(15, 23, 42, 0.105),
+      inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  }
+
+  .card-lift-gold {
+    --card-hover-border: rgba(245, 158, 11, 0.3);
+    --card-hover-shadow:
+      0 18px 42px rgba(120, 77, 18, 0.11),
+      inset 0 1px 0 rgba(255, 255, 255, 0.92);
   }
 
   .aura-border {
@@ -151,6 +177,15 @@
   .radar-sweep {
     animation: radar-sweep 5.8s linear infinite;
     transform-origin: 50% 50%;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card-lift:hover {
+    background-color: var(--card-hover-background);
+    border-color: var(--card-hover-border) !important;
+    box-shadow: var(--card-hover-shadow) !important;
+    transform: translateY(-2px) scale(1.01);
   }
 }
 

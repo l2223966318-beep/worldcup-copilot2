@@ -153,7 +153,7 @@ export function GeneratorPanel() {
 
 function PlatformCard({ title, icon, children }: { title: string; icon: string; children: React.ReactNode }) {
   return (
-    <Card>
+    <Card className="card-lift">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <span className="flex h-9 min-w-9 items-center justify-center rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-2 text-xs text-emerald-50">{icon}</span>

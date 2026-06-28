@@ -119,7 +119,7 @@ export default function SettingsPage() {
         {sourceRows.map((row) => {
           const status = statuses[row.key];
           return (
-            <div key={row.key} className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div key={row.key} className="card-lift card-lift-light rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <h2 className="text-xl font-semibold text-slate-950">{row.label}</h2>

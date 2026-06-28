@@ -77,7 +77,7 @@ export default function TopicEnginePage() {
 
 function TopicCard({ topic, selected, onSelect }: { topic: TopicIdea; selected: boolean; onSelect: () => void }) {
   return (
-    <Card className={selected ? "border-emerald-300/40" : ""}>
+    <Card className={`card-lift ${selected ? "border-emerald-300/40" : ""}`}>
       <CardHeader>
         <div className="flex flex-wrap gap-2">
           <Badge>{topic.recommendation}</Badge>

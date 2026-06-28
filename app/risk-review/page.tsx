@@ -63,7 +63,7 @@ export default function RiskReviewPage() {
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[1fr_440px]">
-        <Card>
+        <Card className="card-lift">
           <CardHeader>
             <CardTitle>待审稿内容</CardTitle>
           </CardHeader>
@@ -86,7 +86,7 @@ export default function RiskReviewPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="card-lift">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-emerald-200" />

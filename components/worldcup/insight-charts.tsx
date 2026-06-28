@@ -150,7 +150,7 @@ export function InsightCharts({
 
 function DataAnglePanel({ dataAngles, theme }: { dataAngles: DataAngle[]; theme: SportTheme }) {
   return (
-    <div className="rounded-[28px] border bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.06)] transition hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(15,23,42,0.1)]" style={{ borderColor: theme.border }}>
+    <div className="card-lift card-lift-light rounded-[28px] border bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
       <div>
         <div className="text-xs font-black tracking-[0.18em] text-slate-400">DATA TO ANGLE</div>
         <h3 className="mt-2 text-lg font-semibold leading-snug" style={{ color: theme.strongText }}>核心数据如何转成内容角度</h3>
@@ -167,7 +167,7 @@ function DataAnglePanel({ dataAngles, theme }: { dataAngles: DataAngle[]; theme:
 
 function DataAngleCard({ label, value, compare, explain, angle, theme }: DataAngle & { theme: SportTheme }) {
   return (
-    <div className="rounded-[28px] border bg-white p-5 shadow-sm transition hover:-translate-y-1" style={{ borderColor: theme.border }}>
+    <div className="card-lift card-lift-light rounded-[28px] border bg-white p-5 shadow-sm" style={{ borderColor: theme.border }}>
       <div className="text-sm font-semibold text-slate-500">{label}</div>
       <div className="mt-3 text-4xl font-black tracking-tight" style={{ color: theme.strongText }}>{value}</div>
       <div className="mt-1 text-sm font-semibold" style={{ color: theme.primary }}>{compare}</div>
@@ -201,7 +201,7 @@ function ChartCard({
   }
 
   return (
-    <div className="group rounded-[28px] border bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.06)] transition hover:-translate-y-1 hover:shadow-[0_24px_60px_rgba(15,23,42,0.1)]" style={{ borderColor: theme.border }}>
+    <div className="card-lift card-lift-light group rounded-[28px] border bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
       <div className="flex items-start justify-between gap-4">
         <h3 className="text-lg font-semibold leading-snug" style={{ color: theme.strongText }}>{title}</h3>
         <button

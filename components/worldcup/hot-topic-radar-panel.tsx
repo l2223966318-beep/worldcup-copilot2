@@ -159,10 +159,10 @@ export function HotTopicRadarPanel({
                 <article
                   key={topic.id}
                   onClick={() => openTopic(topic)}
-                  className={`block w-full cursor-pointer rounded-[24px] border p-4 text-left transition hover:-translate-y-0.5 ${
+                  className={`card-lift card-lift-light block w-full cursor-pointer rounded-[24px] border p-4 text-left ${
                     isFeaturedAll
-                      ? `hot-topic-feature-card hot-topic-feature-${featureRank}`
-                      : "bg-slate-50 hover:bg-white hover:shadow-[0_14px_36px_rgba(15,23,42,0.08)]"
+                      ? `card-lift-gold hot-topic-feature-card hot-topic-feature-${featureRank}`
+                      : "bg-slate-50"
                   }`}
                   style={isFeaturedAll ? undefined : { borderColor: theme.border }}
                 >

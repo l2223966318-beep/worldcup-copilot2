@@ -586,7 +586,7 @@ export default function MatchAnalysisPage() {
             </div>
           </div>
           <div className="space-y-4">
-            {reviewFlow ? <div className="rounded-[28px] border bg-white p-5" style={{ borderColor: theme.border }}>
+            {reviewFlow ? <div className="card-lift card-lift-light rounded-[28px] border bg-white p-5" style={{ borderColor: theme.border }}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full px-3 py-1 text-xs font-black text-white" style={{ backgroundColor: reviewFlow.result.level === "高" ? "#e11d48" : reviewFlow.result.level === "中" ? "#d97706" : theme.primary }}>
                   {reviewFlow.result.level}风险
@@ -603,11 +603,11 @@ export default function MatchAnalysisPage() {
                 ))}
               </div>
             </div> : null}
-            {reviewFlow ? <div className="rounded-[28px] border bg-white p-5" style={{ borderColor: theme.border }}>
+            {reviewFlow ? <div className="card-lift card-lift-light rounded-[28px] border bg-white p-5" style={{ borderColor: theme.border }}>
               <h3 className="text-xl font-semibold text-slate-950">改写建议</h3>
               <ReadableTextBlock text={reviewFlow.rewriteSuggestion} className="mt-3 rounded-2xl bg-emerald-50/60 p-4" />
             </div> : null}
-            {reviewFlow ? <div className="rounded-[28px] border bg-white p-5" style={{ borderColor: theme.border }}>
+            {reviewFlow ? <div className="card-lift card-lift-light rounded-[28px] border bg-white p-5" style={{ borderColor: theme.border }}>
               <h3 className="text-xl font-semibold text-slate-950">发布前检查</h3>
               <div className="mt-3 space-y-2">
                 {reviewFlow.checklist.map((item) => (
@@ -800,7 +800,7 @@ function AiBrainStatus({
       : enhancement?.message ?? "未配置 DeepSeek key 或接口暂不可用，页面继续使用本地规则引擎。";
 
   return (
-    <section className="rounded-[24px] border bg-white px-5 py-4 shadow-[0_14px_40px_rgba(15,23,42,0.05)]" style={{ borderColor: theme.border }}>
+    <section className="card-lift card-lift-light rounded-[24px] border bg-white px-5 py-4 shadow-[0_14px_40px_rgba(15,23,42,0.05)]" style={{ borderColor: theme.border }}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-sm font-black uppercase tracking-[0.16em]" style={{ color: theme.primary }}>AI BRAIN</div>
@@ -855,7 +855,7 @@ function ScoreBar({ label, value, theme }: { label: string; value: number; theme
 function ConclusionCard({ title, body, theme, featured = false }: { title: string; body: string; theme: SportTheme; featured?: boolean }) {
   return (
     <div
-      className="rounded-[28px] border bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]"
+      className="card-lift card-lift-light rounded-[28px] border bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]"
       style={{ borderColor: featured ? theme.primary : theme.border, boxShadow: featured ? `0 24px 70px ${theme.heroGlow}` : undefined }}
     >
       <div className="text-sm font-semibold" style={{ color: theme.primary }}>{title}</div>
@@ -883,7 +883,7 @@ function MatchSignalCard({
         : "bg-emerald-100 text-emerald-700";
 
   return (
-    <article className="rounded-[28px] border bg-white p-5 shadow-sm transition hover:-translate-y-1" style={{ borderColor: signal.priority === "primary" ? theme.primary : theme.border }}>
+    <article className={`card-lift card-lift-light rounded-[28px] border bg-white p-5 shadow-sm ${signal.priority === "primary" ? "card-lift-gold" : ""}`} style={{ borderColor: signal.priority === "primary" ? theme.primary : theme.border }}>
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-full px-3 py-1 text-xs font-black text-white" style={{ backgroundColor: signal.priority === "primary" ? theme.primary : theme.secondary }}>
           {signal.priority === "primary" ? "优先信号" : signal.priority === "secondary" ? "次级信号" : "观察信号"}
@@ -927,7 +927,7 @@ function MatchHotspotCard({
   onUse: () => void;
 }) {
   return (
-    <article className="rounded-[28px] border bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-[0_18px_48px_rgba(15,23,42,0.08)]" style={{ borderColor: hotspot.rank <= 3 ? theme.primary : theme.border }}>
+    <article className={`card-lift card-lift-light rounded-[28px] border bg-white p-5 shadow-sm ${hotspot.rank <= 3 ? "card-lift-gold" : ""}`} style={{ borderColor: hotspot.rank <= 3 ? theme.primary : theme.border }}>
       <div className="flex items-start gap-4">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-black text-white" style={{ backgroundColor: hotspot.rank <= 3 ? theme.primary : theme.secondary }}>
           {hotspot.rank}
@@ -987,7 +987,7 @@ function PlatformOutputCard({
   return (
     <button
       onClick={onClick}
-      className={`rounded-[26px] border p-4 text-left transition hover:-translate-y-1 hover:shadow-[0_20px_56px_rgba(15,23,42,0.08)] ${tone.card}`}
+      className={`card-lift card-lift-light rounded-[26px] border p-4 text-left ${decision.fit === "主推" ? "card-lift-gold" : ""} ${tone.card}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="text-xl font-semibold text-slate-950">{meta.title}</div>
@@ -1040,7 +1040,7 @@ function PlatformPreview({
 }) {
   const generatedText = draft?.body ?? "";
   return (
-    <div className={`rounded-[28px] border bg-white p-5 ${className ?? ""}`} style={{ borderColor: theme.border }}>
+    <div className={`card-lift card-lift-light rounded-[28px] border bg-white p-5 ${className ?? ""}`} style={{ borderColor: theme.border }}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="text-sm font-semibold" style={{ color: theme.primary }}>{platformMeta[platform].title}</div>

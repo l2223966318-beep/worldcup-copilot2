@@ -13,6 +13,7 @@
     "test:workflow": "node scripts/test-workflow-services.mjs",
     "test:platform-draft": "node scripts/test-platform-draft-source.mjs",
     "test:platform-controls": "node scripts/test-match-platform-controls.mjs",
+    "test:card-hover": "node scripts/test-card-hover.mjs",
     "test:match-search": "node scripts/test-match-search.mjs",
     "test:match-detail": "node scripts/test-match-detail-presentation.mjs",
     "test:football-names": "node scripts/test-football-names.mjs",
