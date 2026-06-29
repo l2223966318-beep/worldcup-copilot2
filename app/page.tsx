@@ -5,6 +5,7 @@ import type { CSSProperties, MouseEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Palette, Pause, Play, Trophy, Volume2, VolumeX } from "lucide-react";
 
+import { ScoreReasonPopover } from "@/components/ui/score-reason-popover";
 import { HotTopicRadarPanel } from "@/components/worldcup/hot-topic-radar-panel";
 import { localizeCompetitionName, localizeMatchStatus, localizeRoundName, localizeTeamName, localizeVenueText } from "@/lib/services/footballNames";
 import { filterMatchesByQuery, queryLooksLikeMatchSearch } from "@/lib/services/matchSearchService";
@@ -431,7 +432,18 @@ function OpportunityMatchCard({
           {priority}
         </div>
         <div className="text-sm font-semibold text-slate-500 lg:mt-2">机会等级</div>
-        <div className="mt-1 text-xs font-semibold text-slate-400 lg:mt-1">评分 {opportunity.score}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-semibold text-slate-400 lg:mt-1">
+          <span>评分 {opportunity.score}</span>
+          <ScoreReasonPopover
+            summary={`${priority} 级机会卡的判断依据`}
+            className="shrink-0"
+          >
+            <p>{opportunity.reason}</p>
+            <p className="mt-2">
+              当前命中信号：{opportunity.signals.length ? opportunity.signals.join("、") : "暂无明显内容信号"}。
+            </p>
+          </ScoreReasonPopover>
+        </div>
       </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">

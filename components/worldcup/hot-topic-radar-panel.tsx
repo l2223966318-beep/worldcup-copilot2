@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCcw, Search } from "lucide-react";
 
+import { ScoreReasonPopover } from "@/components/ui/score-reason-popover";
 import type { HotItem, HotSearchPayload, HotTopic } from "@/lib/hot/types";
 import { HOT_RADAR_CACHE_KEY, type HotRadarCache } from "@/lib/hot/hotTopicWorkflow";
 import { localizeTeamName } from "@/lib/services/footballNames";
@@ -198,6 +199,12 @@ export function HotTopicRadarPanel({
                       <div className="mt-2 text-xs font-semibold" style={{ color: theme.secondary }}>
                         热度：{topic.heat ?? topic.relevanceScore ?? "-"}
                         {typeof topic.valueScore === "number" ? `｜价值分：${topic.valueScore}` : ""}
+                      </div>
+                      <div className="mt-2">
+                        <ScoreReasonPopover summary="查看这条热点为什么排在这个位置" align="right">
+                          <p>{buildTopicScoreReason(topic)}</p>
+                          {topic.contentAngles?.[0] ? <p className="mt-2">推荐切口：{topic.contentAngles[0]}</p> : null}
+                        </ScoreReasonPopover>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
                         <button
@@ -465,6 +472,22 @@ function getTopicHeatScore(topic: Pick<HotTopic, "heat" | "relevanceScore" | "ra
   const relevance = topic.relevanceScore ?? 0;
   const rankBonus = topic.rank ? Math.max(0, 100 - topic.rank) : 0;
   return relevance * 100 + rankBonus;
+}
+
+function buildTopicScoreReason(topic: HotTopic) {
+  const scoreText = typeof topic.valueScore === "number" ? `当前价值分 ${topic.valueScore}。` : "当前按热度和赛事相关性综合排序。";
+  const levelText =
+    topic.valueLevel === "high"
+      ? "这条热点兼具热度、赛事关联和内容转化空间，优先级更高。"
+      : topic.valueLevel === "medium"
+        ? "这条热点已有传播信号，但更适合先核验事实再承接。"
+        : "这条热点目前更适合作为观察位，等待新的比赛事件放大。";
+  const relevanceText =
+    typeof topic.relevanceScore === "number" && topic.relevanceScore > 0
+      ? `比赛相关度 ${topic.relevanceScore}，${topic.relatedMatches?.length ? `已关联 ${topic.relatedMatches.length} 场比赛。` : "已识别到赛事语义。"}`
+      : "目前主要依赖平台热度和关键词匹配。";
+  const sourceText = `来源：${topic.platform ?? "全网"} / ${topic.source}${topic.category ? ` / ${topic.category}` : ""}。`;
+  return `${scoreText}${levelText}${relevanceText}${sourceText}`;
 }
 
 function normalizeText(value: string) {
