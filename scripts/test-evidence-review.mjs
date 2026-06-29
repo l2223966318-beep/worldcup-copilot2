@@ -27,7 +27,7 @@ for (const file of files) {
   writeFileSync(join(outDir, file.replace(".ts", ".mjs")), compiled, "utf8");
 }
 
-const { auditDraftEvidence, buildEvidencePack } = await import(
+const { auditDraftEvidence, buildEvidencePack, calculateEvidenceRiskScore } = await import(
   `file:///${join(outDir, "lib/services/evidenceService.mjs").replaceAll("\\", "/")}`
 );
 
@@ -70,8 +70,8 @@ assert.ok(evidence.some((item) => item.source === "微博" && item.sourceUrl));
 assert.deepEqual(evidence.map((item) => item.id), evidence.map((_, index) => `E${String(index + 1).padStart(2, "0")}`));
 
 const supported = auditDraftEvidence("法国在81分钟完成进球，比分变为2-1。", evidence);
-assert.equal(supported.summary.checkedClaims, 1);
-assert.equal(supported.summary.supportedClaims, 1);
+assert.equal(supported.summary.checkedClaims, 2);
+assert.equal(supported.summary.supportedClaims, 2);
 assert.equal(supported.findings.length, 0);
 
 const missing = auditDraftEvidence("法国在70分钟完成进球。", evidence);
@@ -82,5 +82,30 @@ assert.equal(missing.findings[0].evidenceStatus, "missing");
 const opinion = auditDraftEvidence("这场决赛后劲很大，值得重新看一遍。", evidence);
 assert.equal(opinion.summary.checkedClaims, 0);
 assert.equal(opinion.findings.length, 0);
+
+const multiEvidence = auditDraftEvidence(
+  "阿根廷控球率54%对46%，射门12比10，射正6比5，数据反差值得继续拆解。",
+  evidence
+);
+assert.equal(multiEvidence.summary.unsupportedClaims, 0);
+assert.equal(multiEvidence.findings.length, 0);
+
+const editorialInstruction = auditDraftEvidence(
+  "从80分钟开始逐分钟复盘双方攻防，重点分析换人调整。",
+  evidence
+);
+assert.equal(editorialInstruction.summary.checkedClaims, 0);
+assert.equal(editorialInstruction.findings.length, 0);
+
+assert.equal(calculateEvidenceRiskScore(0), 0);
+assert.equal(calculateEvidenceRiskScore(1), 36);
+assert.ok(calculateEvidenceRiskScore(9) <= 100);
+
+const basicCoverageEvidence = buildEvidencePack({
+  ...matchContext,
+  verifiedStats: false,
+  keyEvents: []
+});
+assert.equal(basicCoverageEvidence.some((item) => /控球率|射门|射正/.test(item.text)), false);
 
 console.log("evidence review workflow ok");

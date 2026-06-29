@@ -115,6 +115,20 @@ assert.ok(topicSection.content.includes("动漫"));
 assert.equal(bilibiliTopic.sections.length, 1);
 assert.equal(punctuatedTopic.body.includes("。。"), false);
 
+const basicContext = {
+  ...matchContext,
+  verifiedStats: false,
+  stats: {
+    teamA: { possession: 50, shots: 0, shotsOnTarget: 0, corners: 0, fouls: 0, yellowCards: 0 },
+    teamB: { possession: 50, shots: 0, shotsOnTarget: 0, corners: 0, fouls: 0, yellowCards: 0 }
+  }
+};
+const basicAnalysis = createRuleBasedAnalysis(basicContext);
+const basicDraft = createPlatformDraft("bilibili", basicContext, topic, basicAnalysis);
+assert.ok(basicAnalysis.dataInsights.some((item) => item.includes("未返回可核验")));
+assert.equal(basicAnalysis.dataInsights.some((item) => item.includes("50%")), false);
+assert.equal(basicDraft.body.includes("射门0次"), false);
+
 const pkg = createContentPackage({
   matchContext,
   analysis,

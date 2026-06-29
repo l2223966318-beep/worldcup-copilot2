@@ -38,6 +38,7 @@ export type MatchContext = {
     teamA: TeamStatsSnapshot;
     teamB: TeamStatsSnapshot;
   };
+  verifiedStats?: boolean;
   hotSignals: Array<{ label: string; topicSeed: string; contentValue: number }>;
   evidence?: EvidenceItem[];
   summary: string;

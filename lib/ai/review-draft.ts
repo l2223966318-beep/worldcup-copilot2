@@ -1,7 +1,7 @@
 import { generateDeepSeekJson } from "@/lib/ai/deepseek";
 import { cleanText, ensurePublishable } from "@/lib/ai/quality";
 import { reviewRisk } from "@/lib/ai/risk";
-import { auditDraftEvidence, buildEvidencePack } from "@/lib/services/evidenceService";
+import { auditDraftEvidence, buildEvidencePack, calculateEvidenceRiskScore } from "@/lib/services/evidenceService";
 import type { EvidenceItem, MatchContext, ReviewResultSnapshot } from "@/types/workflow";
 
 type AiReviewDraft = {
@@ -157,6 +157,11 @@ function normalizeAiFindings(findings: AiReviewDraft["findings"], draft: string,
   const evidenceIds = new Set(evidence.map((item) => item.id));
   return (findings ?? [])
     .filter((finding) => typeof finding.sentence === "string" && draft.includes(finding.sentence.trim()))
+    .filter((finding) => {
+      if (finding.evidenceStatus === "risk") return true;
+      const audit = auditDraftEvidence(finding.sentence ?? "", evidence);
+      return audit.summary.unsupportedClaims > 0;
+    })
     .slice(0, 5)
     .map((finding) => ({
       type: cleanText(finding.type || "事实边界"),
@@ -182,7 +187,7 @@ function buildFallbackResult(
     evidenceIds: []
   }));
   const findings = mergeFindings(evidenceAudit.findings, ruleFindings);
-  const score = Math.max(ruleReview.score, evidencePenalty(evidenceAudit.summary.unsupportedClaims));
+  const score = Math.max(ruleReview.score, calculateEvidenceRiskScore(evidenceAudit.summary.unsupportedClaims));
   const level = score >= 70 ? "高" : score >= 36 ? "中" : "低";
 
   return {
@@ -201,7 +206,7 @@ function mergeFindings(
 ) {
   const seen = new Set<string>();
   return [...primary, ...secondary].filter((finding) => {
-    const key = `${finding.type}:${finding.sentence}`;
+    const key = cleanText(finding.sentence).toLowerCase();
     if (!finding.sentence || seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -219,7 +224,7 @@ function buildRiskPoints(result: ReviewResultSnapshot) {
 }
 
 function evidencePenalty(unsupportedClaims: number) {
-  return unsupportedClaims > 0 ? 36 + (unsupportedClaims - 1) * 12 : 0;
+  return calculateEvidenceRiskScore(unsupportedClaims);
 }
 
 function buildSuccessMessage(summary: NonNullable<ReviewResultSnapshot["evidenceSummary"]>) {

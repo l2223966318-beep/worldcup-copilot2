@@ -287,8 +287,8 @@ export default function MatchAnalysisPage() {
       showWorkflowNotice("请先选择一个热点。");
       return;
     }
-    const analysisSnapshot = manualAnalysis ?? createRuleBasedAnalysis(matchContext);
-    const fallbackDraft = createPlatformDraft(toWorkflowPlatform(activePlatform), matchContext, workflowTopic, analysisSnapshot, { contentType: activeContentType, topicMode: activeTopicMode });
+    const analysisSnapshot = manualAnalysis ?? createRuleBasedAnalysis(evidenceContext);
+    const fallbackDraft = createPlatformDraft(toWorkflowPlatform(activePlatform), evidenceContext, workflowTopic, analysisSnapshot, { contentType: activeContentType, topicMode: activeTopicMode });
     setDraftLoading(true);
     let draft = fallbackDraft;
 
@@ -300,7 +300,7 @@ export default function MatchAnalysisPage() {
           platform: toWorkflowPlatform(activePlatform),
           contentType: activeContentType,
           topicMode: activeTopicMode,
-          matchContext,
+          matchContext: evidenceContext,
           topic: workflowTopic,
           analysis: analysisSnapshot,
           apiKey: getStoredDeepseekKey() || undefined
@@ -1404,6 +1404,7 @@ function buildMatchContext(match: MatchData, signals: MatchSignal[], sourceStatu
       rating: player.rating
     })),
     stats: match.stats,
+    verifiedStats: !/基础覆盖未返回事件流|未返回事件流和完整技术统计|基础进球数据/.test(match.summary),
     hotSignals: signals.map((signal) => ({
       label: signal.label,
       topicSeed: signal.topicSeed,

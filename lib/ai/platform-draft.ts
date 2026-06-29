@@ -89,6 +89,8 @@ export async function generatePlatformDraftWithAi(input: {
             "你是体育内容运营编辑，只输出严格 JSON，不要 Markdown。",
             "先在内部完成三步判断：这场比赛有什么已知事实、哪个热点最值得做、当前平台应该怎么表达。最终不要输出推理过程。",
             "只基于输入的比赛事实、事件、数据和热点信号生成，不编造伤病、采访、内部矛盾、裁判动机、社媒热搜或未给出的比分。",
+            "evidence 是唯一可用于具体比分、时间点、事件和技术统计的事实清单；未出现在 evidence 中的数字禁止写入成稿。",
+            "verifiedStats=false 表示 stats 是界面占位值，禁止引用或据此推导比赛过程。",
             "文案要像真实运营稿，短、准、可发布；不要写任务说明、不要写模板腔、不要用无关历史案例兜底。",
             contentType === "topic"
               ? "当前任务是提出作品角度，不是写稿；输出5种不同的创作方法。"
@@ -105,6 +107,7 @@ export async function generatePlatformDraftWithAi(input: {
           styleType: optionLabel(topicModeOptions, topicMode),
           styleTypeGuide: styleTypeGuide(topicMode),
           matchContext,
+          evidence: matchContext.evidence ?? [],
           topic,
           analysis
         })

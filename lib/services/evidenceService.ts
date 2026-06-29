@@ -51,29 +51,31 @@ export function buildEvidencePack(matchContext: MatchContext, hotspots: Evidence
     occurredAt: matchInfo.time,
     relevance: 100
   });
-  evidence.push({
-    id: "",
-    type: "match_stat",
-    text: `${matchInfo.teamA}控球率 ${stats.teamA.possession}%，${matchInfo.teamB}控球率 ${stats.teamB.possession}%`,
-    source,
-    relevance: 94
-  });
-  evidence.push({
-    id: "",
-    type: "match_stat",
-    text: `${matchInfo.teamA}射门 ${stats.teamA.shots} 次、射正 ${stats.teamA.shotsOnTarget} 次；${matchInfo.teamB}射门 ${stats.teamB.shots} 次、射正 ${stats.teamB.shotsOnTarget} 次`,
-    source,
-    relevance: 96
-  });
-  evidence.push({
-    id: "",
-    type: "match_stat",
-    text: `${matchInfo.teamA}角球 ${stats.teamA.corners} 次、犯规 ${stats.teamA.fouls} 次、黄牌 ${stats.teamA.yellowCards} 张；${matchInfo.teamB}角球 ${stats.teamB.corners} 次、犯规 ${stats.teamB.fouls} 次、黄牌 ${stats.teamB.yellowCards} 张`,
-    source,
-    relevance: 82
-  });
+  if (matchContext.verifiedStats !== false) {
+    evidence.push({
+      id: "",
+      type: "match_stat",
+      text: `${matchInfo.teamA}控球率 ${stats.teamA.possession}%，${matchInfo.teamB}控球率 ${stats.teamB.possession}%`,
+      source,
+      relevance: 94
+    });
+    evidence.push({
+      id: "",
+      type: "match_stat",
+      text: `${matchInfo.teamA}射门 ${stats.teamA.shots} 次、射正 ${stats.teamA.shotsOnTarget} 次；${matchInfo.teamB}射门 ${stats.teamB.shots} 次、射正 ${stats.teamB.shotsOnTarget} 次`,
+      source,
+      relevance: 96
+    });
+    evidence.push({
+      id: "",
+      type: "match_stat",
+      text: `${matchInfo.teamA}角球 ${stats.teamA.corners} 次、犯规 ${stats.teamA.fouls} 次、黄牌 ${stats.teamA.yellowCards} 张；${matchInfo.teamB}角球 ${stats.teamB.corners} 次、犯规 ${stats.teamB.fouls} 次、黄牌 ${stats.teamB.yellowCards} 张`,
+      source,
+      relevance: 82
+    });
+  }
 
-  matchContext.keyEvents.slice(0, 10).forEach((event) => {
+  matchContext.keyEvents.filter((event) => event.minute !== "-" && event.team !== "数据源").slice(0, 10).forEach((event) => {
     const description = cleanText(event.description);
     evidence.push({
       id: "",
@@ -138,6 +140,11 @@ export function auditDraftEvidence(draft: string, evidence: EvidenceItem[]) {
   };
 }
 
+export function calculateEvidenceRiskScore(unsupportedClaims: number) {
+  if (unsupportedClaims <= 0) return 0;
+  return Math.min(84, 36 + (unsupportedClaims - 1) * 8);
+}
+
 export function evidenceLabel(item: EvidenceItem) {
   return `${item.id} ${item.source}：${item.text}`;
 }
@@ -157,10 +164,15 @@ function findSupportingEvidence(sentence: string, evidence: EvidenceItem[]) {
 }
 
 function isFactualClaim(sentence: string) {
+  if (isEditorialInstruction(sentence)) return false;
   const hasFactKeyword = FACT_KEYWORDS.some((keyword) => sentence.includes(keyword));
   const hasNumber = extractNumbers(sentence).length > 0;
   const hasSpecificEvent = /(完成进球|打入|罚进|扑出|被罚下|获得点球|发生冲突|受伤|伤退)/.test(sentence);
   return hasSpecificEvent || (hasFactKeyword && hasNumber);
+}
+
+function isEditorialInstruction(sentence: string) {
+  return /(怎么做|建议从|可以从|可从|从\d+分钟开始|重点分析|适合做|做成|创作|脚本结构|内容结构)/.test(sentence);
 }
 
 function sharedNamedTerms(left: string, right: string) {
@@ -179,7 +191,7 @@ function extractNumbers(text: string) {
 
 function splitSentences(text: string) {
   return text
-    .split(/[。！？；;!?\n]/)
+    .split(/[。！？；;!?\n，,]/)
     .map((item) => cleanText(item))
     .filter(Boolean);
 }

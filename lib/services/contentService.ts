@@ -110,7 +110,7 @@ function buildFallbackTopicAngles(
   const mode = topicModeMeta(topicMode).label;
   const turningPoint = safeTurningPoint(analysis);
   const platformName = platformLabel(platform);
-  const shots = `${match.matchInfo.teamA}射门${match.stats.teamA.shots}次、射正${match.stats.teamA.shotsOnTarget}次，${match.matchInfo.teamB}射门${match.stats.teamB.shots}次、射正${match.stats.teamB.shotsOnTarget}次`;
+  const shots = verifiedShotLine(match);
   const player = match.keyPlayers[0]?.name;
 
   return [
@@ -326,7 +326,7 @@ function topicModeMeta(mode: TopicModeKey) {
 
 function topicMethod(mode: TopicModeKey, match: MatchContext, topic: WorkflowTopic, analysis: AnalysisResult) {
   const event = safeTurningPoint(analysis);
-  const shotLine = `${match.matchInfo.teamA}射门${match.stats.teamA.shots}次、射正${match.stats.teamA.shotsOnTarget}次，${match.matchInfo.teamB}射门${match.stats.teamB.shots}次、射正${match.stats.teamB.shotsOnTarget}次`;
+  const shotLine = verifiedShotLine(match);
   const methods: Record<TopicModeKey, { title: string; core: string; expression: string; production: string; risk: string }> = {
     objectiveNews: {
       title: `${match.matchInfo.name}赛后发生了什么`,
@@ -401,6 +401,11 @@ function riskText(topic: WorkflowTopic, extra: string) {
 
 function safeTurningPoint(analysis: AnalysisResult) {
   return ensurePublishable(analysis.turningPoints[0] || analysis.summary || "关键事件和数据变化");
+}
+
+function verifiedShotLine(match: MatchContext) {
+  if (match.verifiedStats === false) return "当前数据源未返回完整射门和射正统计";
+  return `${match.matchInfo.teamA}射门${match.stats.teamA.shots}次、射正${match.stats.teamA.shotsOnTarget}次，${match.matchInfo.teamB}射门${match.stats.teamB.shots}次、射正${match.stats.teamB.shotsOnTarget}次`;
 }
 
 function toTone(platform: PlatformKey) {
