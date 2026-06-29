@@ -9,6 +9,7 @@ type ScoreReasonPopoverProps = {
   summary?: string;
   children: ReactNode;
   align?: "left" | "right";
+  placement?: "top" | "bottom";
   className?: string;
 };
 
@@ -17,6 +18,7 @@ export function ScoreReasonPopover({
   summary = "查看这张卡片的分数解释。",
   children,
   align = "left",
+  placement = "bottom",
   className = ""
 }: ScoreReasonPopoverProps) {
   const [open, setOpen] = useState(false);
@@ -44,6 +46,15 @@ export function ScoreReasonPopover({
     };
   }, []);
 
+  const positionClass =
+    placement === "top"
+      ? open
+        ? "bottom-full mb-2 translate-y-0 opacity-100"
+        : "bottom-full mb-2 translate-y-1 opacity-0"
+      : open
+        ? "top-full mt-2 translate-y-0 opacity-100"
+        : "top-full mt-2 translate-y-1 opacity-0";
+
   return (
     <div
       ref={containerRef}
@@ -68,11 +79,9 @@ export function ScoreReasonPopover({
 
       <div
         id={panelId}
-        className={`pointer-events-none absolute top-full z-30 mt-2 w-[260px] rounded-2xl border border-slate-200 bg-white/96 p-3 text-left shadow-[0_20px_42px_rgba(15,23,42,0.12)] backdrop-blur transition duration-200 ease-out ${
+        className={`pointer-events-none absolute z-40 w-[260px] rounded-2xl border border-slate-200 bg-white/96 p-3 text-left shadow-[0_20px_42px_rgba(15,23,42,0.12)] backdrop-blur transition duration-200 ease-out ${
           align === "right" ? "right-0" : "left-0"
-        } ${
-          open ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
-        }`}
+        } ${positionClass}`}
       >
         <div className="text-[11px] font-black tracking-[0.16em] text-slate-400">{title}</div>
         <div className="mt-1 text-xs font-semibold leading-5 text-slate-700">{summary}</div>

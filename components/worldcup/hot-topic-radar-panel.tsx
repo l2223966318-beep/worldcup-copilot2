@@ -201,7 +201,7 @@ export function HotTopicRadarPanel({
                         {typeof topic.valueScore === "number" ? `｜价值分：${topic.valueScore}` : ""}
                       </div>
                       <div className="mt-2">
-                        <ScoreReasonPopover summary="查看这条热点为什么排在这个位置" align="right">
+                        <ScoreReasonPopover summary="查看这条热点为什么排在这个位置" align="right" placement="top">
                           <p>{buildTopicScoreReason(topic)}</p>
                           {topic.contentAngles?.[0] ? <p className="mt-2">推荐切口：{topic.contentAngles[0]}</p> : null}
                         </ScoreReasonPopover>
