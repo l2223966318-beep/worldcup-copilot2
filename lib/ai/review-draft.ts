@@ -120,7 +120,10 @@ export async function reviewDraftWithAi(input: {
     evidence,
     evidenceSummary: evidenceAudit.summary
   };
-  const rewriteSuggestion = ensurePublishable(result.data.rewriteSuggestion || buildFallbackRewrite(input.draft, resultSnapshot));
+  const aiRewriteSuggestion = ensurePublishable(result.data.rewriteSuggestion || "");
+  const rewriteSuggestion = findings.length && /无需修改|无修改必要|可直接发布/.test(aiRewriteSuggestion)
+    ? buildFallbackRewrite(input.draft, resultSnapshot)
+    : aiRewriteSuggestion || buildFallbackRewrite(input.draft, resultSnapshot);
 
   return {
     sourceStatus: "live",

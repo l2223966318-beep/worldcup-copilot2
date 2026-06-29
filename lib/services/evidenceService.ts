@@ -154,13 +154,25 @@ function findSupportingEvidence(sentence: string, evidence: EvidenceItem[]) {
   const numbers = extractNumbers(sentence);
   const keywords = FACT_KEYWORDS.filter((keyword) => normalizedSentence.includes(normalize(keyword)));
 
-  return evidence.filter((item) => {
+  const candidates = evidence.filter((item) => {
     const normalizedEvidence = normalize(item.text);
-    const numberMatch = !numbers.length || numbers.every((number) => extractNumbers(item.text).includes(number));
     const keywordMatch = !keywords.length || keywords.some((keyword) => normalizedEvidence.includes(normalize(keyword)));
     const teamOrNameMatch = sharedNamedTerms(sentence, item.text) > 0;
-    return numberMatch && keywordMatch && (teamOrNameMatch || numbers.length > 0);
+    return keywordMatch && (teamOrNameMatch || numbers.length > 0);
   });
+
+  if (!numbers.length) return candidates;
+
+  const matched = new Set<EvidenceItem>();
+  for (const number of numbers) {
+    const numberEvidence = candidates.filter((item) => {
+      const evidenceNumbers = extractNumbers(item.text);
+      return evidenceNumbers.includes(number) || isDerivedDifference(number, evidenceNumbers, sentence);
+    });
+    if (!numberEvidence.length) return [];
+    numberEvidence.forEach((item) => matched.add(item));
+  }
+  return Array.from(matched);
 }
 
 function isFactualClaim(sentence: string) {
@@ -189,11 +201,24 @@ function extractNumbers(text: string) {
   return Array.from(text.matchAll(/\d+(?:\.\d+)?%?/g), (match) => match[0].replace(/^0+(?=\d)/, ""));
 }
 
+function isDerivedDifference(target: string, sourceNumbers: string[], sentence: string) {
+  if (!/(差|多|少|领先|落后)/.test(sentence)) return false;
+  const expected = Number(target.replace("%", ""));
+  const values = sourceNumbers.map((value) => Number(value.replace("%", ""))).filter(Number.isFinite);
+  return values.some((left, index) =>
+    values.slice(index + 1).some((right) => Math.abs(left - right) === expected)
+  );
+}
+
 function splitSentences(text: string) {
   return text
     .split(/[。！？；;!?\n，,]/)
-    .map((item) => cleanText(item))
+    .map((item) => stripListPrefix(cleanText(item)))
     .filter(Boolean);
+}
+
+function stripListPrefix(text: string) {
+  return text.replace(/^\s*(?:\d{1,2}[.、)]|[（(]\d{1,2}[）)])\s*/, "");
 }
 
 function normalize(text: string) {

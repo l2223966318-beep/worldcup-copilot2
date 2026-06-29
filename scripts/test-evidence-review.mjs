@@ -90,12 +90,36 @@ const multiEvidence = auditDraftEvidence(
 assert.equal(multiEvidence.summary.unsupportedClaims, 0);
 assert.equal(multiEvidence.findings.length, 0);
 
+const crossEvidence = auditDraftEvidence(
+  "对比阿根廷54%控球率与6次射正，制作一张数据卡。",
+  evidence
+);
+assert.equal(crossEvidence.summary.unsupportedClaims, 0);
+
 const editorialInstruction = auditDraftEvidence(
   "从80分钟开始逐分钟复盘双方攻防，重点分析换人调整。",
   evidence
 );
 assert.equal(editorialInstruction.summary.checkedClaims, 0);
 assert.equal(editorialInstruction.findings.length, 0);
+
+const numberedTopic = auditDraftEvidence(
+  "1. 射正转化率拆解南非的无效控球",
+  evidence
+);
+assert.equal(numberedTopic.summary.checkedClaims, 0);
+
+const derivedDifference = auditDraftEvidence(
+  "南非与加拿大的射正差为5次。",
+  [{
+    id: "E01",
+    type: "match_stat",
+    text: "南非射门6次、射正2次；加拿大射门14次、射正7次",
+    source: "Sportradar",
+    relevance: 96
+  }]
+);
+assert.equal(derivedDifference.summary.unsupportedClaims, 0);
 
 assert.equal(calculateEvidenceRiskScore(0), 0);
 assert.equal(calculateEvidenceRiskScore(1), 36);

@@ -185,7 +185,7 @@
     background-color: var(--card-hover-background);
     border-color: var(--card-hover-border) !important;
     box-shadow: var(--card-hover-shadow) !important;
-    transform: translateY(-2px) scale(1.01);
+    transform: translateY(-2px);
   }
 }
 
