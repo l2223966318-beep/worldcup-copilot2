@@ -157,6 +157,19 @@ export async function getSportradarWorldCupFixtures(): Promise<WorldCupPayload<W
 
 export async function getSportradarWorldCupToday(date: string): Promise<WorldCupPayload<WorldCupMatch[]>> {
   const config = getSportradarConfig();
+  if (config.seasonId) {
+    const payload = await fetchSportradarJson<SportradarScheduleResponse>(
+      config,
+      `seasons/${encodeURIComponent(config.seasonId)}/schedules.json`,
+      false,
+      { limit: "1000" }
+    );
+    const matches = dedupeMatches(normalizeSchedules(payload.schedules ?? [], payload.generated_at)).filter(
+      (match) => getBeijingDateKeyFromValue(match.kickoffTime) === date
+    );
+    return createPayload("live", matches, matches.length ? undefined : "No Sportradar matches for this Beijing date.");
+  }
+
   const dates = adjacentDates(date);
   const settled = await Promise.allSettled(
     dates.map((day) => fetchSportradarJson<SportradarScheduleResponse>(config, `schedules/${day}/schedules.json`))

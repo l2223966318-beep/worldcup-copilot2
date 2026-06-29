@@ -716,7 +716,10 @@ function sourceLabel(status: SourceStatus, provider?: WorldCupMatch["source"]["p
 
 function formatSourceIssue(message?: string) {
   if (!message) return "";
-  if (/429|limit exceeded/i.test(message)) return "Sportradar 当前限流，已切换兜底源";
+  if (/No Sportradar matches for this Beijing date/i.test(message)) {
+    return "今日 Sportradar 未返回匹配场次，已使用免费赛程源";
+  }
+  if (/429|Too Many Requests|limit exceeded/i.test(message)) return "Sportradar 当前限流，已切换兜底源";
   if (/sportradar/i.test(message)) return "Sportradar 暂不可用，已切换兜底源";
   return message;
 }

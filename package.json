@@ -16,6 +16,7 @@
     "test:card-hover": "node scripts/test-card-hover.mjs",
     "test:word-export": "node scripts/test-word-export.mjs",
     "test:evidence-review": "node scripts/test-evidence-review.mjs",
+    "test:sportradar-today": "node scripts/test-sportradar-today.mjs",
     "test:match-search": "node scripts/test-match-search.mjs",
     "test:match-detail": "node scripts/test-match-detail-presentation.mjs",
     "test:football-names": "node scripts/test-football-names.mjs",
