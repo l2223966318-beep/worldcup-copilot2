@@ -26,7 +26,7 @@ import { analyzeMatch, getMatchDetail } from "@/lib/project-api";
 import { createRuleBasedAnalysis } from "@/lib/services/analysisService";
 import { contentTypeOptions, createPlatformDraft, topicModeOptions, type ContentTypeKey, type TopicModeKey } from "@/lib/services/contentService";
 import { buildEvidencePack, evidenceLabel } from "@/lib/services/evidenceService";
-import { createContentPackage, createPackageMarkdown } from "@/lib/services/exportService";
+import { buildContentReportFilename, createContentPackage, createPackageMarkdown, createPendingReviewResult } from "@/lib/services/exportService";
 import { localizeMatchStatus, localizeRoundName, localizeTeamName, localizeVenueText } from "@/lib/services/footballNames";
 import { buildDraftReviewFlow, buildMatchHotspotShortlist, mergeHotSearchPayloads, type DraftReviewFlow, type MatchHotspot } from "@/lib/services/matchDetailPresentation";
 import { appendHistoryRecord, writeReviewDraft, writeWorkflowState } from "@/lib/services/workflowStore";
@@ -393,14 +393,14 @@ export default function MatchAnalysisPage() {
   }
 
   function buildCurrentPackage() {
-    if (!activeWorkflowDraft || !reviewFlow) return null;
+    if (!activeWorkflowDraft) return null;
     const analysisSnapshot = manualAnalysis ?? createRuleBasedAnalysis(matchContext);
     return createContentPackage({
       matchContext: evidenceContext,
       analysis: analysisSnapshot,
       selectedTopic: workflowTopic,
       platformDraft: activeWorkflowDraft,
-      reviewResult: reviewFlow.result
+      reviewResult: reviewFlow?.result ?? createPendingReviewResult(evidence)
     });
   }
 
@@ -663,8 +663,17 @@ export default function MatchAnalysisPage() {
           </ActionButton>
           <ActionButton onClick={async () => {
             const contentPackage = buildCurrentPackage();
-            const reportMarkdown = contentPackage ? createPackageMarkdown(contentPackage) : markdown;
-            await downloadWordReport(`${match.id}-content-report.docx`, reportMarkdown);
+            if (!contentPackage) {
+              showWorkflowNotice("请先生成当前平台内容，再导出 Word。");
+              return;
+            }
+            const reportMarkdown = createPackageMarkdown(contentPackage);
+            const filename = buildContentReportFilename({
+              matchName: match.name,
+              platform: contentPackage.platformDraft.platform,
+              topicTitle: contentPackage.selectedTopic.title
+            });
+            await downloadWordReport(filename, reportMarkdown);
             appendHistoryRecord({
               kind: "workflow",
               matchId: match.id,

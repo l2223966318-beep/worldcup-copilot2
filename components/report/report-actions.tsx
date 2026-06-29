@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { copyToClipboard } from "@/lib/download";
+import { buildContentReportFilename } from "@/lib/services/exportService";
 import { downloadWordReport } from "@/lib/word-export";
 
 export function ReportActions({ content }: { content: string }) {
@@ -17,7 +18,12 @@ export function ReportActions({ content }: { content: string }) {
   }
 
   async function downloadReport() {
-    await downloadWordReport("worldcup-copilot-report.docx", content);
+    const title = content.match(/^#\s+(.+)$/m)?.[1] ?? "赛事内容报告";
+    await downloadWordReport(buildContentReportFilename({
+      matchName: title,
+      platform: "综合",
+      topicTitle: "赛事内容报告"
+    }), content);
   }
 
   return (

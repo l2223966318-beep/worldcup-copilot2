@@ -15,7 +15,7 @@ import { reviewRisk } from "@/lib/ai/risk";
 import { generateTopics } from "@/lib/ai/topics";
 import { copyToClipboard, downloadTextFile } from "@/lib/download";
 import { useLocalStorageState } from "@/lib/local-store";
-import { createContentPackage, createPackageMarkdown, createPackageText } from "@/lib/services/exportService";
+import { buildContentReportFilename, createContentPackage, createPackageMarkdown, createPackageText, createPendingReviewResult } from "@/lib/services/exportService";
 import { appendHistoryRecord, readWorkflowState } from "@/lib/services/workflowStore";
 import { downloadWordReport } from "@/lib/word-export";
 import type { ContentPackage, WorkflowState } from "@/types/workflow";
@@ -81,7 +81,11 @@ export default function ReportPage() {
               复制 Markdown
             </Button>
             <Button className="gap-2" onClick={async () => {
-              await downloadWordReport("worldcup-copilot-report.docx", markdown);
+              await downloadWordReport(buildContentReportFilename({
+                matchName: contentPackage?.matchInfo.name ?? match.name,
+                platform: contentPackage?.platformDraft.platform ?? "综合",
+                topicTitle: contentPackage?.selectedTopic.title ?? topics[0]?.title
+              }), markdown);
               rememberExport(["Word 报告"]);
               showNotice("Word 报告已导出，并写入历史记录。");
             }}>
@@ -132,11 +136,6 @@ function buildPackageFromWorkflow(workflowState: WorkflowState | null): ContentP
     analysis: workflowState.analysisResult,
     selectedTopic: workflowState.selectedTopic,
     platformDraft: workflowState.generatedContent,
-    reviewResult: workflowState.reviewResult ?? {
-      level: "低",
-      score: 10,
-      findings: [],
-      advice: "可发布"
-    }
+    reviewResult: workflowState.reviewResult ?? createPendingReviewResult(workflowState.currentMatch.evidence)
   });
 }

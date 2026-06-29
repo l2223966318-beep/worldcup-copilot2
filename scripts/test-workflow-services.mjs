@@ -35,7 +35,12 @@ for (const file of files) {
 
 const { createRuleBasedAnalysis } = await import(`file:///${join(outDir, "lib/services/analysisService.mjs").replaceAll("\\", "/")}`);
 const { createPlatformDraft, supportedPlatforms, contentTypeOptions, topicModeOptions } = await import(`file:///${join(outDir, "lib/services/contentService.mjs").replaceAll("\\", "/")}`);
-const { createContentPackage, createPackageMarkdown } = await import(`file:///${join(outDir, "lib/services/exportService.mjs").replaceAll("\\", "/")}`);
+const {
+  buildContentReportFilename,
+  createContentPackage,
+  createPackageMarkdown,
+  createPendingReviewResult
+} = await import(`file:///${join(outDir, "lib/services/exportService.mjs").replaceAll("\\", "/")}`);
 
 const matchContext = {
   id: "match-1",
@@ -142,5 +147,28 @@ const packageMarkdown = createPackageMarkdown(pkg);
 assert.ok(packageMarkdown.includes("可直接发布版"));
 assert.ok(packageMarkdown.includes("## 证据与来源"));
 assert.ok(packageMarkdown.includes("E01｜Sportradar｜4' 巴拉圭后卫乌龙球"));
+
+const topicPackage = createContentPackage({
+  matchContext,
+  analysis,
+  selectedTopic: topic,
+  platformDraft: bilibiliTopic,
+  reviewResult: createPendingReviewResult(matchContext.evidence)
+});
+const topicMarkdown = createPackageMarkdown(topicPackage);
+assert.ok(topicMarkdown.includes("## 选题方案"));
+assert.ok(topicMarkdown.includes("尚未执行 AI 审核"));
+assert.equal(topicMarkdown.includes("## 可直接发布版"), false);
+assert.equal(topicMarkdown.includes("bilibili 完整稿件"), false);
+
+assert.equal(
+  buildContentReportFilename({
+    matchName: "世界杯：南非 vs 加拿大",
+    platform: "bilibili",
+    topicTitle: "射正效率如何改变比赛",
+    createdAt: "2026-06-29T08:00:00.000Z"
+  }),
+  "南非vs加拿大_B站_射正效率如何改变比赛_20260629.docx"
+);
 
 console.log("workflow services ok");

@@ -19,10 +19,19 @@ for (const [file, source] of [
   ["components/report/report-actions.tsx", reportActions]
 ]) {
   assert.match(source, /downloadWordReport/, `${file} must use the shared Word exporter`);
-  assert.match(source, /\.docx/, `${file} must export a .docx filename`);
+  assert.match(source, /buildContentReportFilename/, `${file} must use the descriptive report filename builder`);
 }
 
 assert.doesNotMatch(reportPage, /导出 Markdown/, "Report page must no longer present Markdown as the report export format");
 assert.doesNotMatch(matchPage, /导出 Markdown 报告/, "Match page must no longer present Markdown as the report export format");
+assert.doesNotMatch(reportPage, /worldcup-copilot-report\.docx/, "Report page should use a descriptive filename");
+assert.doesNotMatch(matchPage, /-content-report\.docx/, "Match page should use a descriptive filename");
+assert.doesNotMatch(reportActions, /worldcup-copilot-report\.docx/, "Shared report actions should use a descriptive filename");
+assert.doesNotMatch(
+  matchPage,
+  /contentPackage\s*\?\s*createPackageMarkdown\(contentPackage\)\s*:\s*markdown/,
+  "Match page must not fall back to the stale multi-platform report"
+);
+assert.match(matchPage, /请先生成当前平台内容/, "Match page should explain why export is unavailable");
 
 console.log("word export contract ok");
