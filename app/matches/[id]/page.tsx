@@ -32,7 +32,6 @@ import {
   buildDraftReviewFlow,
   buildMatchHotspotShortlist,
   mergeHotSearchPayloads,
-  summarizeHotspotSources,
   type DraftReviewFlow,
   type MatchHotspot
 } from "@/lib/services/matchDetailPresentation";
@@ -124,8 +123,6 @@ export default function MatchAnalysisPage() {
   const [aiReviewFlow, setAiReviewFlow] = useState<DraftReviewFlow | null>(null);
   const [workflowNotice, setWorkflowNotice] = useState("");
   const [matchHotItems, setMatchHotItems] = useState<HotItem[]>([]);
-  const [hotspotLoading, setHotspotLoading] = useState(false);
-  const [hotspotError, setHotspotError] = useState("");
   const [draftForReview, setDraftForReview] = useState("");
   const [reviewedDraft, setReviewedDraft] = useState("");
   const [selectedHotspotId, setSelectedHotspotId] = useState("");
@@ -149,7 +146,6 @@ export default function MatchAnalysisPage() {
     () => buildMatchHotspotShortlist({ match, signals: matchSignals, hotItems: matchHotItems }),
     [match, matchHotItems, matchSignals]
   );
-  const hotspotSources = useMemo(() => summarizeHotspotSources(matchHotspots), [matchHotspots]);
   const evidence = useMemo(() => buildEvidencePack(matchContext, matchHotspots), [matchContext, matchHotspots]);
   const evidenceContext = useMemo(() => ({ ...matchContext, evidence }), [evidence, matchContext]);
   const selectedHotspot = matchHotspots.find((hotspot) => hotspot.id === selectedHotspotId) ?? matchHotspots[0] ?? null;
@@ -199,8 +195,6 @@ export default function MatchAnalysisPage() {
   useEffect(() => {
     const controller = new AbortController();
     const query = `${match.teamA} ${match.teamB} ${match.name} 世界杯 足球`;
-    setHotspotLoading(true);
-    setHotspotError("");
 
     Promise.allSettled([
       fetchHotPayload(`/api/hot?source=all&scope=sports&limit=50&xhsQuery=${encodeURIComponent(query)}`, controller.signal, getStoredHotSearchHeaders()),
@@ -213,21 +207,15 @@ export default function MatchAnalysisPage() {
         if (!payloads.length) throw failures[0] ?? new Error("热点源请求失败，已保留本场事件信号。");
         const payload = mergeHotSearchPayloads(payloads);
         if (payload.sourceStatus === "error") {
-          setHotspotError(payload.message || "热点源暂不可用，已保留本场事件信号。");
           setMatchHotItems([]);
           return;
         }
         setMatchHotItems(payload.data ?? []);
-        setHotspotError(payload.message ?? "");
       })
-      .catch((error) => {
+      .catch(() => {
         if (!controller.signal.aborted) {
-          setHotspotError(error instanceof Error ? error.message : "热点源请求失败，已保留本场事件信号。");
           setMatchHotItems([]);
         }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setHotspotLoading(false);
       });
 
     return () => controller.abort();
@@ -453,14 +441,6 @@ export default function MatchAnalysisPage() {
 
       <section className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
         <SectionTitle eyebrow="FIELD SIGNALS" title="场上热点信号" description="把外部热榜和本场事件合并成短榜，按热度与比赛相关性排序，像热搜一样先看最值得处理的内容。" />
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-          <span>
-            {hotspotLoading
-              ? "正在同步热点源..."
-              : `已汇集 ${matchHotspots.length} 条比赛相关热点${hotspotSources ? ` · 来源：${hotspotSources}` : ""}`}
-          </span>
-          {hotspotError ? <span className="font-semibold text-amber-700">{hotspotError}</span> : null}
-        </div>
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
           {matchHotspots.map((hotspot) => (
             <MatchHotspotCard
