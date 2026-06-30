@@ -28,7 +28,14 @@ import { contentTypeOptions, createPlatformDraft, topicModeOptions, type Content
 import { buildEvidencePack, evidenceLabel } from "@/lib/services/evidenceService";
 import { buildContentReportFilename, createContentPackage, createPackageMarkdown, createPendingReviewResult } from "@/lib/services/exportService";
 import { localizeMatchStatus, localizeRoundName, localizeTeamName, localizeVenueText } from "@/lib/services/footballNames";
-import { buildDraftReviewFlow, buildMatchHotspotShortlist, mergeHotSearchPayloads, type DraftReviewFlow, type MatchHotspot } from "@/lib/services/matchDetailPresentation";
+import {
+  buildDraftReviewFlow,
+  buildMatchHotspotShortlist,
+  mergeHotSearchPayloads,
+  summarizeHotspotSources,
+  type DraftReviewFlow,
+  type MatchHotspot
+} from "@/lib/services/matchDetailPresentation";
 import { appendHistoryRecord, writeReviewDraft, writeWorkflowState } from "@/lib/services/workflowStore";
 import { worldCupMatchToMatchData } from "@/lib/sports/adapters";
 import { useWorldCupQuery } from "@/lib/sports/client";
@@ -142,6 +149,7 @@ export default function MatchAnalysisPage() {
     () => buildMatchHotspotShortlist({ match, signals: matchSignals, hotItems: matchHotItems }),
     [match, matchHotItems, matchSignals]
   );
+  const hotspotSources = useMemo(() => summarizeHotspotSources(matchHotspots), [matchHotspots]);
   const evidence = useMemo(() => buildEvidencePack(matchContext, matchHotspots), [matchContext, matchHotspots]);
   const evidenceContext = useMemo(() => ({ ...matchContext, evidence }), [evidence, matchContext]);
   const selectedHotspot = matchHotspots.find((hotspot) => hotspot.id === selectedHotspotId) ?? matchHotspots[0] ?? null;
@@ -446,7 +454,11 @@ export default function MatchAnalysisPage() {
       <section className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
         <SectionTitle eyebrow="FIELD SIGNALS" title="场上热点信号" description="把外部热榜和本场事件合并成短榜，按热度与比赛相关性排序，像热搜一样先看最值得处理的内容。" />
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-500">
-          <span>{hotspotLoading ? "正在同步热点源..." : `已筛出 ${matchHotspots.length} 条比赛相关热点`}</span>
+          <span>
+            {hotspotLoading
+              ? "正在同步热点源..."
+              : `已汇集 ${matchHotspots.length} 条比赛相关热点${hotspotSources ? ` · 来源：${hotspotSources}` : ""}`}
+          </span>
           {hotspotError ? <span className="font-semibold text-amber-700">{hotspotError}</span> : null}
         </div>
         <div className="mt-6 grid gap-4 lg:grid-cols-2">

@@ -1,7 +1,12 @@
 import { generateDeepSeekJson } from "@/lib/ai/deepseek";
 import { cleanText, ensurePublishable } from "@/lib/ai/quality";
 import { reviewRisk } from "@/lib/ai/risk";
-import { auditDraftEvidence, buildEvidencePack, calculateEvidenceRiskScore } from "@/lib/services/evidenceService";
+import {
+  auditDraftEvidence,
+  buildEvidencePack,
+  calculateEvidenceRiskScore,
+  finalizeReviewRiskScore
+} from "@/lib/services/evidenceService";
 import type { EvidenceItem, MatchContext, ReviewResultSnapshot } from "@/types/workflow";
 
 type AiReviewDraft = {
@@ -110,7 +115,10 @@ export async function reviewDraftWithAi(input: {
     evidencePenalty(evidenceAudit.summary.unsupportedClaims),
     ruleReview.score
   );
-  const score = findings.length ? rawScore : Math.min(rawScore, 20);
+  const score = finalizeReviewRiskScore(
+    rawScore,
+    findings.map((finding) => finding.evidenceStatus ?? "risk")
+  );
   const level = score >= 70 ? "高" : score >= 36 ? "中" : "低";
   const resultSnapshot: ReviewResultSnapshot = {
     level,

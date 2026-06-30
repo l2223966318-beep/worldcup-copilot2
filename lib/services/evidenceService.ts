@@ -36,6 +36,19 @@ const FACT_KEYWORDS = [
   "分钟"
 ];
 
+const FACT_TERM_GROUPS = [
+  ["进球", "失球", "扳平", "领先", "绝杀", "goal", "scored"],
+  ["射门", "shot"],
+  ["射正", "shotontarget"],
+  ["角球", "corner", "cornerkick"],
+  ["犯规", "foul"],
+  ["黄牌", "yellowcard"],
+  ["红牌", "redcard"],
+  ["点球", "penalty"],
+  ["乌龙", "owngoal"],
+  ["受伤", "伤退", "injury", "injured"]
+];
+
 export function buildEvidencePack(matchContext: MatchContext, hotspots: EvidenceHotspot[] = []): EvidenceItem[] {
   const { matchInfo, stats } = matchContext;
   const evidence: EvidenceItem[] = [];
@@ -142,7 +155,17 @@ export function auditDraftEvidence(draft: string, evidence: EvidenceItem[]) {
 
 export function calculateEvidenceRiskScore(unsupportedClaims: number) {
   if (unsupportedClaims <= 0) return 0;
-  return Math.min(84, 36 + (unsupportedClaims - 1) * 8);
+  return Math.min(56, 18 + (unsupportedClaims - 1) * 6);
+}
+
+export function finalizeReviewRiskScore(
+  rawScore: number,
+  evidenceStatuses: Array<"missing" | "overreach" | "risk">
+) {
+  const score = Math.max(0, Math.min(100, Math.round(rawScore)));
+  if (!evidenceStatuses.length) return Math.min(score, 20);
+  if (evidenceStatuses.includes("risk")) return score;
+  return Math.min(score, 56);
 }
 
 export function evidenceLabel(item: EvidenceItem) {
@@ -153,10 +176,16 @@ function findSupportingEvidence(sentence: string, evidence: EvidenceItem[]) {
   const normalizedSentence = normalize(sentence);
   const numbers = extractNumbers(sentence);
   const keywords = FACT_KEYWORDS.filter((keyword) => normalizedSentence.includes(normalize(keyword)));
+  const factGroups = FACT_TERM_GROUPS.filter((group) =>
+    group.some((term) => normalizedSentence.includes(normalize(term)))
+  );
 
   const candidates = evidence.filter((item) => {
     const normalizedEvidence = normalize(item.text);
-    const keywordMatch = !keywords.length || keywords.some((keyword) => normalizedEvidence.includes(normalize(keyword)));
+    const keywordMatch =
+      (!keywords.length && !factGroups.length) ||
+      keywords.some((keyword) => normalizedEvidence.includes(normalize(keyword))) ||
+      factGroups.some((group) => group.some((term) => normalizedEvidence.includes(normalize(term))));
     const teamOrNameMatch = sharedNamedTerms(sentence, item.text) > 0;
     return keywordMatch && (teamOrNameMatch || numbers.length > 0);
   });

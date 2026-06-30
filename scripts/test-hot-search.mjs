@@ -58,7 +58,7 @@ assert.equal(dailyHotItems.length, 2);
 assert.equal(dailyHotItems[0].platform, "微博");
 assert.equal(dailyHotItems[0].source, "dailyhot-weibo");
 assert.ok(dailyHotItems[0].tags.includes("乌龙球"));
-assert.equal(tavilyItems[0].source, "tavily");
+assert.equal(tavilyItems[0].source, "全网搜索");
 assert.ok(tavilyItems[0].relevance > tavilyItems[1].relevance);
 
 const merged = mergeHotItems([...dailyHotItems, ...tavilyItems]);

@@ -27,7 +27,12 @@ for (const file of files) {
   writeFileSync(join(outDir, file.replace(".ts", ".mjs")), compiled, "utf8");
 }
 
-const { auditDraftEvidence, buildEvidencePack, calculateEvidenceRiskScore } = await import(
+const {
+  auditDraftEvidence,
+  buildEvidencePack,
+  calculateEvidenceRiskScore,
+  finalizeReviewRiskScore
+} = await import(
   `file:///${join(outDir, "lib/services/evidenceService.mjs").replaceAll("\\", "/")}`
 );
 
@@ -122,8 +127,32 @@ const derivedDifference = auditDraftEvidence(
 assert.equal(derivedDifference.summary.unsupportedClaims, 0);
 
 assert.equal(calculateEvidenceRiskScore(0), 0);
-assert.equal(calculateEvidenceRiskScore(1), 36);
-assert.ok(calculateEvidenceRiskScore(9) <= 100);
+assert.equal(calculateEvidenceRiskScore(1), 18);
+assert.ok(calculateEvidenceRiskScore(8) < 70);
+assert.equal(finalizeReviewRiskScore(84, ["missing", "missing", "overreach"]), 56);
+assert.equal(finalizeReviewRiskScore(84, ["missing", "risk"]), 84);
+
+const multilingualEvents = auditDraftEvidence(
+  "85分钟巴西获得角球。90+6分钟Martinelli完成进球。",
+  [
+    {
+      id: "E01",
+      type: "match_event",
+      text: "85' Rayan, corner kick.",
+      source: "Sportradar",
+      relevance: 90
+    },
+    {
+      id: "E02",
+      type: "match_event",
+      text: "90+6' Martinelli, Gabriel, goal.",
+      source: "Sportradar",
+      relevance: 98
+    }
+  ]
+);
+assert.equal(multilingualEvents.summary.unsupportedClaims, 0);
+assert.equal(multilingualEvents.findings.length, 0);
 
 const basicCoverageEvidence = buildEvidencePack({
   ...matchContext,

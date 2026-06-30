@@ -65,10 +65,11 @@ export function buildMatchHotspotShortlist({
     .filter((item): item is MatchHotspot => Boolean(item));
   const signalTopics = signals.map((signal) => signalToMatchHotspot(signal, match));
   const deduped = dedupeHotspots([...sourceTopics, ...signalTopics]);
+  const sorted = deduped.sort(
+    (a, b) => b.heatScore - a.heatScore || b.valueScore - a.valueScore || a.rank - b.rank
+  );
 
-  return deduped
-    .sort((a, b) => b.heatScore - a.heatScore || b.valueScore - a.valueScore || a.rank - b.rank)
-    .slice(0, limit)
+  return selectDiverseHotspots(sorted, limit)
     .map((item, index) => ({ ...item, rank: index + 1 }));
 }
 
@@ -93,6 +94,12 @@ export function mergeHotSearchPayloads(payloads: HotSearchPayload[]): HotSearchP
     lastUpdated: payloads[0]?.lastUpdated ?? new Date().toISOString(),
     message
   };
+}
+
+export function summarizeHotspotSources(hotspots: MatchHotspot[]) {
+  return Array.from(
+    new Set(hotspots.map((hotspot) => hotspot.source === "场上事件" ? hotspot.source : hotspot.platform || hotspot.source))
+  ).join("、");
 }
 
 export function buildDraftReviewFlow(draft: string, match: MatchData, result?: RiskReviewResult): DraftReviewFlow {
@@ -196,7 +203,9 @@ function hotItemToMatchHotspot(item: HotItem, match: MatchData): MatchHotspot | 
   const reason = getMatchReason(text, match);
   if (!reason) return null;
 
-  const heatScore = numericHeat(item.heat ?? item.hot) + (item.valueScore ?? item.relevance ?? 0) * 10;
+  const rawHeat = numericHeat(item.heat ?? item.hot);
+  const heatBonus = rawHeat > 0 ? Math.round(Math.log10(rawHeat + 1) * 100) : 0;
+  const heatScore = (item.valueScore ?? item.relevance ?? 0) * 100 + heatBonus;
   return {
     id: item.id,
     rank: item.rank ?? 999,
@@ -222,7 +231,7 @@ function signalToMatchHotspot(signal: Pick<MatchSignal, "id" | "label" | "minute
     source: "场上事件",
     platform: signal.recommendedPlatforms.join(" / "),
     heat: signal.contentValue,
-    heatScore: signal.contentValue * 1000,
+    heatScore: signal.contentValue * 100,
     valueScore: signal.contentValue,
     matchReason: `来自${match.name}的关键事件`,
     actionText: "复制选题/生成内容"
@@ -236,6 +245,10 @@ function getMatchReason(text: string, match: MatchData) {
   const hasTeamA = teamAAliases.some((alias) => normalized.includes(alias));
   const hasTeamB = teamBAliases.some((alias) => normalized.includes(alias));
   if (hasTeamA && hasTeamB) return "当前对阵";
+  if (matchEntityAliases(match).some((alias) => normalized.includes(alias))) return "本场球员或事件";
+  if ((hasTeamA || hasTeamB) && MATCH_EVENT_TERMS.some((term) => normalized.includes(term))) {
+    return "本场球员或事件";
+  }
   return "";
 }
 
@@ -254,6 +267,73 @@ function dedupeHotspots(items: MatchHotspot[]) {
     seen.add(key);
     return true;
   });
+}
+
+function selectDiverseHotspots(items: MatchHotspot[], limit: number) {
+  const selected: MatchHotspot[] = [];
+  const selectedIds = new Set<string>();
+  const selectedSources = new Set<string>();
+
+  for (const item of items) {
+    const sourceKey = item.source === "场上事件" ? item.source : item.platform || item.source;
+    if (selectedSources.has(sourceKey)) continue;
+    selected.push(item);
+    selectedIds.add(item.id);
+    selectedSources.add(sourceKey);
+    if (selected.length >= limit) return selected;
+  }
+
+  for (const item of items) {
+    if (selectedIds.has(item.id)) continue;
+    selected.push(item);
+    selectedIds.add(item.id);
+    if (selected.length >= limit) break;
+  }
+
+  return selected;
+}
+
+const MATCH_EVENT_TERMS = [
+  "进球",
+  "乌龙",
+  "角球",
+  "点球",
+  "红牌",
+  "黄牌",
+  "换人",
+  "扑救",
+  "射门",
+  "射正",
+  "goal",
+  "owngoal",
+  "corner",
+  "penalty",
+  "substitution",
+  "save",
+  "shot"
+].map(normalizeText);
+
+const IGNORED_EVENT_WORDS = new Set(
+  ["own", "goal", "corner", "kick", "shot", "target", "substitution", "miss", "player"].map(normalizeText)
+);
+
+function matchEntityAliases(match: MatchData) {
+  const playerNames = match.keyPlayers.map((player) => normalizeText(player.name));
+  const eventNames = match.keyEvents.flatMap((event) => extractLatinEntityNames(event.description));
+  return Array.from(new Set([...playerNames, ...eventNames].filter((item) => item.length >= 3)));
+}
+
+function extractLatinEntityNames(value: string) {
+  const words = value.match(/[A-Za-z][A-Za-z.'-]*/g) ?? [];
+  const names = words.flatMap((word, index) => {
+    const current = normalizeText(word);
+    const next = normalizeText(words[index + 1] ?? "");
+    const pair = current && next && !(IGNORED_EVENT_WORDS.has(current) && IGNORED_EVENT_WORDS.has(next))
+      ? `${current}${next}`
+      : "";
+    return [IGNORED_EVENT_WORDS.has(current) ? "" : current, pair];
+  });
+  return names.filter((item) => item.length >= 4);
 }
 
 function simpleReviewRisk(text: string): DraftReviewFlow["result"] {

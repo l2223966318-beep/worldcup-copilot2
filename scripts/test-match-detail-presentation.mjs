@@ -23,7 +23,8 @@ const {
   buildDraftReviewFlow,
   buildMatchHotspotShortlist,
   buildTeamRadarData,
-  mergeHotSearchPayloads
+  mergeHotSearchPayloads,
+  summarizeHotspotSources
 } = await import(`file:///${modulePath.replaceAll("\\", "/")}`);
 
 const match = {
@@ -92,12 +93,44 @@ const hotspots = buildMatchHotspotShortlist({
       valueScore: 88,
       heat: "520万",
       tags: ["美国", "巴拉圭", "乌龙球"]
+    },
+    {
+      id: "match-weibo",
+      title: "美国队4比1巴拉圭赛后讨论",
+      summary: "双方比赛结束后引发球迷讨论",
+      source: "微博",
+      platform: "微博",
+      relevance: 84,
+      valueScore: 86,
+      heat: "480万",
+      tags: ["美国", "巴拉圭"]
+    },
+    {
+      id: "match-redfox",
+      title: "D. Bobadilla乌龙球成为比赛转折",
+      summary: "小红书创作者讨论这次关键事件",
+      source: "RedFox 小红书每日爆款笔记",
+      platform: "小红书",
+      relevance: 82,
+      valueScore: 84,
+      tags: ["D. Bobadilla", "乌龙球"]
     }
-  ]
+  ],
+  limit: 4
 });
 assert.equal(hotspots[0].title, "美国队4比1巴拉圭 乌龙球");
 assert.ok(hotspots[0].heatScore > hotspots[1].heatScore);
-assert.ok(hotspots.every((item) => item.matchReason === "当前对阵" || item.source === "场上事件"));
+assert.ok(hotspots.every((item) =>
+  item.matchReason === "当前对阵" ||
+  item.matchReason === "本场球员或事件" ||
+  item.source === "场上事件"
+));
+assert.deepEqual(
+  new Set(hotspots.map((item) => item.platform)),
+  new Set(["抖音", "微博", "小红书", "抖音 / 微博"])
+);
+assert.ok(hotspots.some((item) => item.id === "match-redfox" && item.matchReason === "本场球员或事件"));
+assert.equal(summarizeHotspotSources(hotspots), "抖音、场上事件、微博、小红书");
 
 const narrowMatch = {
   ...match,
