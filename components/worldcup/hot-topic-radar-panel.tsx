@@ -340,11 +340,13 @@ function normalizeHotTopics(items: HotItem[], matches: WorldCupMatch[], updatedA
 }
 
 function normalizeSource(source: string): HotTopic["source"] {
-  if (/小红书配置源|小红书热点源/i.test(source)) return source;
-  if (/微博|抖音|B站|哔哩|知乎|百度|头条|今日热榜|榜眼数据/i.test(source)) return "今日热榜";
+  if (/RedFox|小红书配置源|小红书热点源/i.test(source)) return "小红书热点源（RedFox）";
+  if (/UAPI/i.test(source)) return "UAPI 热榜";
+  if (/榜眼数据|TopHub/i.test(source)) return "榜眼数据";
   if (/tavily|全网搜索/i.test(source)) return "全网搜索";
+  if (/微博|抖音|B站|哔哩|知乎|百度|头条|今日热榜/i.test(source)) return "今日热榜";
   if (/fallback|ai|AI筛选|演示数据/i.test(source)) return "AI筛选";
-  return "今日热榜";
+  return source || "今日热榜";
 }
 
 function classifyCategory(text: string): HotTopic["category"] {
@@ -455,6 +457,8 @@ function sourceStatusLabel(status: HotSearchPayload["sourceStatus"]) {
 }
 
 function sourcePriority(source: HotTopic["source"]) {
+  if (source === "UAPI 热榜") return 4;
+  if (source === "榜眼数据") return 3;
   if (source === "今日热榜") return 3;
   if (/小红书/.test(source)) return 2;
   if (source === "全网搜索") return 2;
