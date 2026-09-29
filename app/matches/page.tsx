@@ -896,7 +896,7 @@ function AiBrainStatus({
       ? fromCache
         ? `已复用本场比赛的${liveModules || "运营分析"}，比赛数据更新后会自动重新分析。`
         : `当前页面的${liveModules || "运营分析"}由 DS API 生成，硬数据来自项目服务端比赛接口。切换到非主推选题时，平台内容会使用本地规则补齐。`
-      : enhancement?.message ?? "未配置 DeepSeek key 或接口暂不可用，页面继续使用本地规则引擎。";
+      : enhancement?.message ?? "CloudBase AI 暂不可用，页面继续使用本地规则引擎。DeepSeek 密钥由服务端环境变量管理。";
 
   return (
     <section className="card-lift card-lift-light rounded-[24px] border bg-white px-5 py-4 shadow-[0_14px_40px_rgba(15,23,42,0.05)]" style={{ borderColor: theme.border }}>
