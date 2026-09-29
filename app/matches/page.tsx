@@ -320,10 +320,6 @@ export default function MatchAnalysisPage() {
   }
 
   async function handleGeneratePlatformDraft() {
-    if (!selectedHotspot) {
-      showWorkflowNotice("请先选择一个热点。");
-      return;
-    }
     const analysisSnapshot = manualAnalysis ?? createRuleBasedAnalysis(evidenceContext);
     const fallbackDraft = createPlatformDraft(toWorkflowPlatform(activePlatform), evidenceContext, workflowTopic, analysisSnapshot, { contentType: activeContentType, topicMode: activeTopicMode });
     setDraftLoading(true);
@@ -1174,7 +1170,7 @@ function PlatformPreview({
           >
             {hotspots.length ? hotspots.map((hotspot) => (
               <option key={hotspot.id} value={hotspot.id}>{hotspot.title}</option>
-            )) : <option value="">暂无可选热点</option>}
+            )) : <option value="">当前 AI 选题</option>}
           </select>
         </label>
         <label className="text-sm font-semibold text-slate-600">
