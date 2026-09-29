@@ -360,7 +360,7 @@ export default function HotTopicDetailPage() {
         </div>
         <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-600">
           <div className="font-semibold text-slate-800">AI 调用诊断</div>
-          <div>本页检测到的 DeepSeek Key：{deepseekKey ? "已读取" : "未读取"}</div>
+          <div>浏览器本地 DeepSeek Key（可选）：{deepseekKey ? "已设置" : "未设置"}；CloudBase 服务端 Key 不会暴露到页面。</div>
           <div>分析状态：{toStatusLabel(analysisStatus)}</div>
           <div>内容生成状态：{toStatusLabel(contentStatus)}</div>
           <div>审核状态：{toStatusLabel(auditStatus)}</div>
