@@ -106,8 +106,8 @@ export default function HotTopicDetailPage() {
       analysis: HotAnalysisResult;
     }>(window.localStorage, topic);
     if (cachedAnalysis) {
-      setAnalysis(cachedAnalysis.analysis);
-      setTopicIntro(cachedAnalysis.intro);
+      setAnalysis(normalizeHotAnalysisPayload(cachedAnalysis.analysis, fallbackAnalysisSnapshot));
+      setTopicIntro(typeof cachedAnalysis.intro === "string" ? cachedAnalysis.intro : fallbackIntro);
       setAnalysisStatus("cache");
       setAnalysisMessage("");
       return;
@@ -132,8 +132,8 @@ export default function HotTopicDetailPage() {
           message?: string;
         };
         if (!active) return;
-        const nextIntro = payload.intro || fallbackIntro;
-        const nextAnalysis = payload.analysis || fallbackAnalysisSnapshot;
+        const nextIntro = typeof payload.intro === "string" && payload.intro.trim() ? payload.intro : fallbackIntro;
+        const nextAnalysis = normalizeHotAnalysisPayload(payload.analysis, fallbackAnalysisSnapshot);
         setTopicIntro(nextIntro);
         setAnalysis(nextAnalysis);
         setAnalysisStatus(payload.sourceStatus === "live" ? "live" : payload.sourceStatus === "fallback" ? "fallback" : "error");
@@ -652,6 +652,60 @@ function getStoredDeepseekKey() {
 
 function refreshDeepseekKey(setter: (value: string) => void) {
   setter(getStoredDeepseekKey());
+}
+
+function normalizeHotAnalysisPayload(
+  value: HotAnalysisResult | undefined,
+  fallback: HotAnalysisResult
+): HotAnalysisResult {
+  if (!value || typeof value !== "object") return fallback;
+
+  const toText = (item: unknown, fallbackText = "") => {
+    if (typeof item === "string") return item;
+    if (typeof item === "number" || typeof item === "boolean") return String(item);
+    if (item && typeof item === "object") {
+      const record = item as Record<string, unknown>;
+      const parts = [record.label, record.value, record.note]
+        .filter((part) => typeof part === "string" || typeof part === "number")
+        .map(String)
+        .filter(Boolean);
+      if (parts.length) return parts.join("：");
+    }
+    return fallbackText;
+  };
+
+  const toTextList = (items: unknown, fallbackItems: string[]) => {
+    if (!Array.isArray(items)) return fallbackItems;
+    const normalized = items.map((item) => toText(item)).filter(Boolean);
+    return normalized.length ? normalized : fallbackItems;
+  };
+
+  const toInsights = (items: unknown, fallbackItems: HotAnalysisResult["overview"]) => {
+    if (!Array.isArray(items)) return fallbackItems;
+    const normalized = items
+      .map((item, index) => {
+        if (!item || typeof item !== "object") return null;
+        const record = item as Record<string, unknown>;
+        return {
+          label: toText(record.label, fallbackItems[index]?.label ?? "判断"),
+          value: toText(record.value, fallbackItems[index]?.value ?? "-"),
+          note: toText(record.note, fallbackItems[index]?.note ?? "")
+        };
+      })
+      .filter((item): item is HotAnalysisResult["overview"][number] => Boolean(item));
+    return normalized.length ? normalized.slice(0, 3) : fallbackItems;
+  };
+
+  return {
+    overview: toInsights(value.overview, fallback.overview),
+    production: toInsights(value.production, fallback.production),
+    whyCare: toTextList(value.whyCare, fallback.whyCare),
+    relation: toTextList(value.relation, fallback.relation),
+    angles: toTextList(value.angles, fallback.angles),
+    platforms: toTextList(value.platforms, fallback.platforms),
+    factsToVerify: toTextList(value.factsToVerify, fallback.factsToVerify),
+    risks: toTextList(value.risks, fallback.risks)
+  };
 }
 
 function toStatusLabel(status: "idle" | "loading" | "live" | "fallback" | "cache" | "error") {
