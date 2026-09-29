@@ -149,7 +149,10 @@ export default function MatchAnalysisPage() {
     () => buildMatchContext(match, matchSignals, payload?.sourceStatus ?? "fallback"),
     [match, matchSignals, payload?.sourceStatus]
   );
-  const platformDecisions = useMemo(() => buildPlatformDecisions(match, matchSignals, selectedTopic), [match, matchSignals, selectedTopic]);
+  const platformDecisions = useMemo(
+    () => buildPlatformDecisions(match, matchSignals, selectedTopic, matchContext.verifiedStats !== false),
+    [match, matchContext.verifiedStats, matchSignals, selectedTopic]
+  );
   const matchHotspots = useMemo(
     () => buildMatchHotspotShortlist({ match, signals: matchSignals, hotItems: matchHotItems }),
     [match, matchHotItems, matchSignals]
@@ -472,7 +475,13 @@ export default function MatchAnalysisPage() {
       <section className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
         <SectionTitle eyebrow="CHART INSIGHTS" title="图表服务内容创作" description="每张图表都配运营解释和可复制金句，用来快速变成脚本、标题或长文段落。" />
         <div className="mt-6">
-          <InsightCharts match={match} theme={theme} dataAngles={workflow.dataAngles} />
+          {matchContext.verifiedStats !== false ? (
+            <InsightCharts match={match} theme={theme} dataAngles={workflow.dataAngles} />
+          ) : (
+            <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-sm leading-6 text-slate-500">
+              当前赛事数据源未返回可核验的控球、射门、射正等技术统计，因此不展示占位图表，避免把默认值误当成真实比赛数据。
+            </div>
+          )}
         </div>
       </section>
 
@@ -1209,16 +1218,23 @@ function getPublishableDraftText(draft: PlatformDraft) {
   return draft.sections.find((section) => section.title.includes("可直接发布"))?.content ?? draft.body;
 }
 
-function buildPlatformDecisions(match: MatchData, signals: MatchSignal[], topic: TopicIdea): Record<PlatformKey, PlatformDecision> {
-  const eventCount = match.keyEvents.length;
-  const playerCount = match.keyPlayers.length;
+function buildPlatformDecisions(
+  match: MatchData,
+  signals: MatchSignal[],
+  topic: TopicIdea,
+  hasVerifiedStats: boolean
+): Record<PlatformKey, PlatformDecision> {
+  const eventCount = match.keyEvents.filter((event) => event.minute !== "-" && event.team !== "数据源").length;
+  const playerCount = hasVerifiedStats ? match.keyPlayers.filter((player) => player.rating > 0).length : 0;
   const scoreParts = match.score.match(/\d+/g)?.map(Number) ?? [];
   const goalTotal = scoreParts.reduce((sum, item) => sum + item, 0);
-  const shotGap = Math.abs(match.stats.teamA.shots - match.stats.teamB.shots);
-  const onTargetTotal = match.stats.teamA.shotsOnTarget + match.stats.teamB.shotsOnTarget;
+  const shotGap = hasVerifiedStats ? Math.abs(match.stats.teamA.shots - match.stats.teamB.shots) : 0;
+  const onTargetTotal = hasVerifiedStats ? match.stats.teamA.shotsOnTarget + match.stats.teamB.shotsOnTarget : 0;
   const signalValue = Math.max(...signals.map((signal) => signal.contentValue), 0);
   const hasPenalty = Boolean(match.penaltyScore) || match.keyEvents.some((event) => event.type.includes("点"));
-  const hasLateEvent = match.keyEvents.some((event) => /8\d|9\d|加时|点球|终场/.test(event.minute));
+  const hasLateEvent = match.keyEvents.some(
+    (event) => event.minute !== "-" && event.team !== "数据源" && /8\d|9\d|加时|点球|终场/.test(event.minute)
+  );
 
   const deepScore = clampPlatformScore(58 + eventCount * 4 + playerCount * 3 + Math.min(shotGap, 12) + (hasPenalty ? 8 : 0));
   const weiboScore = clampPlatformScore(56 + goalTotal * 5 + (hasLateEvent ? 10 : 0) + Math.round(signalValue / 8));
