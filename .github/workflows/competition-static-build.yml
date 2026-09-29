@@ -1,0 +1,29 @@
+name: Competition static build
+
+on:
+  push:
+    branches:
+      - competition-static
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build static export
+        run: npm run build
+
+      - name: Verify static output
+        run: |
+          test -f out/index.html
+          test -d out/_next
