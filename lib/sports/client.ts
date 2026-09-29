@@ -28,10 +28,10 @@ export function useWorldCupQuery<T>(
   const staleMs = options.staleMs ?? 120_000;
   const maxStaleMs = options.maxStaleMs ?? Math.max(staleMs, 6 * 60 * 60_000);
   const revalidateOnMount = options.revalidateOnMount ?? true;
-  const [state, setState] = useState<QueryState<T>>(() => {
-    if (!enabled) return { loading: false };
-    const cached = readCachedPayload<T>(cacheKey, maxStaleMs);
-    return cached ? { payload: cached, loading: false } : { loading: true };
+  // Keep the first server render and the first browser render identical.
+  // Browser-only cache hydration happens in useEffect below.
+  const [state, setState] = useState<QueryState<T>>({
+    loading: enabled
   });
 
   useEffect(() => {
