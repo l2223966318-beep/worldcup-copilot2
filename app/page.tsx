@@ -165,7 +165,7 @@ export default function DashboardPage() {
                           : "接口当前返回为空。你可以先切换筛选条件，或直接进入经典样例完整演示。"}
                   </p>
                   <div className="mt-5 flex flex-wrap gap-3">
-                    <Link href="/matches/argentina-france-2022-final" className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5">
+                    <Link href="/matches?id=argentina-france-2022-final" className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5">
                       进入经典样例完整演示
                     </Link>
                     <Link href="/settings" className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5">
@@ -467,7 +467,7 @@ function OpportunityMatchCard({
             ))}
           </div>
           <Link
-            href={`/matches/${match.id}`}
+            href={`/matches?id=${encodeURIComponent(match.id)}`}
             className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-full px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5"
             style={{ backgroundColor: theme.primary, boxShadow: `0 14px 30px ${theme.heroGlow}` }}
           >
