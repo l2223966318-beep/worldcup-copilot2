@@ -36,7 +36,7 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
         shots: homeStats.shots,
         keyPasses: 0,
         duelsWon: 0,
-        rating: 7.6
+        rating: 0
       },
       {
         name: awayTeam,
@@ -47,7 +47,7 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
         shots: awayStats.shots,
         keyPasses: 0,
         duelsWon: 0,
-        rating: 7.4
+        rating: 0
       }
     ],
     keyEvents: match.events.length
@@ -62,7 +62,7 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
             minute: "-",
             team: "数据源",
             type: "终场",
-            description: "当前 Sportradar 基础覆盖未返回事件流；可基于比分、状态和基础统计做内容判断，但不要编造进球过程、判罚、伤病或球员发言。"
+            description: "当前赛事数据源未返回事件流；可基于已确认的比分、状态和已返回统计做内容判断，但不要编造进球过程、判罚、伤病或球员发言。"
           }
         ],
     historicalMeetings: [
