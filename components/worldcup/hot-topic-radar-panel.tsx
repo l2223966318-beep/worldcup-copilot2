@@ -49,8 +49,8 @@ export function HotTopicRadarPanel({
   const filteredTopics = useMemo(() => rankedTopics.filter((topic) => filterByTab(topic, activeTab)), [activeTab, rankedTopics]);
 
   function openTopic(topic: HotTopic, mode: "analysis" | "generate" = "analysis") {
-    const query = mode === "generate" ? "?mode=generate" : "";
-    router.push(`/hot-topics/${encodeURIComponent(topic.id)}${query}`);
+    const query = mode === "generate" ? "&mode=generate" : "";
+    router.push(`/hot-topics?id=${encodeURIComponent(topic.id)}${query}`);
   }
 
   const updateHotTopics = useCallback(async (forceRefresh = false) => {
