@@ -53,7 +53,7 @@ export function buildEvidencePack(matchContext: MatchContext, hotspots: Evidence
   const { matchInfo, stats } = matchContext;
   const evidence: EvidenceItem[] = [];
   const source = matchInfo.sourceStatus === "live" || matchInfo.sourceStatus === "cache"
-    ? "Sportradar"
+    ? "赛事数据源"
     : "赛事数据";
 
   evidence.push({
