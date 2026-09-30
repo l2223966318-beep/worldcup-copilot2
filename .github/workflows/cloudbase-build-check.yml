@@ -1,0 +1,36 @@
+name: CloudBase build check
+
+on:
+  push:
+    branches:
+      - china-deploy
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test Sportradar adapter
+        run: npm run test:sportradar-today
+
+      - name: Build Next.js standalone
+        run: npm run build
+
+      - name: Verify standalone server
+        run: |
+          test -f .next/standalone/server.js
+          test -d .next/static
+          test -d public
