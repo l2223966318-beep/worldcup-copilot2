@@ -70,12 +70,15 @@ export type SourceSeasonDebugResult = {
   hint: string;
 };
 
+const DEFAULT_WORLD_CUP_COMPETITION_ID = "sr:competition:16";
+const DEFAULT_WORLD_CUP_SEASON_ID = "sr:season:101177";
+
 export async function getSportradarSourceDebug(): Promise<SourceDebugResult> {
   const accessLevel = process.env.SPORTRADAR_ACCESS_LEVEL?.trim() || "trial";
   const languageCode = process.env.SPORTRADAR_LANGUAGE_CODE?.trim() || "en";
   const apiKey = process.env.SPORTRADAR_API_KEY?.trim();
-  const competitionId = process.env.SPORTRADAR_WORLD_CUP_COMPETITION_ID?.trim();
-  const seasonId = process.env.SPORTRADAR_WORLD_CUP_SEASON_ID?.trim();
+  const competitionId = process.env.SPORTRADAR_WORLD_CUP_COMPETITION_ID?.trim() || DEFAULT_WORLD_CUP_COMPETITION_ID;
+  const seasonId = process.env.SPORTRADAR_WORLD_CUP_SEASON_ID?.trim() || DEFAULT_WORLD_CUP_SEASON_ID;
 
   const result: SourceDebugResult = {
     configured: {
@@ -93,7 +96,7 @@ export async function getSportradarSourceDebug(): Promise<SourceDebugResult> {
   };
 
   if (!apiKey) {
-    result.fallbackHint = "线上环境没有读取到 SPORTRADAR_API_KEY，会直接走免费源兜底。";
+    result.fallbackHint = "代码已内置 FIFA World Cup 赛事与赛季 ID；当前部署只缺 SPORTRADAR_API_KEY，因此会继续走免费源兜底。";
     return result;
   }
 
@@ -130,8 +133,8 @@ export async function getSportradarSourceDebug(): Promise<SourceDebugResult> {
 
     if (!schedules.length) {
       result.fallbackHint = "Sportradar 连接成功，但 live schedules 当前没有比赛。今日赛程会继续尝试 daily schedules。";
-    } else if (!result.sportradar.matchedWorldCupCount && !competitionId && !seasonId) {
-      result.fallbackHint = "Sportradar 连接成功，但没有匹配到 World Cup。建议配置 SPORTRADAR_WORLD_CUP_COMPETITION_ID 或 SPORTRADAR_WORLD_CUP_SEASON_ID。";
+    } else if (!result.sportradar.matchedWorldCupCount) {
+      result.fallbackHint = "Sportradar 连接成功；当前没有正在进行的世界杯比赛。赛季级接口会继续检查完整赛程与历史结果。";
     } else {
       result.fallbackHint = "Sportradar 连接成功。若业务接口仍 fallback，请检查赛季/赛事 ID 或当天是否有匹配赛程。";
     }
@@ -201,8 +204,8 @@ export async function getSportradarSeasonDebug(): Promise<SourceSeasonDebugResul
   const accessLevel = process.env.SPORTRADAR_ACCESS_LEVEL?.trim() || "trial";
   const languageCode = process.env.SPORTRADAR_LANGUAGE_CODE?.trim() || "en";
   const apiKey = process.env.SPORTRADAR_API_KEY?.trim();
-  const competitionId = process.env.SPORTRADAR_WORLD_CUP_COMPETITION_ID?.trim();
-  const seasonId = process.env.SPORTRADAR_WORLD_CUP_SEASON_ID?.trim();
+  const competitionId = process.env.SPORTRADAR_WORLD_CUP_COMPETITION_ID?.trim() || DEFAULT_WORLD_CUP_COMPETITION_ID;
+  const seasonId = process.env.SPORTRADAR_WORLD_CUP_SEASON_ID?.trim() || DEFAULT_WORLD_CUP_SEASON_ID;
   const baseUrl = `https://api.sportradar.com/soccer/${accessLevel}/v4/${languageCode}`;
 
   const result: SourceSeasonDebugResult = {
@@ -223,11 +226,11 @@ export async function getSportradarSeasonDebug(): Promise<SourceSeasonDebugResul
       ok: false,
       candidates: []
     },
-    hint: "Use the season id and competition_id from the exact FIFA World Cup 2026 candidate. Qualification candidates are not the final tournament."
+    hint: "Default FIFA World Cup IDs are built in. Override them only if Sportradar changes the catalog or the app targets a different tournament."
   };
 
   if (!apiKey) {
-    result.hint = "SPORTRADAR_API_KEY is not configured in the current deployment.";
+    result.hint = "SPORTRADAR_API_KEY is not configured in the current deployment; the built-in World Cup IDs are ready.";
     return result;
   }
 
