@@ -30,12 +30,15 @@
 需要真实 AI / 实时数据时，再在 CloudBase 服务配置中添加：
 
 - `DEEPSEEK_API_KEY`
-- `SPORTRADAR_API_KEY`
-- `SPORTRADAR_WORLD_CUP_SEASON_ID`
+- `SPORTRADAR_API_KEY`（必填，腾讯云切到 Sportradar 真数据只需要这一项）
+- `SPORTRADAR_WORLD_CUP_COMPETITION_ID`（可选覆盖；默认 `sr:competition:16`）
+- `SPORTRADAR_WORLD_CUP_SEASON_ID`（可选覆盖；默认 `sr:season:101177`）
 - `TAVILY_API_KEY`
 - 其他热点源 Key
 
 不要把真实 Key 提交到 GitHub。
+
+配置并重新部署后，可访问 `/api/source-debug` 检查 Sportradar 是否成功连接，再访问 `/api/worldcup/fixtures` 验证世界杯赛程/结果是否来自真实数据源。
 
 ## 国赛现场建议
 
