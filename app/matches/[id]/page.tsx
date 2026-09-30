@@ -456,7 +456,7 @@ export default function MatchAnalysisPage() {
         sourceStatus={payload?.sourceStatus ?? "fallback"}
         lastUpdated={payload?.lastUpdated}
         loading={loading}
-        error={error || formatSourceIssue(payload?.message)}
+        error={error || formatSourceIssue(payload?.message, sourceMatch?.source.provider, payload?.sourceStatus)}
       />
 
       <AiBrainStatus loading={aiLoading} enhancement={aiEnhancement} fromCache={aiCacheHit} theme={theme} />
@@ -1659,8 +1659,13 @@ function sourceLabel(status: SourceStatus, provider?: WorldCupMatch["source"]["p
   return "请求失败";
 }
 
-function formatSourceIssue(message?: string) {
+function formatSourceIssue(
+  message?: string,
+  provider?: WorldCupMatch["source"]["provider"],
+  status?: SourceStatus
+) {
   if (!message) return "";
+  if (provider === "sportradar" && (status === "live" || status === "cache")) return "";
   if (/429|limit exceeded/i.test(message)) return "Sportradar 当前限流，已切换兜底源";
   if (/sportradar/i.test(message)) return "Sportradar 暂不可用，已切换兜底源";
   return message;
