@@ -24,7 +24,7 @@ export default function DashboardPage() {
   const { payload, loading, error } = useWorldCupQuery<WorldCupMatch[]>("/api/worldcup/fixtures", 120_000, {
     cacheKey: "worldcup.fixtures.season",
     staleMs: 300_000,
-    revalidateOnMount: false
+    revalidateOnMount: true
   });
   const matches = (payload?.data ?? []).filter(isDisplayableFixture);
   const queryFilteredMatches = filterMatchesByQuery(matches, matchSearchQuery);
@@ -43,7 +43,8 @@ export default function DashboardPage() {
   const competitions = Array.from(new Set(matches.map((item) => item.competition))).filter(Boolean);
   const activePayload = payload;
   const activeStatus = activePayload?.sourceStatus ?? "fallback";
-  const sourceIssue = formatSourceIssue(activePayload?.message);
+  const activeProvider = readPayloadProvider(activePayload?.data);
+  const sourceIssue = formatSourceIssue(activePayload?.message, activeProvider, activeStatus);
   const hasFilters = Boolean(matchSearchQuery.trim() || dateFilter || statusFilter !== "all" || competitionFilter !== "all");
   const visibleMatches = hasFilters ? filteredMatches : filteredMatches.slice(-12).reverse();
   const isMockMode = activeStatus === "fallback";
@@ -95,7 +96,7 @@ export default function DashboardPage() {
               <SectionTitle title="今日赛事内容机会池" />
               <SourceBadge
                 status={activeStatus}
-                provider={readPayloadProvider(activePayload?.data)}
+                provider={activeProvider}
                 lastUpdated={activePayload?.lastUpdated}
                 loading={loading}
                 error={error || sourceIssue}
@@ -722,8 +723,13 @@ function sourceLabel(status: SourceStatus, provider?: WorldCupMatch["source"]["p
   return "请求失败";
 }
 
-function formatSourceIssue(message?: string) {
+function formatSourceIssue(
+  message?: string,
+  provider?: WorldCupMatch["source"]["provider"],
+  status?: SourceStatus
+) {
   if (!message) return "";
+  if (provider === "sportradar" && (status === "live" || status === "cache")) return "";
   if (/No Sportradar matches for this Beijing date/i.test(message)) {
     return "今日 Sportradar 未返回匹配场次，已使用免费赛程源";
   }
