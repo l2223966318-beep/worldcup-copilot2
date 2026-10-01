@@ -57,6 +57,7 @@ jobs:
           npm run test:cloudbase-startup
           npm run test:cloudbase-release
           node scripts/test-cloudbase-workflow.mjs
+          node scripts/test-cloudbase-inspection.mjs
           npm run build
           npm run preview:cloudbase-release
       - uses: actions/upload-artifact@v4
