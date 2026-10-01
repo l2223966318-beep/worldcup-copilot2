@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node scripts/run-next.mjs dev",
+    "build": "node scripts/run-next.mjs build",
+    "start": "node scripts/run-next.mjs start",
     "lint": "next lint",
     "test:signals": "node scripts/test-signals.mjs",
     "test:hot": "node scripts/test-hot-search.mjs",
@@ -35,7 +35,9 @@
     "test:cloudbase-startup": "node scripts/test-cloudbase-startup.mjs",
     "test:cloudbase-release": "node scripts/test-cloudbase-release.mjs",
     "preview:cloudbase-release": "node scripts/release-cloudbase.mjs",
-    "build:cloudbase-sports": "node scripts/build-cloudbase-sportradar.mjs"
+    "build:cloudbase-sports": "node scripts/build-cloudbase-sportradar.mjs",
+    "test:worldcup-route": "node scripts/test-worldcup-route.mjs",
+    "test:frontend-http": "node scripts/test-frontend-http.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.0",
@@ -43,22 +45,27 @@
     "clsx": "^2.1.1",
     "docx": "^9.5.1",
     "lucide-react": "^0.468.0",
-    "next": "14.2.16",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
+    "next": "15.5.27",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
     "recharts": "^2.15.0",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
     "@types/node": "^20.17.9",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.1",
-    "eslint-config-next": "14.2.16",
-    "postcss": "^8.4.49",
+    "eslint-config-next": "15.5.27",
+    "postcss": "^8.5.28",
     "tailwindcss": "^3.4.15",
     "typescript": "^5.6.3"
+  },
+  "overrides": {
+    "next": {
+      "postcss": "$postcss"
+    }
   }
 }
