@@ -73,6 +73,8 @@ type SportradarStatus = {
   match_status?: string;
   home_score?: number | string | null;
   away_score?: number | string | null;
+  home_normaltime_score?: number | string | null;
+  away_normaltime_score?: number | string | null;
   period_scores?: Array<{
     home_score?: number | string | null;
     away_score?: number | string | null;
@@ -344,14 +346,22 @@ function normalizeSportradarScore(raw?: SportradarStatus): WorldCupMatch["score"
   const away = toNullableNumber(raw?.away_score);
   const display = home !== null && away !== null ? `${home}-${away}` : "vs";
   const firstHalf = raw?.period_scores?.find((period) => String(period.number) === "1");
-  const fulltime = raw?.period_scores?.find((period) => period.type === "regular_period" && String(period.number) === "2");
+  const secondHalf = raw?.period_scores?.find((period) => period.type === "regular_period" && String(period.number) === "2");
+  const normalTimeComplete = normalizeSportradarStatus(raw) === "finished"
+    || /overtime|extra_time|awaiting_extra|penalties/.test(`${raw?.status ?? ""} ${raw?.match_status ?? ""}`);
+  const periodScores = [firstHalf?.home_score, firstHalf?.away_score, secondHalf?.home_score, secondHalf?.away_score].map(toNullableNumber);
+  // Sportradar period scores are independent half totals, excluding extra time and penalties.
+  const summedRegularScore = periodScores.every(value => value !== null)
+    ? pairScore(periodScores[0]! + periodScores[2]!, periodScores[1]! + periodScores[3]!) : undefined;
+  const fulltime = normalTimeComplete
+    ? pairScore(raw?.home_normaltime_score, raw?.away_normaltime_score) ?? summedRegularScore : undefined;
   const penalties = raw?.period_scores?.find((period) => /penalt/i.test(period.type ?? ""));
 
   return {
     home,
     away,
     halftime: pairScore(firstHalf?.home_score, firstHalf?.away_score),
-    fulltime: pairScore(fulltime?.home_score, fulltime?.away_score),
+    fulltime,
     penalty: pairScore(penalties?.home_score, penalties?.away_score),
     display: penalties ? `${display} (pens ${penalties.home_score}-${penalties.away_score})` : display
   };

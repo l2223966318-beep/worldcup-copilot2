@@ -105,6 +105,25 @@ globalThis.fetch = async input => {
 let fixtures = await client.getSportradarWorldCupFixtures();
 assert.equal(fixtures.data[0].status, "finished", "closed penalty shootout is finished, not live");
 assert.equal(fixtures.data.length, 1, "competition match must not admit a different configured season");
+const regularPeriods = [
+  { type: "regular_period", number: 1, home_score: 1, away_score: 0 },
+  { type: "regular_period", number: 2, home_score: 1, away_score: 0 },
+];
+for (const [scores, expected] of [
+  [{ status: "closed", match_status: "ended", home_score: 2, away_score: 0, period_scores: regularPeriods }, "2-0"],
+  [{ status: "closed", match_status: "after_extra_time", home_score: 3, away_score: 0,
+    period_scores: [...regularPeriods, { type: "overtime", number: 3, home_score: 1, away_score: 0 }] }, "2-0"],
+  [{ status: "closed", match_status: "after_penalties", home_score: 3, away_score: 3,
+    home_normaltime_score: 2, away_normaltime_score: 2,
+    period_scores: [{ type: "penalties", number: 5, home_score: 4, away_score: 2 }] }, "2-2"],
+  [{ status: "live", match_status: "2nd_half", home_score: 2, away_score: 0, period_scores: regularPeriods }, undefined],
+  [{ status: "closed", match_status: "ended", home_score: 1, away_score: 0, period_scores: regularPeriods.slice(1) }, undefined],
+  [{ status: "closed", match_status: "ended", period_scores: [regularPeriods[0], { ...regularPeriods[1], home_score: null }] }, undefined],
+]) {
+  status = scores;
+  const normalized = await client.getSportradarWorldCupFixtures();
+  assert.equal(normalized.data[0].score.fulltime, expected, "fulltime must represent completed normal time, not second-half goals");
+}
 status = { status: "postponed" };
 fixtures = await client.getSportradarWorldCupFixtures();
 assert.equal(fixtures.data[0].status, "postponed");
