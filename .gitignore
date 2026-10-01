@@ -11,3 +11,5 @@ yarn-error.log*
 pnpm-debug.log*
 
 .vercel
+.codex/npm-cache/
+deliverables/cloudbase-release/

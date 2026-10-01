@@ -1,0 +1,106 @@
+import assert from "node:assert/strict";
+import http from "node:http";
+import vm from "node:vm";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { once } from "node:events";
+const localRequire = createRequire(import.meta.url);
+const { createSources } = localRequire("../cloudfunctions/api-proxy/hot-sources.js");
+const { createSportsService } = localRequire("../cloudfunctions/api-proxy/sports-service.js");
+let handler;
+let calls = [];
+const event = { id: "sr:sport_event:123", start_time: "2026-06-28T19:00:00Z", sport_event_context: { competition: { name: "FIFA World Cup" }, season: { id: "sr:season:1", year: "2026" } }, competitors: [{ name: "Argentina", qualifier: "home" }, { name: "France", qualifier: "away" }] };
+const fakeFetch = async (url, init) => {
+  const host = new URL(url).host;
+  calls.push({ host, init });
+  if (host === "api.sportradar.com") return Response.json({
+    schedules: [{ sport_event: event, sport_event_status: { status: "closed", home_score: 1, away_score: 0 } }],
+    sport_event: event, sport_event_status: { status: "closed", home_score: 1, away_score: 0 },
+    timeline: [{ type: "score_change", match_time: 115, team: "home", player: { name: "Messi" } }],
+  });
+  if (host === "api.tavily.com") return new Response(JSON.stringify({ results: [
+    { title: "Argentina football press conference", url: "https://example.org/argentina", content: "Argentina World Cup interviews" },
+    { title: "Japan football", url: "https://example.org/japan" },
+  ] }));
+  if (host === "api.tophubdata.com") return new Response('{"message":"sensitive-key"}', { status: 401 });
+  if (host === "uapis.cn") return new Response(JSON.stringify({ list: [
+    { title: "阿根廷足球新闻", url: "https://example.org/uapi" },
+    { title: "NBA决赛", url: "https://example.org/nba" },
+  ] }));
+  return new Response(JSON.stringify({ code: 200, data: [] }));
+};
+const env = { TAVILY_API_KEY: "sensitive-key", TOPHUBDATA_API_KEY: "other-secret", SPORTRADAR_API_KEY: "sports-secret", SPORTRADAR_WORLD_CUP_SEASON_ID: "sr:season:1", SPORTRADAR_REQUEST_INTERVAL_MS: "15" };
+const clientModule = { exports: {} };
+vm.runInNewContext(readFileSync(new URL("../cloudfunctions/api-proxy/sportradar.js", import.meta.url), "utf8"), {
+  exports: clientModule.exports, require: name => localRequire(`../cloudfunctions/api-proxy/${name}`),
+  process: { env }, fetch: fakeFetch, URL, AbortController, setTimeout, clearTimeout,
+});
+const sportsService = createSportsService({ client: clientModule.exports, env });
+const context = vm.createContext({
+  require: name => name === "./sports-service" ? { createSportsService: () => sportsService } : name === "./hot-sources" ? { createSources: () => createSources({ env, fetchImpl: fakeFetch }) } : { createServer: fn => { handler = fn; return { listen() {} }; } },
+  process: { env }, fetch: fakeFetch, URL, AbortController, Buffer, setTimeout, clearTimeout, console,
+});
+vm.runInContext(readFileSync(new URL("../cloudfunctions/api-proxy/index.js", import.meta.url), "utf8"), context);
+const server = http.createServer(handler);
+server.listen(0, "127.0.0.1");
+await once(server, "listening");
+const origin = `http://127.0.0.1:${server.address().port}`;
+try {
+  let response = await fetch(`${origin}/api/hot/health`);
+  const health = await response.json();
+  assert.equal(health.providers.find(p => p.provider === "tavily").configured, true);
+  assert.equal(calls.length, 0, "health must not probe upstreams");
+  response = await fetch(`${origin}/api/worldcup/health`);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).seasonConfigured, true);
+  assert.equal(calls.length, 0);
+  const fixtures = await Promise.all([fetch(`${origin}/api/worldcup/fixtures`), fetch(`${origin}/api/worldcup/fixtures`)]);
+  for (const result of fixtures) assert.equal((await result.json()).data[0].source.provider, "sportradar");
+  assert.equal(calls.filter(c => c.host === "api.sportradar.com").length, 1);
+  response = await fetch(`${origin}/api/worldcup/matches/sr%3Asport_event%3A123`);
+  assert.equal((await response.json()).data.events[0].player, "Messi");
+  response = await fetch(`${origin}/api/worldcup/fixtures`, { method: "POST" });
+  assert.equal(response.status, 405);
+  response = await fetch(`${origin}/api/hot?source=bilibili`);
+  assert.equal((await response.json()).data.length, 1);
+  response = await fetch(`${origin}/api/hot/search?q=Argentina%20World%20Cup`);
+  const search = await response.json();
+  assert.equal(search.searchMode, "multi-source-search");
+  assert.equal(search.sourceStatus, "partial");
+  assert.ok(search.data.some(item => item.provider === "tavily"));
+  assert.ok(search.data.every(item => !item.title.includes("Japan")));
+  assert.equal(search.diagnostics.find(p => p.provider === "tophubdata").status, "unauthorized");
+  assert.equal(JSON.stringify(search).includes("sensitive-key"), false);
+  const count = calls.length;
+  await fetch(`${origin}/api/hot/search?q=Argentina%20World%20Cup`);
+  assert.equal(calls.length, count, "same query must not re-charge a provider within cache TTL");
+  response = await fetch(`${origin}/api/hot`, { method: "POST" });
+  assert.equal(response.status, 405);
+  response = await fetch(`${origin}/api/hot/search?q=`);
+  assert.equal(response.status, 400);
+  assert.equal(calls.length, count, "invalid requests must not consume upstream quota");
+  response = await fetch(`${origin}/api/ai/hot-topic`, { method: "POST", body: "{broken" });
+  assert.equal(response.status, 400);
+  response = await fetch(`${origin}/api/ai/hot-topic`, { method: "POST", body: "x".repeat(262145) });
+  assert.equal(response.status, 413);
+  response = await fetch(`${origin}/api/health`);
+  assert.equal(response.status, 200, "bad requests must not take down the process");
+  const aiRequests = [
+    ["hot-topic", { topic: { title: "Argentina football" } }],
+    ["hot-topic-workflow", { action: "generate", topic: { title: "Argentina football" }, config: { platform: "B站", contentType: "选题" } }],
+    ["match-workflow", { match: { homeTeam: { name: "Argentina" }, awayTeam: { name: "France" } }, baselineTopics: [{ id: "one", title: "Football" }] }],
+    ["platform-draft", { platform: "bilibili", contentType: "topic", topicMode: "professional", matchContext: { matchInfo: { name: "Argentina vs France", score: "1-0" } }, topic: { title: "Football" }, analysis: {} }],
+    ["review-draft", { draft: "比赛复盘", matchContext: {}, evidence: [] }],
+  ];
+  const beforeAi = calls.length;
+  for (const [path, body] of aiRequests) {
+    response = await fetch(`${origin}/api/ai/${path}`, { method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" } });
+    assert.equal(response.status, 200, `${path} handler must exist and return without crashing`);
+    assert.equal((await response.json()).sourceStatus, "fallback", `${path} must disclose missing AI key`);
+  }
+  assert.equal(calls.length, beforeAi, "missing AI config must not make billable requests");
+  console.log("CloudBase HTTP: Sportradar routes, five AI fallback handlers, multi-source search, safe errors and cached quota protection passed.");
+} finally {
+  server.closeAllConnections();
+  await new Promise(resolve => server.close(resolve));
+}

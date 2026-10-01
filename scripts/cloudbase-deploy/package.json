@@ -1,0 +1,6 @@
+{
+  "name": "worldcup-cloudbase-release-tools",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": { "tencentcloud-sdk-nodejs-scf": "4.1.168" }
+}
