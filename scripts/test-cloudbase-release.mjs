@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 const source = new URL("./release-cloudbase.mjs", import.meta.url);
 assert.ok(existsSync(source), "an offline-by-default release script must exist");
-const { release, TARGET, encryptBackup, decryptBackup } = await import(source);
+const { release, TARGET, encryptBackup, decryptBackup, safeReleaseFailure } = await import(source);
+assert.equal(typeof safeReleaseFailure, "function", "release failures must provide sanitized diagnostics");
+assert.match(safeReleaseFailure(new Error("A 32-byte base64 backup key is required.")), /CLOUDBASE_BACKUP_KEY/);
+assert.match(safeReleaseFailure({ code: "AuthFailure.SecretIdNotFound", message: "private-secret" }), /credentials/);
+assert.match(safeReleaseFailure({ code: "UnauthorizedOperation", message: "private-secret" }), /permission/);
+assert.equal(safeReleaseFailure(new Error("private-secret https://private?signature=secret")).includes("private"), false);
 const zip = readFileSync(new URL("../deliverables/cloudbase/worldcup-api-v6.1-complete.zip", import.meta.url));
 const key = Buffer.alloc(32, 7).toString("base64");
 let calls = [], saved;
@@ -22,6 +27,10 @@ const fakeFetch = async url => {
   return Response.json({ ok: true, configured: true, seasonConfigured: true });
 };
 const options = { zip, env, client, fetchImpl: fakeFetch, saveBackup: async data => { saved = data; }, wait: async () => {} };
+const stages = [];
+await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName,
+  env: { ...env, CLOUDBASE_BACKUP_KEY: "invalid" }, onStage: stage => stages.push(stage) }), /backup key/);
+assert.deepEqual(stages, ["validate-inputs"], "invalid backup key must identify its stage without starting cloud calls");
 let result = await release(options);
 assert.equal(result.mode, "preview");
 assert.equal(calls.length, 0, "default preview must never contact Tencent");
