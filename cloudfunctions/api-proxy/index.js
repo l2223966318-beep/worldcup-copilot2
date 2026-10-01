@@ -601,7 +601,7 @@ async function callDeepSeekJson(messages, options = {}) {
   const apiKey = String(options.apiKey || process.env.DEEPSEEK_API_KEY || "").trim();
   if (!apiKey) return { ok: false, message: "DEEPSEEK_API_KEY is not configured." };
 
-  const model = String(options.model || process.env.DEEPSEEK_MODEL || DEFAULT_DEEPSEEK_MODEL).trim();
+  const model = String(options.model || process.env.DEEPSEEK_MODEL || process.env.DEEPSEEK_MODEL_FAST || DEFAULT_DEEPSEEK_MODEL).trim();
 
   async function requestOnce({ jsonMode }) {
     const controller = new AbortController();
@@ -1389,9 +1389,29 @@ async function handleRequest(req, res) {
   const url = new URL(req.url || "/", "http://localhost");
   const path = url.pathname;
 
+  if (path === "/api/source-debug") {
+    if (req.method !== "GET") {
+      res.setHeader("allow", "GET");
+      return json(res, 405, payload("error", null, "Method not allowed."));
+    }
+    const health = sportsService.health();
+    return json(res, 200, {
+      configured: {
+        apiKey: health.configured,
+        accessLevel: String(process.env.SPORTRADAR_ACCESS_LEVEL || "trial").trim(),
+        languageCode: String(process.env.SPORTRADAR_LANGUAGE_CODE || "en").trim(),
+        competitionId: String(process.env.SPORTRADAR_WORLD_CUP_COMPETITION_ID || "sr:competition:16").trim(),
+        seasonId: String(process.env.SPORTRADAR_WORLD_CUP_SEASON_ID || "").trim() || null
+      },
+      sportradar: { attempted: false, ok: null, status: "not-probed", recent: health.recent },
+      fallbackOrder: ["sportradar", "worldcup26-free", "thestatsapi-fixtures", "mock"],
+      note: "Passive diagnostics only. No upstream request was made; see recent for the last cached result."
+    });
+  }
+
   if (path === "/api/ai/health" && req.method === "GET") {
     const configured = Boolean(String(process.env.DEEPSEEK_API_KEY || "").trim());
-    const model = String(process.env.DEEPSEEK_MODEL || "deepseek-flash").trim();
+    const model = String(process.env.DEEPSEEK_MODEL || process.env.DEEPSEEK_MODEL_FAST || DEFAULT_DEEPSEEK_MODEL).trim();
 
     if (url.searchParams.get("probe") !== "1") {
       return json(res, 200, {
