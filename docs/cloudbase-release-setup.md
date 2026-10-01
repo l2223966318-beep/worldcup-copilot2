@@ -12,7 +12,7 @@
 
 1. 在 `l2223966318-beep/worldcup-copilot2` 审阅并合并发布流程 PR。工作流必须位于默认分支才能从 Actions 页面手动运行。不要把本地其他演示改动一起覆盖到网站分支。
 2. 打开仓库 Settings > Environments，创建 `cloudbase-production`。先设置 Required reviewers 和仅允许 `main` 发布，再配置部署凭据。**仅在 YAML 写 environment 名称并不会自动建立审批保护。** 如果账户无法设置保护，不要配置正式发布凭据。
-3. 经独立授权后，使用腾讯云受限子账号或临时凭据。仅允许原环境、原函数所需的 `scf:GetFunction`、`scf:GetFunctionAddress`、`scf:UpdateFunctionCode`。通过腾讯云权限编辑器核对资源范围，不使用主账号全权限 Key，也不把 Key 发进聊天或提交源码。
+3. 经独立授权后，使用腾讯云专用子账号或临时凭据，仅允许 `scf:GetFunction`、`scf:GetFunctionAddress`、`scf:UpdateFunctionCode` 三项操作，不附加管理员、SCF 全权限或其他预设宽权限策略。官方 CAM 权限表将这些 SCF 接口列为操作级权限，使用 `resource: ["*"]` 可能覆盖账号下所有 SCF 函数，不能宣称凭据只对原环境或单个函数有效。原环境和函数锁定仅由本项目脚本实施；管理员必须明确接受云端授权范围，否则先调整部署方案，不创建或关联该策略。不要使用主账号全权限 Key，也不要把 Key 发进聊天或提交源码。
 4. 在该 GitHub Environment 的 Secrets 保存 `TENCENTCLOUD_SECRET_ID`、`TENCENTCLOUD_SECRET_KEY`；临时凭据另存 `TENCENTCLOUD_SESSION_TOKEN`。保存 `CLOUDBASE_BACKUP_KEY`：管理员自行生成的随机 32 字节密钥，标准 Base64 编码，并在私有密码库另存一份。它用于加密线上代码备份，丢失后无法恢复备份。
 5. 只有部署权限已正式批准且上述保护已配置，才在 Environment 的 Variables 设置 `CLOUDBASE_RELEASE_AUTHORIZED=true`。此开关只是额外防误操作，不能解除平台安全拒绝。DeepSeek、Sportradar 等业务 Key 仍保留在原腾讯云函数环境变量中，不转存到此流程。
 
@@ -46,4 +46,4 @@ npm.cmd run preview:cloudbase-release
 
 本次仅以模拟 SDK/HTTP 验证发布步骤，尚未验证真实 CloudBase 对 SCF SDK 的访问权限和下载地址。如果目标类型、权限、版本或健康检查不符，流程会停止，不能据此宣称已经发布成功。
 
-参考：[腾讯云代码更新接口](https://cloud.tencent.com/document/api/583/18581)、[代码下载接口](https://cloud.tencent.com/document/product/583/37164)、[GitHub 环境保护](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)。
+参考：[SCF CAM 权限表](https://cloud.tencent.com/document/product/598/70005)、[腾讯云代码更新接口](https://cloud.tencent.com/document/api/583/18581)、[代码下载接口](https://cloud.tencent.com/document/product/583/37164)、[GitHub 环境保护](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments)。
