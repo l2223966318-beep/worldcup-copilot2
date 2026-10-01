@@ -1,0 +1,30 @@
+name: CloudBase Read-Only Inspection
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: cloudbase-production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated official SDK
+        run: npm ci --prefix scripts/cloudbase-deploy --ignore-scripts --no-audit --no-fund
+      - name: Report configuration presence without secrets
+        env:
+          TENCENTCLOUD_SECRET_ID: ${{ secrets.TENCENTCLOUD_SECRET_ID }}
+          TENCENTCLOUD_SECRET_KEY: ${{ secrets.TENCENTCLOUD_SECRET_KEY }}
+          TENCENTCLOUD_SESSION_TOKEN: ${{ secrets.TENCENTCLOUD_SESSION_TOKEN }}
+          CLOUDBASE_RELEASE_AUTHORIZED: ${{ vars.CLOUDBASE_RELEASE_AUTHORIZED }}
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          node -e 'if (process.env.RELEASE_REF !== "refs/heads/main") { console.error("Only main may inspect production configuration"); process.exit(1); }'
+          node scripts/inspect-cloudbase.mjs
