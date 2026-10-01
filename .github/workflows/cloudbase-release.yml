@@ -47,6 +47,7 @@ jobs:
           npm run test:cloudbase-request
           npm run test:cloudbase-sports
           npm run test:cloudbase-api
+          npm run test:cloudbase-hot
           npm run test:cloudbase-startup
           npm run test:cloudbase-release
           node scripts/test-cloudbase-workflow.mjs

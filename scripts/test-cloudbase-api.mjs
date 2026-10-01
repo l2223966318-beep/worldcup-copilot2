@@ -13,6 +13,9 @@ const event = { id: "sr:sport_event:123", start_time: "2026-06-28T19:00:00Z", sp
 const fakeFetch = async (url, init) => {
   const host = new URL(url).host;
   calls.push({ host, init });
+  if (host === "api.deepseek.com") return Response.json({
+    choices: [{ message: { content: "{}" }, finish_reason: "stop" }]
+  });
   if (host === "api.sportradar.com") return Response.json({
     schedules: [{ sport_event: event, sport_event_status: { status: "closed", home_score: 1, away_score: 0 } }],
     sport_event: event, sport_event_status: { status: "closed", home_score: 1, away_score: 0 },
@@ -54,6 +57,17 @@ try {
   assert.equal(response.status, 200);
   assert.equal((await response.json()).seasonConfigured, true);
   assert.equal(calls.length, 0);
+  response = await fetch(`${origin}/api/source-debug`);
+  assert.equal(response.status, 200, "the existing source-debug entry must remain available");
+  const debug = await response.json();
+  assert.equal(debug.configured.apiKey, true);
+  assert.equal(debug.configured.seasonId, "sr:season:1");
+  assert.equal(debug.sportradar.attempted, false);
+  assert.equal(debug.sportradar.ok, null, "an unprobed source must not be labelled successful or failed");
+  assert.equal(JSON.stringify(debug).includes("sports-secret"), false);
+  assert.equal(calls.length, 0, "source-debug must not spend upstream quota");
+  response = await fetch(`${origin}/api/source-debug`, { method: "POST" });
+  assert.equal(response.status, 405);
   const fixtures = await Promise.all([fetch(`${origin}/api/worldcup/fixtures`), fetch(`${origin}/api/worldcup/fixtures`)]);
   for (const result of fixtures) assert.equal((await result.json()).data[0].source.provider, "sportradar");
   assert.equal(calls.filter(c => c.host === "api.sportradar.com").length, 1);
@@ -99,6 +113,25 @@ try {
     assert.equal((await response.json()).sourceStatus, "fallback", `${path} must disclose missing AI key`);
   }
   assert.equal(calls.length, beforeAi, "missing AI config must not make billable requests");
+  env.DEEPSEEK_API_KEY = "ai-test-secret";
+  env.DEEPSEEK_MODEL_FAST = "configured-fast-model";
+  response = await fetch(`${origin}/api/ai/hot-topic`, {
+    method: "POST", body: JSON.stringify({ topic: { title: "Argentina football" } })
+  });
+  const aiResult = await response.json();
+  assert.equal(aiResult.model, "configured-fast-model", "existing MODEL_FAST configuration must be preserved");
+  const aiCall = calls.find(c => c.host === "api.deepseek.com");
+  const sent = JSON.parse(aiCall.init.body);
+  assert.equal(sent.model, "configured-fast-model");
+  assert.equal(sent.thinking.type, "disabled");
+  assert.equal(sent.response_format.type, "json_object");
+  response = await fetch(`${origin}/api/ai/health`);
+  assert.equal((await response.json()).model, "configured-fast-model", "health must report the effective model");
+  env.DEEPSEEK_MODEL = "preferred-model";
+  response = await fetch(`${origin}/api/ai/hot-topic`, {
+    method: "POST", body: JSON.stringify({ topic: { title: "Argentina football" } })
+  });
+  assert.equal((await response.json()).model, "preferred-model", "MODEL takes precedence over MODEL_FAST");
   console.log("CloudBase HTTP: Sportradar routes, five AI fallback handlers, multi-source search, safe errors and cached quota protection passed.");
 } finally {
   server.closeAllConnections();

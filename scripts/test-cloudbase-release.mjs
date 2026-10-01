@@ -8,7 +8,7 @@ const key = Buffer.alloc(32, 7).toString("base64");
 let calls = [], saved;
 const env = { TENCENTCLOUD_SECRET_ID: "test-id", TENCENTCLOUD_SECRET_KEY: "test-secret", CLOUDBASE_BACKUP_KEY: key, CLOUDBASE_RELEASE_AUTHORIZED: "true" };
 const client = {
-  GetFunction: async params => { calls.push(["read", params]); return { FunctionName: TARGET.functionName, Type: "HTTP", Status: "Active" }; },
+  GetFunction: async params => { calls.push(["read", params]); return { FunctionName: TARGET.functionName, Type: "HTTP", Status: "Active", Environment: { Variables: [] } }; },
   GetFunctionAddress: async params => { calls.push(["backup", params]); return { Url: "https://code.cos.ap-shanghai.myqcloud.com/download?signature=private" }; },
   UpdateFunctionCode: async params => { calls.push(["update", params]); return { RequestId: "test" }; },
 };
@@ -36,7 +36,35 @@ const encrypted = encryptBackup(zip, key);
 assert.deepEqual(decryptBackup(encrypted, key), zip);
 assert.equal(encrypted.includes(Buffer.from("index.js")), false);
 await assert.rejects(async () => decryptBackup(encrypted, Buffer.alloc(32, 8).toString("base64")));
-result = await release({ ...options, apply: true, confirmFunction: TARGET.functionName });
+for (const season of [undefined, "", "   ", "not-a-season"]) {
+  calls = [];
+  const beforeFetch = fetchCount;
+  const variables = [{ Key: "SPORTRADAR_API_KEY", Value: "private-provider-key" }];
+  if (season !== undefined) variables.push({ Key: "SPORTRADAR_WORLD_CUP_SEASON_ID", Value: season });
+  await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName,
+    client: { ...client, GetFunction: async params => {
+      calls.push(["read", params]);
+      return { FunctionName: TARGET.functionName, Type: "HTTP", Status: "Active", Environment: { Variables: variables } };
+    } } }), /SPORTRADAR_WORLD_CUP_SEASON_ID/);
+  assert.deepEqual(calls.map(([method]) => method), ["read"], "Invalid season configuration must stop before backup or code update");
+  assert.equal(fetchCount, beforeFetch, "Preflight must not probe paid providers or download code");
+}
+calls = [];
+await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName,
+  client: { ...client, GetFunction: async params => {
+    calls.push(["read", params]);
+    return { FunctionName: TARGET.functionName, Type: "HTTP", Status: "Active" };
+  } } }), /environment variables could not be verified/);
+assert.deepEqual(calls.map(([method]) => method), ["read"]);
+calls = [];
+result = await release({ ...options, apply: true, confirmFunction: TARGET.functionName,
+  client: { ...client, GetFunction: async params => {
+    calls.push(["read", params]);
+    return { FunctionName: TARGET.functionName, Type: "HTTP", Status: "Active", Environment: { Variables: [
+      { Key: "SPORTRADAR_API_KEY", Value: "private-provider-key" },
+      { Key: "SPORTRADAR_WORLD_CUP_SEASON_ID", Value: " sr:season:123456 " }
+    ] } };
+  } } });
 assert.equal(result.mode, "verified");
 assert.deepEqual(decryptBackup(saved, key), zip);
 const update = calls.find(([method]) => method === "update")[1];
@@ -47,6 +75,7 @@ assert.deepEqual(Buffer.from(update.ZipFile, "base64"), zip);
 assert.deepEqual(Object.keys(update).sort(), ["CodeSource", "FunctionName", "Namespace", "Publish", "ZipFile"].sort(), "release must not change runtime, env vars or routes");
 assert.equal(JSON.stringify(result).includes("private"), false);
 assert.equal(JSON.stringify(result).includes("test-secret"), false);
+assert.equal(JSON.stringify(result).includes("private-provider-key"), false);
 calls = [];
 await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName, saveBackup: async () => { throw new Error("disk failure"); } }), /disk failure/);
 assert.equal(calls.some(([method]) => method === "update"), false, "failed backup must prevent release");

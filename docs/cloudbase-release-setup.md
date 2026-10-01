@@ -8,6 +8,8 @@
 
 固定目标：上海 / `scti-test-2026-d6g3udtld9f8e08f5` / `worldcup-api-proxy1`。仅更新 `$LATEST` 的代码，不修改函数密钥、运行时、HTTP 路由、触发器或别名。若路由指向已发布版本或别名，更新 `$LATEST` 不会自动切换路由，需要先由管理员核对。
 
+发布前会通过 GetFunction 的 Environment.Variables 核对配置，不打印变量值、不探测付费数据源。无法读取完整变量列表时停止；已启用 SPORTRADAR_API_KEY 时，必须显式配置 SPORTRADAR_WORLD_CUP_SEASON_ID，格式为 sr:season:数字。缺失、空白或格式错误都会在下载备份和更新代码之前停止。此检查只确认配置存在和格式，不证明赛季属于世界杯，也不证明上游账户有访问权限；管理员仍需核对赛季来源。没有配置 Sportradar 密钥的备用数据模式保持可用。
+
 ## 首次接通需要管理员操作
 
 1. 在 `l2223966318-beep/worldcup-copilot2` 审阅并合并发布流程 PR。工作流必须位于默认分支才能从 Actions 页面手动运行。不要把本地其他演示改动一起覆盖到网站分支。
