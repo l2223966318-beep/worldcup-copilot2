@@ -1,16 +1,14 @@
-import { Info } from "lucide-react";
-
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const notes = [
-  "2026 世界杯赛程、比分、分组、球队和场馆优先使用 WorldCup26 免费 API，备用赛程来自 TheStatsAPI 免费静态数据。",
-  "当前版本使用示例数据、用户输入数据和手动导入数据。",
-  "免费公开源通常不包含完整射门分布、传球线路等深度技术统计，相关分析会在页面中标注数据覆盖限制。",
-  "不后台抓取抖音、小红书、B站、微博等平台登录内容。",
-  "不保存账号、密码、Cookie 或个人平台会话。",
-  "AI 生成内容仅作为创作辅助，不替代人工编辑和事实核查。",
-  "正式版本可接入授权体育数据 API、公开数据集或机构自有数据源。"
+  { title: "赛事来源", body: "配置 Sportradar 接口后优先读取其赛程、比分、统计和事件；免费备用源为 WorldCup26 与 TheStatsAPI。页面标注实际返回的来源，不把备用数据写成 Sportradar 数据。" },
+  { title: "热点来源", body: "热点通过已配置的搜索、榜单接口或手动输入获取。来源链接用于回查；热度和关键词关联不等于事实已确认，也不代表可直接转载原始内容。" },
+  { title: "时间与状态", body: "赛程按北京时间展示。更新时间是系统获取数据的时间，不是赛事发生时间；历史赛事、缓存结果和实时返回分别标注，比赛池不等同于当天赛程。" },
+  { title: "示例与输入", body: "经典案例用于演示完整流程，不作为当日新闻。用户手动输入的比赛或热点尚需核验，来源真实性不能仅靠 AI 确认。" },
+  { title: "数据缺失", body: "缺少技术统计时显示未知，不补写成零。免费源不一定包含完整事件和深度统计；不能据此推断伤病、争议、球员言论或其他未提供的事实。" },
+  { title: "凭据与隐私", body: "设置页填写的个人 API Key 保存在当前浏览器 localStorage，并按请求发送给本站服务端调用对应接口。共享 AI 访问口令仅存于当前标签页的会话存储；不要在公共电脑上保留个人 Key。" },
+  { title: "AI 与人工审核", body: "AI 用于分析、选题和创作辅助。本地核验只是规则检查，不是事实认证；模型不可用或审核信息不完整时，保留待人工确认状态。" },
+  { title: "使用边界", body: "公开可访问不等于拥有转载、商用或再分发许可。正式使用仍需核实接口条款、原素材版权和个人信息处理要求；当前版本不自动发布到内容平台。" }
 ];
 
 export default function DataNotesPage() {
@@ -24,19 +22,14 @@ export default function DataNotesPage() {
         </p>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <dl className="divide-y divide-emerald-100 border-y border-emerald-100">
         {notes.map((note) => (
-          <Card key={note}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Info className="h-5 w-5 text-emerald-200" />
-                说明
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="text-base leading-7 text-slate-200">{note}</CardContent>
-          </Card>
+          <div key={note.title} className="grid gap-3 py-5 md:grid-cols-[160px_minmax(0,1fr)]">
+            <dt className="text-lg font-bold text-slate-950">{note.title}</dt>
+            <dd className="max-w-4xl text-base leading-7 text-slate-600">{note.body}</dd>
+          </div>
         ))}
-      </div>
+      </dl>
     </div>
   );
 }

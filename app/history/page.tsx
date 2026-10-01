@@ -27,7 +27,7 @@ export default function HistoryPage() {
         stage: item.match.stage,
         savedAt: new Date().toISOString(),
         platforms: item.generatedPlatforms.length ? item.generatedPlatforms : ["示例报告"],
-        route: `/matches/${item.match.id}`
+        route: `/matches/?id=${encodeURIComponent(item.match.id)}`
       })),
     [generated]
   );
@@ -52,7 +52,7 @@ export default function HistoryPage() {
             </p>
           </div>
           {!hasRecords ? (
-            <Link href="/matches/argentina-france-2022-final" className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5">
+            <Link href="/matches/?id=argentina-france-2022-final" className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5">
               进入经典样例完整演示
             </Link>
           ) : null}

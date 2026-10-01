@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - competition-static
+  pull_request:
+    branches:
+      - competition-static
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -14,16 +21,29 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "22"
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
+
+      - name: Dependency audit
+        run: npm audit --audit-level=low
+
+      - name: Offline frontend regressions
+        run: |
+          node --input-type=module -e 'import {readFileSync} from "node:fs"; import {execFileSync} from "node:child_process"; for (const [name, command] of Object.entries(JSON.parse(readFileSync("package.json", "utf8")).scripts)) { if (name.startsWith("test:") && !/browser|static-output/.test(name)) { console.log(name); execFileSync(process.execPath, command.split(" ").slice(1), {stdio:"inherit"}); } }'
 
       - name: Build static export
         run: npm run build
 
       - name: Verify static output
-        run: |
-          test -f out/index.html
-          test -d out/_next
+        run: npm run test:static-output
+
+      - name: Upload static frontend (not a Tencent deployment)
+        uses: actions/upload-artifact@v4
+        with:
+          name: worldcup-v6.3-static-site
+          path: out/
+          if-no-files-found: error
+          retention-days: 14

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const source = readFileSync(new URL("../app/matches/[id]/page.tsx", import.meta.url), "utf8");
+const source = readFileSync(new URL("../app/matches/page.tsx", import.meta.url), "utf8");
 
 assert.match(source, />\s*生成类型\s*</);
 assert.match(source, />\s*风格类型\s*</);
@@ -13,10 +13,10 @@ assert.match(source, /const \[reviewedDraft, setReviewedDraft\] = useState\(""\)
 assert.match(source, /const reviewFlow = reviewedDraft === reviewSourceText && reviewedDraft/);
 assert.match(source, /setReviewedDraft\(draftSnapshot\)/);
 assert.match(source, /onChange=\{\(event\) => \{[\s\S]*?setReviewedDraft\(""\)/);
-assert.match(source, /const AI_WORKFLOW_MAX_ATTEMPTS = 2/);
-assert.match(source, /for \(let attempt = 1; attempt <= AI_WORKFLOW_MAX_ATTEMPTS; attempt \+= 1\)/);
+assert.doesNotMatch(source, /AI_WORKFLOW_MAX_ATTEMPTS|AI_WORKFLOW_RETRY_DELAY_MS/,
+  "automatic AI failures must not trigger another paid model request");
 assert.match(source, /payload\.sourceStatus === "live"/);
-assert.match(source, /setTimeout\(resolve, AI_WORKFLOW_RETRY_DELAY_MS\)/);
+assert.match(source, /headers: getAiRequestHeaders\(\)/);
 assert.match(source, /<ReadableTextBlock text=\{generatedText\} emphasizeTitles/);
 
 const readableTextSource = readFileSync(new URL("../components/ui/readable-text.tsx", import.meta.url), "utf8");

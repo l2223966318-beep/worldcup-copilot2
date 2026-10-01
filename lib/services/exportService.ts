@@ -1,4 +1,4 @@
-import { ensurePublishable } from "@/lib/ai/quality";
+import { cleanText, ensurePublishable } from "@/lib/ai/quality";
 import type { AnalysisResult, ContentPackage, MatchContext, PlatformDraft, ReviewResultSnapshot, WorkflowTopic } from "@/types/workflow";
 
 export function createContentPackage(input: {
@@ -38,36 +38,36 @@ export function createPackageMarkdown(contentPackage: ContentPackage) {
     `- 目标平台：${platformName(platformDraft.platform)}`,
     "",
     `## ${primaryHeading}`,
-    ensurePublishable(primarySection?.content ?? platformDraft.body),
+    cleanText(primarySection?.content ?? platformDraft.body),
     "",
     "## 编辑参考版",
-    `- 核心选题：${ensurePublishable(selectedTopic.title)}`,
-    `- 核心看点：${ensurePublishable(selectedTopic.coreAngle)}`,
-    `- 制作形式：${ensurePublishable(selectedTopic.recommendedFormat)}`,
-    `- 选题说明：${ensurePublishable(selectedTopic.reason)}`,
+    `- 核心选题：${cleanText(selectedTopic.title)}`,
+    `- 核心看点：${cleanText(selectedTopic.coreAngle)}`,
+    `- 制作形式：${cleanText(selectedTopic.recommendedFormat)}`,
+    `- 选题说明：${cleanText(selectedTopic.reason)}`,
     "",
-    ...(referenceSection?.content ? [ensurePublishable(referenceSection.content), ""] : []),
-    ensurePublishable(analysis.summary),
+    ...(referenceSection?.content ? [cleanText(referenceSection.content), ""] : []),
+    cleanText(analysis.summary),
     "",
-    ensurePublishable(analysis.winLossReason),
+    cleanText(analysis.winLossReason),
     "",
     "## 审核结果",
     `- 等级：${reviewResult.level}`,
     ...(reviewResult.level === "待审核" ? [] : [`- 风险分：${reviewResult.score}`]),
-    `- 建议：${ensurePublishable(reviewResult.advice)}`,
+    `- 建议：${cleanText(reviewResult.advice)}`,
     "",
     "## 风险提示",
-    ...(platformRiskSection?.content ? [ensurePublishable(platformRiskSection.content)] : []),
+    ...(platformRiskSection?.content ? [cleanText(platformRiskSection.content)] : []),
     ...reviewResult.findings.map((finding) => {
       const ids = finding.evidenceIds?.length ? `（依据 ${finding.evidenceIds.join("、")}）` : "";
-      return `- ${finding.type}${ids}：${ensurePublishable(finding.rewrite)}`;
+      return `- ${finding.type}${ids}：${cleanText(finding.rewrite)}`;
     }),
     "",
     "## 证据与来源",
     ...(evidence.length
       ? evidence.map((item) => `- ${item.id}｜${item.source}｜${item.text}${item.sourceUrl ? `｜${item.sourceUrl}` : ""}`)
       : ["- 当前报告未附可核验来源。"])
-  ].map((line) => ensurePublishable(line)).join("\n");
+  ].join("\n");
 }
 
 export function createPackageText(contentPackage: ContentPackage) {

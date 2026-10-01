@@ -23,6 +23,7 @@ import { copyToClipboard } from "@/lib/download";
 import { HighlightedText } from "@/components/ui/readable-text";
 import { buildChartCopy, buildTeamRadarData } from "@/lib/services/matchDetailPresentation";
 import { getSportTheme, type SportTheme } from "@/lib/sport-theme";
+import { hasVerifiedStatistics } from "@/lib/sports/statistics";
 
 type DataAngle = {
   label: string;
@@ -41,6 +42,9 @@ export function InsightCharts({
   theme?: SportTheme;
   dataAngles?: DataAngle[];
 }) {
+  if (match.verifiedStats === false || !hasVerifiedStatistics(match.stats)) {
+    return <p className="py-6 text-sm text-slate-600">技术统计尚不完整，暂不生成对比图表。可先查看已确认比分和比赛事件。</p>;
+  }
   const possessionData = [
     { team: match.teamA, value: match.stats.teamA.possession },
     { team: match.teamB, value: match.stats.teamB.possession }

@@ -52,9 +52,7 @@ const FACT_TERM_GROUPS = [
 export function buildEvidencePack(matchContext: MatchContext, hotspots: EvidenceHotspot[] = []): EvidenceItem[] {
   const { matchInfo, stats } = matchContext;
   const evidence: EvidenceItem[] = [];
-  const source = matchInfo.sourceStatus === "live" || matchInfo.sourceStatus === "cache"
-    ? "赛事数据源"
-    : "赛事数据";
+  const source = matchInfo.sourceName || "赛事数据";
 
   evidence.push({
     id: "",
@@ -64,7 +62,8 @@ export function buildEvidencePack(matchContext: MatchContext, hotspots: Evidence
     occurredAt: matchInfo.time,
     relevance: 100
   });
-  if (matchContext.verifiedStats !== false) {
+  if (matchContext.verifiedStats !== false
+    && [...Object.values(stats.teamA), ...Object.values(stats.teamB)].every(value => typeof value === "number" && Number.isFinite(value))) {
     evidence.push({
       id: "",
       type: "match_stat",
@@ -88,7 +87,7 @@ export function buildEvidencePack(matchContext: MatchContext, hotspots: Evidence
     });
   }
 
-  matchContext.keyEvents.filter((event) => event.minute !== "-" && event.team !== "数据源").slice(0, 10).forEach((event) => {
+  matchContext.keyEvents.filter((event) => event.minute !== "-" && event.team !== "数据源").forEach((event) => {
     const description = cleanText(event.description);
     evidence.push({
       id: "",
@@ -120,7 +119,6 @@ export function buildEvidencePack(matchContext: MatchContext, hotspots: Evidence
       return true;
     })
     .sort((a, b) => b.relevance - a.relevance)
-    .slice(0, 16)
     .map((item, index) => ({ ...item, id: `E${String(index + 1).padStart(2, "0")}` }));
 }
 
@@ -158,6 +156,20 @@ export function calculateEvidenceRiskScore(unsupportedClaims: number) {
   return Math.min(56, 18 + (unsupportedClaims - 1) * 6);
 }
 
+export function hasCompleteReview(value: unknown, draft: string) {
+  if (!value || typeof value !== "object") return false;
+  const data = value as Record<string, unknown>;
+  if (typeof data.score !== "number" || !Number.isFinite(data.score) || data.score < 0 || data.score > 100
+    || !Array.isArray(data.findings)) return false;
+  return data.findings.every(finding => {
+    if (!finding || typeof finding !== "object") return false;
+    const item = finding as Record<string, unknown>;
+    return typeof item.sentence === "string" && Boolean(item.sentence.trim()) && draft.includes(item.sentence.trim())
+      && (item.evidenceStatus === undefined || ["missing", "overreach", "risk"].includes(String(item.evidenceStatus)))
+      && (item.evidenceIds === undefined || (Array.isArray(item.evidenceIds) && item.evidenceIds.every(id => typeof id === "string")));
+  });
+}
+
 export function finalizeReviewRiskScore(
   rawScore: number,
   evidenceStatuses: Array<"missing" | "overreach" | "risk">
@@ -173,35 +185,105 @@ export function evidenceLabel(item: EvidenceItem) {
 }
 
 function findSupportingEvidence(sentence: string, evidence: EvidenceItem[]) {
+  const statClaims = parseStatFacts(sentence);
+  if (statClaims.length) {
+    // A recognized statistic must not hide another unchecked number or score in the same clause.
+    const remaining = normalizeStatOrder(sentence).replace(/(控球率?|射门|射正|角球|犯规|黄牌|红牌)\s*\d+(?:\.\d+)?\s*(%|次|张)?(?:\s*(?:比|对)\s*\d+(?:\.\d+)?\s*(%|次|张)?)?/g, "");
+    if (/\d/.test(remaining)) return [];
+    const matches = statClaims.map(claim => evidence.filter(item => {
+      const facts = parseStatFacts(item.text);
+      if (claim.pairedValue !== undefined) {
+        const pair = facts.filter(fact => fact.metric === claim.metric);
+        return pair.length === 2 && pair[0].value === claim.value && pair[1].value === claim.pairedValue
+          && pair.every(fact => fact.unit === claim.unit)
+          && (!claim.subject || pair[0].subject === claim.subject);
+      }
+      return facts.some(fact => fact.metric === claim.metric && fact.value === claim.value
+        && fact.unit === claim.unit && (!claim.subject || fact.subject === claim.subject));
+    }));
+    return matches.every(items => items.length) ? Array.from(new Set(matches.flat())) : [];
+  }
+
+  const difference = sentence.match(/(控球率?|射门|射正|角球|犯规|黄牌|红牌)(?:差|差距)(?:为|是)?\s*(\d+(?:\.\d+)?)(%|次|张)?/);
+  if (difference) {
+    const subjects = sentence.slice(0, difference.index).replace(/的$/, "").split(/与|和|对比/).map(normalize).filter(Boolean);
+    return evidence.filter(item => {
+      const facts = parseStatFacts(item.text).filter(fact => fact.metric === normalizeMetric(difference[1]));
+      return subjects.length === 2 && facts.length === 2
+        && subjects.every(subject => facts.some(fact => fact.subject === subject))
+        && facts[0].unit === facts[1].unit
+        && (!difference[3] || facts[0].unit === difference[3])
+        && Math.abs(facts[0].value - facts[1].value) === Number(difference[2]);
+    });
+  }
+
+  const score = sentence.match(/\d+\s*[-比:]\s*\d+/)?.[0];
+  if (score) {
+    const resultClaim = sentence.match(/^(.+?)(?:以)?\s*(\d+)\s*[-比:]\s*(\d+)\s*(?:战胜|击败|不敌|负于)\s*(.+)$/);
+    return evidence.filter(item => {
+      const scoreboard = item.text.match(/^(.+?)\s+vs\s+(.+?)[，,]\s*比分\s*(\d+)\s*[-比:]\s*(\d+)/i);
+      if (!scoreboard) return false;
+      if (resultClaim) {
+        const homeFirst = normalize(resultClaim[1]) === normalize(scoreboard[1]) && normalize(resultClaim[4]) === normalize(scoreboard[2]);
+        const awayFirst = normalize(resultClaim[1]) === normalize(scoreboard[2]) && normalize(resultClaim[4]) === normalize(scoreboard[1]);
+        const expected = homeFirst ? [scoreboard[3], scoreboard[4]] : awayFirst ? [scoreboard[4], scoreboard[3]] : [];
+        const won = /战胜|击败/.test(sentence);
+        return expected[0] === resultClaim[2] && expected[1] === resultClaim[3]
+          && (won ? Number(expected[0]) > Number(expected[1]) : Number(expected[0]) < Number(expected[1]));
+      }
+      // Only an explicit scoreboard statement can omit the two team names.
+      return /^比分(?:变为|为|是)?\s*\d+/.test(sentence)
+        && score.replace(/\s|比|:/g, char => char === "比" || char === ":" ? "-" : "") === `${scoreboard[3]}-${scoreboard[4]}`;
+    });
+  }
+
   const normalizedSentence = normalize(sentence);
-  const numbers = extractNumbers(sentence);
-  const keywords = FACT_KEYWORDS.filter((keyword) => normalizedSentence.includes(normalize(keyword)));
   const factGroups = FACT_TERM_GROUPS.filter((group) =>
     group.some((term) => normalizedSentence.includes(normalize(term)))
   );
-
-  const candidates = evidence.filter((item) => {
+  const minute = sentence.match(/(\d+(?:\+\d+)?)(?:分钟|['’])/ )?.[1];
+  const subject = eventSubject(sentence);
+  return evidence.filter((item) => {
+    if (item.type !== "match_event") return false;
     const normalizedEvidence = normalize(item.text);
-    const keywordMatch =
-      (!keywords.length && !factGroups.length) ||
-      keywords.some((keyword) => normalizedEvidence.includes(normalize(keyword))) ||
-      factGroups.some((group) => group.some((term) => normalizedEvidence.includes(normalize(term))));
-    const teamOrNameMatch = sharedNamedTerms(sentence, item.text) > 0;
-    return keywordMatch && (teamOrNameMatch || numbers.length > 0);
+    const keywordMatch = factGroups.length > 0 && factGroups.every(group => group.some(term => normalizedEvidence.includes(normalize(term))));
+    const evidenceMinute = item.minute?.replace(/['’]/g, "") || item.text.match(/^(\d+(?:\+\d+)?)(?:分钟|['’])/ )?.[1];
+    return keywordMatch && (!minute || minute === evidenceMinute)
+      && Boolean(subject) && normalizedEvidence.includes(normalize(subject));
   });
+}
 
-  if (!numbers.length) return candidates;
-
-  const matched = new Set<EvidenceItem>();
-  for (const number of numbers) {
-    const numberEvidence = candidates.filter((item) => {
-      const evidenceNumbers = extractNumbers(item.text);
-      return evidenceNumbers.includes(number) || isDerivedDifference(number, evidenceNumbers, sentence);
-    });
-    if (!numberEvidence.length) return [];
-    numberEvidence.forEach((item) => matched.add(item));
+function parseStatFacts(text: string) {
+  text = normalizeStatOrder(text);
+  const facts: Array<{ subject: string; metric: string; value: number; unit: string; pairedValue?: number }> = [];
+  let previousEnd = 0;
+  let subject = "";
+  for (const match of text.matchAll(/(控球率?|射门|射正|角球|犯规|黄牌|红牌)\s*(\d+(?:\.\d+)?)\s*(%|次|张)?/g)) {
+    const prefix = text.slice(previousEnd, match.index).replace(/^[\s，,；;、与和]+/, "").replace(/^对比/, "").trim();
+    if (prefix) subject = normalize(prefix.replace(/的$/, ""));
+    const metric = normalizeMetric(match[1]);
+    const unit = match[3] || (metric === "控球率" ? "%" : metric.endsWith("牌") ? "张" : "次");
+    const end = match.index! + match[0].length;
+    const pair = text.slice(end).match(/^\s*(?:比|对)\s*(\d+(?:\.\d+)?)/);
+    facts.push({ subject, metric, value: Number(match[2]), unit, ...(pair ? { pairedValue: Number(pair[1]) } : {}) });
+    previousEnd = end;
   }
-  return Array.from(matched);
+  return facts;
+}
+
+function normalizeStatOrder(text: string) {
+  return text.replace(/(\d+(?:\.\d+)?)\s*(%|次|张)\s*(控球率?|射门|射正|角球|犯规|黄牌|红牌)/g, "$3$1$2");
+}
+
+function normalizeMetric(metric: string) {
+  return metric === "控球" ? "控球率" : metric;
+}
+
+function eventSubject(sentence: string) {
+  const beforeTime = sentence.match(/^([^\d]+?)(?:在)?\d+(?:\+\d+)?(?:分钟|['’])/)?.[1];
+  if (beforeTime) return beforeTime.replace(/在$/, "").trim();
+  return sentence.replace(/^\d+(?:\+\d+)?(?:分钟|['’])\s*/, "")
+    .match(/^(.+?)(?:完成|获得|打入|罚进|扑出|被罚下|发生|受伤|伤退)/)?.[1]?.trim() || "";
 }
 
 function isFactualClaim(sentence: string) {
@@ -209,34 +291,15 @@ function isFactualClaim(sentence: string) {
   const hasFactKeyword = FACT_KEYWORDS.some((keyword) => sentence.includes(keyword));
   const hasNumber = extractNumbers(sentence).length > 0;
   const hasSpecificEvent = /(完成进球|打入|罚进|扑出|被罚下|获得点球|发生冲突|受伤|伤退)/.test(sentence);
-  return hasSpecificEvent || (hasFactKeyword && hasNumber);
+  return hasSpecificEvent || (hasFactKeyword && hasNumber) || /\d+\s*[-比:]\s*\d+/.test(sentence);
 }
 
 function isEditorialInstruction(sentence: string) {
-  return /(怎么做|建议从|可以从|可从|从\d+分钟开始|重点分析|适合做|做成|创作|脚本结构|内容结构)/.test(sentence);
-}
-
-function sharedNamedTerms(left: string, right: string) {
-  const rightText = normalize(right);
-  return left
-    .split(/[\s，。；、：:（）()《》“”"']/)
-    .map((item) => normalize(item))
-    .filter((item) => item.length >= 2 && !FACT_KEYWORDS.some((keyword) => normalize(keyword) === item))
-    .filter((item) => rightText.includes(item))
-    .length;
+  return /(怎么做|建议从|可以从|可从|从\d+分钟开始|重点分析|适合做|做成|制作|创作|脚本结构|内容结构)/.test(sentence);
 }
 
 function extractNumbers(text: string) {
   return Array.from(text.matchAll(/\d+(?:\.\d+)?%?/g), (match) => match[0].replace(/^0+(?=\d)/, ""));
-}
-
-function isDerivedDifference(target: string, sourceNumbers: string[], sentence: string) {
-  if (!/(差|多|少|领先|落后)/.test(sentence)) return false;
-  const expected = Number(target.replace("%", ""));
-  const values = sourceNumbers.map((value) => Number(value.replace("%", ""))).filter(Number.isFinite);
-  return values.some((left, index) =>
-    values.slice(index + 1).some((right) => Math.abs(left - right) === expected)
-  );
 }
 
 function splitSentences(text: string) {

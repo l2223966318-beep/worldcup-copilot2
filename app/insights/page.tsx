@@ -10,15 +10,18 @@ import { InsightCharts } from "@/components/worldcup/insight-charts";
 import { MatchSelect } from "@/components/worldcup/match-select";
 import { exampleMatches } from "@/data/matches";
 import { useLocalStorageState } from "@/lib/local-store";
+import { formatStatistic, shotAccuracy, statisticDifference, statisticTotal } from "@/lib/sports/statistics";
 
 export default function InsightsPage() {
   const [matchId, setMatchId] = useLocalStorageState("worldcup.selectedMatchId", exampleMatches[0].id);
   const match = exampleMatches.find((item) => item.id === matchId) ?? exampleMatches[0];
-  const shootingEfficiencyA = Math.round((match.stats.teamA.shotsOnTarget / Math.max(match.stats.teamA.shots, 1)) * 100);
-  const shootingEfficiencyB = Math.round((match.stats.teamB.shotsOnTarget / Math.max(match.stats.teamB.shots, 1)) * 100);
-  const possessionLeader = match.stats.teamA.possession >= match.stats.teamB.possession ? match.teamA : match.teamB;
-  const shotLeader = match.stats.teamA.shotsOnTarget >= match.stats.teamB.shotsOnTarget ? match.teamA : match.teamB;
-  const yellowTotal = match.stats.teamA.yellowCards + match.stats.teamB.yellowCards;
+  const shootingEfficiencyA = formatStatistic(shotAccuracy(match.stats.teamA.shotsOnTarget, match.stats.teamA.shots), "%");
+  const shootingEfficiencyB = formatStatistic(shotAccuracy(match.stats.teamB.shotsOnTarget, match.stats.teamB.shots), "%");
+  const possessionDifference = statisticDifference(match.stats.teamA.possession, match.stats.teamB.possession);
+  const shotDifference = statisticDifference(match.stats.teamA.shotsOnTarget, match.stats.teamB.shotsOnTarget);
+  const possessionLeader = possessionDifference === null ? "暂无数据" : possessionDifference === 0 ? "双方持平" : possessionDifference > 0 ? match.teamA : match.teamB;
+  const shotLeader = shotDifference === null ? "暂无数据" : shotDifference === 0 ? "双方持平" : shotDifference > 0 ? match.teamA : match.teamB;
+  const yellowTotal = formatStatistic(statisticTotal(match.stats.teamA.yellowCards, match.stats.teamB.yellowCards));
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
@@ -73,8 +76,8 @@ export default function InsightsPage() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm leading-7 text-slate-200">
             <AlertCard title="控球与威胁不完全同步" body={`${possessionLeader}控球更多，但射正领先方是${shotLeader}。这说明运营文案要把“控球”和“威胁”拆开讲。`} />
-            <AlertCard title="射正效率可做短视频钩子" body={`${match.teamA}射正率 ${shootingEfficiencyA}%，${match.teamB}射正率 ${shootingEfficiencyB}%。如果做短视频，建议用“射正率解释比赛观感”作为前三秒钩子。`} />
-            <AlertCard title="黄牌和犯规只做强度提示" body={`本场共 ${yellowTotal} 张黄牌，${match.teamA}犯规 ${match.stats.teamA.fouls} 次，${match.teamB}犯规 ${match.stats.teamB.fouls} 次。不要直接推断恶意动作。`} />
+            <AlertCard title="射正效率可做短视频钩子" body={`${match.teamA}射正率 ${shootingEfficiencyA}，${match.teamB}射正率 ${shootingEfficiencyB}。如果做短视频，建议用“射正率解释比赛观感”作为前三秒钩子。`} />
+            <AlertCard title="黄牌和犯规只做强度提示" body={`黄牌总数：${yellowTotal}；${match.teamA}犯规：${formatStatistic(match.stats.teamA.fouls, "次")}；${match.teamB}犯规：${formatStatistic(match.stats.teamB.fouls, "次")}。不要直接推断恶意动作。`} />
           </CardContent>
         </Card>
       </div>

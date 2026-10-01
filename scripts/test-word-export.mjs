@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 const root = new URL("../", import.meta.url);
 const exporter = readFileSync(new URL("lib/word-export.ts", root), "utf8");
 const reportPage = readFileSync(new URL("app/report/page.tsx", root), "utf8");
-const matchPage = readFileSync(new URL("app/matches/[id]/page.tsx", root), "utf8");
+const matchPage = readFileSync(new URL("app/matches/page.tsx", root), "utf8");
 const reportActions = readFileSync(new URL("components/report/report-actions.tsx", root), "utf8");
 
 assert.match(exporter, /Packer\.toBlob/, "Word exporter must create a real DOCX blob");
@@ -15,7 +15,7 @@ assert.match(exporter, /downloadBlob/, "Word exporter must download the generate
 
 for (const [file, source] of [
   ["app/report/page.tsx", reportPage],
-  ["app/matches/[id]/page.tsx", matchPage],
+  ["app/matches/page.tsx", matchPage],
   ["components/report/report-actions.tsx", reportActions]
 ]) {
   assert.match(source, /downloadWordReport/, `${file} must use the shared Word exporter`);
