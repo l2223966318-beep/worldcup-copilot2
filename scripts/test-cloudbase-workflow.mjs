@@ -4,6 +4,14 @@ import { createRequire } from "node:module";
 const yaml = createRequire(import.meta.url)("js-yaml");
 const text = readFileSync(new URL("../.github/workflows/cloudbase-release.yml", import.meta.url), "utf8");
 const config = yaml.load(text);
+const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+for (const job of Object.values(config.jobs)) {
+  for (const step of job.steps) {
+    for (const [, script] of (step.run || "").matchAll(/^\s*npm run ([\w:.-]+)\s*$/gm)) {
+      assert.equal(typeof manifest.scripts[script], "string", `Workflow references missing npm script: ${script}`);
+    }
+  }
+}
 assert.deepEqual(Object.keys(config.on), ["workflow_dispatch"], "pushes and PRs must not release a cloud function");
 assert.equal(config.on.workflow_dispatch.inputs.dry_run.default, true);
 assert.deepEqual(config.permissions, { contents: "read" });
