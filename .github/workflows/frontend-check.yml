@@ -1,0 +1,63 @@
+name: Frontend Security And Build
+
+on:
+  pull_request:
+    paths:
+      - 'app/**'
+      - 'components/**'
+      - 'lib/**'
+      - 'types/**'
+      - 'scripts/test-*.mjs'
+      - 'scripts/run-next.mjs'
+      - 'package*.json'
+      - '*.config.*'
+      - 'tsconfig.json'
+      - '.eslintrc.json'
+      - '.github/workflows/frontend-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm audit --audit-level=low
+      - run: npm run lint
+      - run: npm run build
+      - run: npm run test:frontend-http
+      - name: Frontend regressions (no live providers)
+        run: |
+          npm run test:signals
+          npm run test:hot
+          npm run test:hot-topic
+          npm run test:workflow
+          npm run test:platform-draft
+          npm run test:platform-controls
+          npm run test:match-ai-cache
+          npm run test:hot-ai-cache
+          npm run test:card-hover
+          npm run test:word-export
+          npm run test:evidence-review
+          npm run test:sportradar-today
+          npm run test:match-search
+          npm run test:match-detail
+          npm run test:football-names
+          npm run test:static-status
+          npm run test:time
+          npm run test:worldcup-route
+          npm run test:pitch
