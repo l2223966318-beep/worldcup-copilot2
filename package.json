@@ -30,6 +30,7 @@
     "test:cloudbase": "node scripts/test-cloudbase-check.mjs",
     "test:cloudbase-sources": "node scripts/test-cloudbase-sources.mjs",
     "test:cloudbase-api": "node scripts/test-cloudbase-api.mjs",
+    "test:cloudbase-hot": "node scripts/test-cloudbase-hot.mjs",
     "test:cloudbase-request": "node scripts/test-cloudbase-request.mjs",
     "test:cloudbase-sports": "node scripts/test-cloudbase-sports.mjs",
     "test:cloudbase-startup": "node scripts/test-cloudbase-startup.mjs",
