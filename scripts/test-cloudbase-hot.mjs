@@ -101,6 +101,23 @@ const reviewed = await runtime.request("/api/ai/review-draft", {
 assert.equal(reviewed.result.advice, "修改后发布");
 assert.ok(reviewed.result.findings.length > 0);
 assert.equal(runtime.calls(), aiBefore, "AI fallback must remain usable without a key or upstream calls");
+runtime.run('callDeepSeekJson = async () => ({ ok: true, model: "test-model", data: { score: 95, findings: [], riskPoints: [], checklist: [] } })');
+const cleanReview = await runtime.request("/api/ai/review-draft", {
+  draft: "欢迎理性讨论比赛表现。", matchContext: {}, evidence: []
+});
+assert.equal(cleanReview.sourceStatus, "live");
+assert.equal(cleanReview.result.level, "低", "an unexplained model score must not label a clean draft high risk");
+assert.equal(cleanReview.result.advice, "可发布");
+const missedReview = await runtime.request("/api/ai/review-draft", {
+  draft: "这是黑哨", matchContext: {}, evidence: []
+});
+assert.ok(missedReview.result.findings.length > 0, "local risk checks must survive an empty model finding list");
+assert.notEqual(missedReview.result.level, "低");
+runtime.run('callDeepSeekJson = async () => ({ ok: true, model: "test-model", data: { score: 95, findings: [{ sentence: "这是黑哨", type: "引战", reason: "未提供判罚证据", rewrite: "判罚仍需核实", evidenceStatus: "risk" }] } })');
+const riskReview = await runtime.request("/api/ai/review-draft", {
+  draft: "这是黑哨", matchContext: {}, evidence: []
+});
+assert.equal(riskReview.result.level, "高", "a concrete high-risk finding must retain its warning");
 const fallback = await failed.run('loadFixtures()');
 assert.equal(fallback.sourceStatus, "fallback");
 assert.equal(fallback.data[0].id, "argentina-france-2022-final");

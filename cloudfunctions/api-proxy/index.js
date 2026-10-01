@@ -1283,6 +1283,7 @@ async function handleAiReviewDraft(req, res) {
         "纯观点、情绪和创意表达不要求来源，不要误报。",
         "重点检查伤病、判罚、冲突、内部消息、引战词和绝对化表达。",
         "sentence 必须逐字来自原稿；改写不能新增事实。",
+        "score 是风险分，不是质量分：越高风险越大；低风险 0-35，中风险 36-69，高风险 70-100。没有具体问题时 score 应在 0-10。",
         "没有具体问题时 findings、riskPoints、checklist 返回空数组。"
       ].join("\n")
     },
@@ -1344,7 +1345,8 @@ async function handleAiReviewDraft(req, res) {
       }).filter(Boolean).slice(0, 6)
     : [];
 
-  let score = matchAiScore(d.score, findings.length ? 45 : 10);
+  if (!findings.length && fallbackResult.findings.length) findings.push(...fallbackResult.findings);
+  let score = findings.length ? matchAiScore(d.score, 45) : fallbackResult.score;
   if (findings.some((f) => f.evidenceStatus === "risk")) score = Math.max(score, 50);
   const level = score >= 70 ? "高" : score >= 36 ? "中" : "低";
   const resultSnapshot = {
