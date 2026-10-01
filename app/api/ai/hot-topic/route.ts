@@ -8,22 +8,13 @@ import {
   type HotInsight
 } from "@/lib/hot/hotTopicWorkflow";
 import type { HotTopic } from "@/lib/hot/types";
+import { buildHotTopicAiFingerprint } from "@/lib/services/hotTopicAiCache";
+import { getAiAccessFailure } from "@/lib/ai/requestGuard";
 
 export const dynamic = "force-dynamic";
 
-type AiCacheEntry = {
-  expiresAt: number;
-  payload: {
-    sourceStatus: "live";
-    intro: string;
-    analysis: HotAnalysisResult;
-    model?: string;
-  };
-};
-
 const HOT_TOPIC_AI_CACHE_TTL_MS = Number(process.env.HOT_TOPIC_AI_CACHE_TTL_MS ?? 10 * 60_000);
 const HOT_TOPIC_AI_TIMEOUT_MS = Number(process.env.HOT_TOPIC_AI_TIMEOUT_MS ?? 20_000);
-const aiCache = new Map<string, AiCacheEntry>();
 
 type HotTopicAiPayload = {
   intro?: string;
@@ -40,6 +31,8 @@ type HotTopicAiPayload = {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { topic?: HotTopic; apiKey?: string };
+    const denied = getAiAccessFailure(request.headers, body.apiKey);
+    if (denied) return NextResponse.json({ sourceStatus: "error", message: denied.message }, { status: denied.status });
     if (!body.topic) {
       return NextResponse.json(
         {
@@ -52,13 +45,6 @@ export async function POST(request: Request) {
 
     const fallbackIntro = buildTopicIntro(body.topic);
     const fallbackAnalysis = buildHotAnalysis(body.topic);
-    const cacheKey = buildAiCacheKey(body.topic);
-    const cached = aiCache.get(cacheKey);
-
-    if (cached && cached.expiresAt > Date.now()) {
-      return NextResponse.json(cached.payload);
-    }
-
     const result = await generateDeepSeekJson<HotTopicAiPayload>(
       [
         {
@@ -94,7 +80,8 @@ export async function POST(request: Request) {
           })
         }
       ],
-      { timeoutMs: HOT_TOPIC_AI_TIMEOUT_MS, apiKey: body.apiKey, quality: "fast", maxTokens: 1_400 }
+      { timeoutMs: HOT_TOPIC_AI_TIMEOUT_MS, apiKey: body.apiKey, quality: "fast", maxTokens: 1_400,
+        cacheTtlMs: HOT_TOPIC_AI_CACHE_TTL_MS, cacheKey: `hot-topic-v2:${buildHotTopicAiFingerprint(body.topic)}` }
     );
 
     if (!result.ok) {
@@ -115,7 +102,6 @@ export async function POST(request: Request) {
       analysis,
       model: result.model
     } as const;
-    aiCache.set(cacheKey, { expiresAt: Date.now() + HOT_TOPIC_AI_CACHE_TTL_MS, payload });
     return NextResponse.json(payload);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown hot topic AI error.";
@@ -127,10 +113,6 @@ export async function POST(request: Request) {
       { status: 500 }
     );
   }
-}
-
-function buildAiCacheKey(topic: HotTopic) {
-  return `${topic.id}:${topic.title}:${topic.updatedAt ?? ""}`;
 }
 
 function normalizeIntro(value: string | undefined, fallback: string) {

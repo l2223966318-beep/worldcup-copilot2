@@ -124,7 +124,7 @@ export function mockMatchToWorldCupMatch(match: MatchData): WorldCupMatch {
       {
         team: match.teamA,
         values: [
-          { type: "控球率", value: `${match.stats.teamA.possession}%` },
+          { type: "控球率", value: match.stats.teamA.possession === null ? null : `${match.stats.teamA.possession}%` },
           { type: "射门", value: match.stats.teamA.shots },
           { type: "射正", value: match.stats.teamA.shotsOnTarget },
           { type: "角球", value: match.stats.teamA.corners },
@@ -135,7 +135,7 @@ export function mockMatchToWorldCupMatch(match: MatchData): WorldCupMatch {
       {
         team: match.teamB,
         values: [
-          { type: "控球率", value: `${match.stats.teamB.possession}%` },
+          { type: "控球率", value: match.stats.teamB.possession === null ? null : `${match.stats.teamB.possession}%` },
           { type: "射门", value: match.stats.teamB.shots },
           { type: "射正", value: match.stats.teamB.shotsOnTarget },
           { type: "角球", value: match.stats.teamB.corners },

@@ -2,7 +2,7 @@ import type { HotTopic } from "@/lib/hot/types";
 
 export const HOT_TOPIC_AI_CACHE_TTL_MS = 7 * 24 * 60 * 60_000;
 
-const HOT_TOPIC_AI_CACHE_VERSION = "hot-topic-analysis-v1";
+const HOT_TOPIC_AI_CACHE_VERSION = "hot-topic-analysis-v2";
 const HOT_TOPIC_AI_CACHE_PREFIX = "worldcup.hot-topic-ai-analysis";
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -29,8 +29,9 @@ export function readHotTopicAiCache<T extends CacheableAiPayload>(
     const entry = JSON.parse(raw) as HotTopicAiCacheEntry<T>;
     const isValid =
       entry.version === HOT_TOPIC_AI_CACHE_VERSION &&
-      entry.fingerprint === buildTopicFingerprint(topic) &&
+      entry.fingerprint === buildHotTopicAiFingerprint(topic) &&
       entry.payload?.sourceStatus === "live" &&
+      Number.isFinite(entry.savedAt) && entry.savedAt <= now &&
       now - entry.savedAt <= HOT_TOPIC_AI_CACHE_TTL_MS;
 
     if (!isValid) {
@@ -40,7 +41,7 @@ export function readHotTopicAiCache<T extends CacheableAiPayload>(
 
     return entry.payload;
   } catch {
-    storage.removeItem(key);
+    try { storage.removeItem(key); } catch { /* Storage can be disabled. */ }
     return null;
   }
 }
@@ -55,7 +56,7 @@ export function writeHotTopicAiCache<T extends CacheableAiPayload>(
 
   const entry: HotTopicAiCacheEntry<T> = {
     version: HOT_TOPIC_AI_CACHE_VERSION,
-    fingerprint: buildTopicFingerprint(topic),
+    fingerprint: buildHotTopicAiFingerprint(topic),
     savedAt: now,
     payload
   };
@@ -71,27 +72,19 @@ function buildCacheKey(topicId: string) {
   return `${HOT_TOPIC_AI_CACHE_PREFIX}.${encodeURIComponent(topicId)}`;
 }
 
-function buildTopicFingerprint(topic: HotTopic) {
-  const source = JSON.stringify({
+export function buildHotTopicAiFingerprint(topic: HotTopic) {
+  return JSON.stringify({
     version: HOT_TOPIC_AI_CACHE_VERSION,
     id: topic.id,
     title: topic.title,
     summary: topic.summary,
-    heat: topic.heat,
     platform: topic.platform,
     source: topic.source,
     category: topic.category,
     valueLevel: topic.valueLevel,
-    valueScore: topic.valueScore,
-    relevanceScore: topic.relevanceScore,
-    tags: topic.tags,
-    updatedAt: topic.updatedAt,
-    contentAngles: topic.contentAngles,
-    relatedMatches: topic.relatedMatches
+    tags: [...(topic.tags ?? [])].sort(),
+    url: topic.url,
+    contentAngles: [...(topic.contentAngles ?? [])].sort(),
+    relatedMatches: [...(topic.relatedMatches ?? [])].sort()
   });
-  let hash = 0;
-  for (let index = 0; index < source.length; index += 1) {
-    hash = (hash * 31 + source.charCodeAt(index)) | 0;
-  }
-  return String(hash);
 }

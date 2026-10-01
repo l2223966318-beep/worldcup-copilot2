@@ -23,6 +23,7 @@ writeFileSync(modulePath, compiled, "utf8");
 
 const {
   MATCH_AI_WORKFLOW_CACHE_TTL_MS,
+  MATCH_AI_LIVE_CACHE_TTL_MS,
   readMatchAiWorkflowCache,
   writeMatchAiWorkflowCache
 } = await import(`file:///${modulePath.replaceAll("\\", "/")}`);
@@ -73,6 +74,15 @@ assert.equal(readMatchAiWorkflowCache(storage, { ...match, score: "2-0" }, topic
 writeMatchAiWorkflowCache(storage, match, topics, payload, savedAt);
 assert.equal(readMatchAiWorkflowCache(storage, match, topics, savedAt + MATCH_AI_WORKFLOW_CACHE_TTL_MS + 1), null);
 
+const liveMatch = { ...match, status: "live" };
+writeMatchAiWorkflowCache(storage, liveMatch, topics, payload, savedAt);
+assert.deepEqual(readMatchAiWorkflowCache(storage, liveMatch, topics, savedAt + 1), payload);
+assert.equal(readMatchAiWorkflowCache(storage, liveMatch, topics, savedAt + MATCH_AI_LIVE_CACHE_TTL_MS + 1), null,
+  "live analysis must expire even when the provider snapshot has not changed");
+
+const brokenStorage = { getItem() { throw new Error("disabled"); }, setItem() { throw new Error("disabled"); }, removeItem() { throw new Error("disabled"); } };
+assert.equal(readMatchAiWorkflowCache(brokenStorage, match, topics, savedAt + 1), null);
+
 writeMatchAiWorkflowCache(storage, match, topics, { ...payload, sourceStatus: "error" }, savedAt);
 assert.equal(readMatchAiWorkflowCache(storage, match, topics, savedAt + 1), null);
 
@@ -81,5 +91,6 @@ assert.match(pageSource, /readMatchAiWorkflowCache/);
 assert.match(pageSource, /writeMatchAiWorkflowCache/);
 assert.match(pageSource, /if \(cachedEnhancement\) \{[\s\S]*setAiEnhancement\(cachedEnhancement\)[\s\S]*return/);
 assert.match(pageSource, /if \(loading && !payload\) return/);
+assert.doesNotMatch(pageSource, /AI_WORKFLOW_MAX_ATTEMPTS/, "page entry must not automatically repeat paid AI requests");
 
 console.log("match AI cache ok");

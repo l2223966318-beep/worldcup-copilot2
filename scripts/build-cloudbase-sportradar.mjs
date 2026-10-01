@@ -6,11 +6,16 @@ const root = new URL("../", import.meta.url);
 const files = [
   ["lib/time/beijingTime.ts", "beijing-time.js"],
   ["lib/sports/sportradarClient.ts", "sportradar.js"],
+  ["lib/ai/quality.ts", "quality.js"],
+  ["lib/services/evidenceService.ts", "evidence.js"],
+  ["lib/ai/requestGuard.ts", "ai-guard.js"],
+  ["lib/services/hotTopicAiCache.ts", "hot-ai-cache.js"],
 ];
 for (const [source, output] of files) {
   const code = readFileSync(new URL(source, root), "utf8")
     .replaceAll("@/lib/sports/normalizers", "./sports-payload")
-    .replaceAll("@/lib/time/beijingTime", "./beijing-time");
+    .replaceAll("@/lib/time/beijingTime", "./beijing-time")
+    .replaceAll("@/lib/ai/quality", "./quality");
   const result = ts.transpileModule(code, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
     reportDiagnostics: true,

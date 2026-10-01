@@ -9,12 +9,13 @@ const { createSources } = localRequire("../cloudfunctions/api-proxy/hot-sources.
 const { createSportsService } = localRequire("../cloudfunctions/api-proxy/sports-service.js");
 let handler;
 let calls = [];
+let modelResult = {};
 const event = { id: "sr:sport_event:123", start_time: "2026-06-28T19:00:00Z", sport_event_context: { competition: { name: "FIFA World Cup" }, season: { id: "sr:season:1", year: "2026" } }, competitors: [{ name: "Argentina", qualifier: "home" }, { name: "France", qualifier: "away" }] };
 const fakeFetch = async (url, init) => {
   const host = new URL(url).host;
   calls.push({ host, init });
   if (host === "api.deepseek.com") return Response.json({
-    choices: [{ message: { content: "{}" }, finish_reason: "stop" }]
+    choices: [{ message: { content: JSON.stringify(modelResult) }, finish_reason: "stop" }]
   });
   if (host === "api.sportradar.com") return Response.json({
     schedules: [{ sport_event: event, sport_event_status: { status: "closed", home_score: 1, away_score: 0 } }],
@@ -40,7 +41,7 @@ vm.runInNewContext(readFileSync(new URL("../cloudfunctions/api-proxy/sportradar.
 });
 const sportsService = createSportsService({ client: clientModule.exports, env });
 const context = vm.createContext({
-  require: name => name === "./sports-service" ? { createSportsService: () => sportsService } : name === "./hot-sources" ? { createSources: () => createSources({ env, fetchImpl: fakeFetch }) } : { createServer: fn => { handler = fn; return { listen() {} }; } },
+  require: name => ["./evidence", "./ai-guard", "./hot-ai-cache"].includes(name) ? localRequire(`../cloudfunctions/api-proxy/${name}.js`) : name === "./sports-service" ? { createSportsService: () => sportsService } : name === "./hot-sources" ? { createSources: () => createSources({ env, fetchImpl: fakeFetch }) } : { createServer: fn => { handler = fn; return { listen() {} }; } },
   process: { env }, fetch: fakeFetch, URL, AbortController, Buffer, setTimeout, clearTimeout, console,
 });
 vm.runInContext(readFileSync(new URL("../cloudfunctions/api-proxy/index.js", import.meta.url), "utf8"), context);
@@ -113,14 +114,58 @@ try {
     assert.equal((await response.json()).sourceStatus, "fallback", `${path} must disclose missing AI key`);
   }
   assert.equal(calls.length, beforeAi, "missing AI config must not make billable requests");
+  response = await fetch(`${origin}/api/ai/review-draft`, { method: "POST", body: JSON.stringify({
+    draft: "阿根廷以9-0战胜法国。", matchContext: {}, evidence: []
+  }) });
+  const unchecked = await response.json();
+  assert.equal(unchecked.result.level, "待人工确认");
+  assert.notEqual(unchecked.result.advice, "可发布");
+  assert.equal(unchecked.result.evidenceSummary.unsupportedClaims, 1);
   env.DEEPSEEK_API_KEY = "ai-test-secret";
+  for (const [path, body] of aiRequests) {
+    response = await fetch(`${origin}/api/ai/${path}`, { method: "POST", body: JSON.stringify(body) });
+    assert.equal(response.status, 403, "shared AI must be private unless deliberately opened");
+  }
+  response = await fetch(`${origin}/api/ai/health?probe=1`);
+  assert.equal(response.status, 403, "paid health probes require the same access policy");
+  assert.equal(calls.length, beforeAi, "denied calls must not reach the model");
+  env.AI_ALLOW_PUBLIC = "true";
+  response = await fetch(`${origin}/api/ai/review-draft`, { method: "POST", body: JSON.stringify({
+    draft: "比赛复盘", matchContext: {}, evidence: []
+  }) });
+  const invalidReview = await response.json();
+  assert.equal(invalidReview.sourceStatus, "fallback", "an empty model object must not count as a completed review");
+  assert.notEqual(invalidReview.result.advice, "可发布");
+  modelResult = { level: "低", score: 0, findings: [] };
+  const statEvidence = [{ id: "E01", type: "match_stat", source: "test", relevance: 100,
+    text: "阿根廷射门12次、射正6次；法国射门10次、射正5次" }];
+  for (const [draft, unsupported] of [["法国射门12次。", 1], ["法国射门10次。", 0]]) {
+    response = await fetch(`${origin}/api/ai/review-draft`, { method: "POST", body: JSON.stringify({ draft, matchContext: {}, evidence: statEvidence }) });
+    const checked = await response.json();
+    assert.equal(checked.result.evidenceSummary.checkedClaims, 1);
+    assert.equal(checked.result.evidenceSummary.unsupportedClaims, unsupported);
+    assert.equal(checked.result.advice === "可发布", unsupported === 0, "model approval must not override the same local fact checker used by Next.js");
+  }
+  modelResult = {};
   env.DEEPSEEK_MODEL_FAST = "configured-fast-model";
   response = await fetch(`${origin}/api/ai/hot-topic`, {
     method: "POST", body: JSON.stringify({ topic: { title: "Argentina football" } })
   });
   const aiResult = await response.json();
   assert.equal(aiResult.model, "configured-fast-model", "existing MODEL_FAST configuration must be preserved");
-  const aiCall = calls.find(c => c.host === "api.deepseek.com");
+  const analyzedCount = calls.filter(c => c.host === "api.deepseek.com").length;
+  await Promise.all([1, 2].map(i => fetch(`${origin}/api/ai/hot-topic`, {
+    method: "POST", body: JSON.stringify({ topic: { title: "Argentina football", updatedAt: `2026-10-01T00:0${i}:00Z`, heat: i * 100 } })
+  })));
+  assert.equal(calls.filter(c => c.host === "api.deepseek.com").length, analyzedCount,
+    "a refreshed timestamp must reuse the same server-side analysis");
+  response = await fetch(`${origin}/api/ai/hot-topic`, {
+    method: "POST", body: JSON.stringify({ apiKey: "personal-test-key", topic: { title: "Argentina football" } })
+  });
+  assert.equal(response.status, 200);
+  assert.equal(calls.filter(c => c.host === "api.deepseek.com").length, analyzedCount + 1,
+    "personal keys must not share another credential's analysis cache");
+  const aiCall = calls.findLast(c => c.host === "api.deepseek.com");
   const sent = JSON.parse(aiCall.init.body);
   assert.equal(sent.model, "configured-fast-model");
   assert.equal(sent.thinking.type, "disabled");

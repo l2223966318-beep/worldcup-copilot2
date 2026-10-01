@@ -1,4 +1,5 @@
 import { exampleMatches, type MatchData } from "@/data/matches";
+import { formatStatistic, hasVerifiedStatistics, shotAccuracy } from "@/lib/sports/statistics";
 
 export type Project = {
   id: string;
@@ -98,12 +99,15 @@ export function getProjectOutputPlatforms(projectId: string) {
 }
 
 export function analyzeMatch(matchData: MatchData) {
-  const teamAShotRate = Math.round((matchData.stats.teamA.shotsOnTarget / Math.max(matchData.stats.teamA.shots, 1)) * 100);
-  const teamBShotRate = Math.round((matchData.stats.teamB.shotsOnTarget / Math.max(matchData.stats.teamB.shots, 1)) * 100);
+  const teamAShotRate = shotAccuracy(matchData.stats.teamA.shotsOnTarget, matchData.stats.teamA.shots);
+  const teamBShotRate = shotAccuracy(matchData.stats.teamB.shotsOnTarget, matchData.stats.teamB.shots);
+  const hasStats = matchData.verifiedStats !== false && hasVerifiedStatistics(matchData.stats);
 
   return {
-    trend: `${matchData.teamA}在控球和持续进攻上更主动，${matchData.teamB}则依靠关键时段的效率改变比赛情绪。`,
-    reason: `射正率分别为 ${teamAShotRate}% 和 ${teamBShotRate}%，说明内容不能只写比分，要解释射门质量和关键节点。`,
+    trend: `${matchData.teamA}与${matchData.teamB}的比赛应结合已确认比分和事件记录复盘。`,
+    reason: hasStats
+      ? `射正率分别为 ${formatStatistic(teamAShotRate, "%")} 和 ${formatStatistic(teamBShotRate, "%")}，需要结合事件说明机会质量。`
+      : "当前未返回完整技术统计，不据此判断控球优势或进攻效率。",
     turningPoint: matchData.keyEvents[Math.min(3, matchData.keyEvents.length - 1)]?.description ?? matchData.summary,
     contentValue: "适合拆成数据解释、球员叙事和平台化短内容三条线。"
   };

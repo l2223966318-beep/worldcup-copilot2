@@ -208,7 +208,7 @@ export default function PitchPage() {
             <div className="pitch-cover-progress" aria-hidden="true"><span style={{ width: `${coverProgress * 100}%` }} /></div>
             {!coverRevealed ? <button type="button" className="pitch-cover-skip" onClick={skipCoverVideo}>跳过片头 <SkipForward aria-hidden="true" /></button> : null}
           </div>
-          <div className="pitch-cover-index">AIGC 应用大赛 · 四川赛区决赛</div>
+          <div className="pitch-cover-index">AIGC 应用大赛 · 国赛答辩</div>
         </section>
 
         <section className="pitch-slide pitch-context" aria-label="项目背景">
@@ -286,8 +286,8 @@ export default function PitchPage() {
             <p className="pitch-eyebrow">BACKGROUND → LIVE PRODUCT</p>
             <h2>背景介绍到这里，<br /><span>接下来直接操作。</span></h2>
             <p>从一场比赛开始，现场走完热点筛选、选题生成、平台内容、风险审校与 Word 导出。</p>
-            <Link href="/" className="pitch-enter-tool">
-              <span>进入 WorldCup Copilot</span>
+            <Link href="/demo" className="pitch-enter-tool">
+              <span>开始实机演示</span>
               <ArrowRight aria-hidden="true" />
             </Link>
           </div>

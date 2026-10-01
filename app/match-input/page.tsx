@@ -11,6 +11,7 @@ import { ExampleBadge } from "@/components/worldcup/example-badge";
 import { MatchCard } from "@/components/worldcup/match-card";
 import { exampleMatches } from "@/data/matches";
 import { useLocalStorageState } from "@/lib/local-store";
+import { formatStatistic } from "@/lib/sports/statistics";
 
 export default function MatchInputPage() {
   const [selectedId, setSelectedId] = useLocalStorageState("worldcup.selectedMatchId", exampleMatches[0].id);
@@ -134,12 +135,12 @@ export default function MatchInputPage() {
 function MatchDetail({ matchId }: { matchId: string }) {
   const match = exampleMatches.find((item) => item.id === matchId) ?? exampleMatches[0];
   const statRows = [
-    ["控球率", `${match.stats.teamA.possession}%`, `${match.stats.teamB.possession}%`],
-    ["射门", match.stats.teamA.shots, match.stats.teamB.shots],
-    ["射正", match.stats.teamA.shotsOnTarget, match.stats.teamB.shotsOnTarget],
-    ["角球", match.stats.teamA.corners, match.stats.teamB.corners],
-    ["犯规", match.stats.teamA.fouls, match.stats.teamB.fouls],
-    ["黄牌", match.stats.teamA.yellowCards, match.stats.teamB.yellowCards]
+    ["控球率", formatStatistic(match.stats.teamA.possession, "%"), formatStatistic(match.stats.teamB.possession, "%")],
+    ["射门", formatStatistic(match.stats.teamA.shots), formatStatistic(match.stats.teamB.shots)],
+    ["射正", formatStatistic(match.stats.teamA.shotsOnTarget), formatStatistic(match.stats.teamB.shotsOnTarget)],
+    ["角球", formatStatistic(match.stats.teamA.corners), formatStatistic(match.stats.teamB.corners)],
+    ["犯规", formatStatistic(match.stats.teamA.fouls), formatStatistic(match.stats.teamB.fouls)],
+    ["黄牌", formatStatistic(match.stats.teamA.yellowCards), formatStatistic(match.stats.teamB.yellowCards)]
   ];
 
   return (

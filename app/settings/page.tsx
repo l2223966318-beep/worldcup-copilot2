@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2, PlugZap, Save, XCircle } from "lucide-react";
+import { readAiAccessToken, saveAiAccessToken } from "@/lib/ai/client-access";
 
 type SourceKey = "tavily" | "topHubData" | "dailyHot" | "xiaohongshu" | "deepseek" | "openai";
 
@@ -48,10 +49,13 @@ const defaultSettings: SettingsState = {
 export default function SettingsPage() {
   const [settings, setSettings] = useState<SettingsState>(defaultSettings);
   const [saved, setSaved] = useState(false);
+  const [aiAccessToken, setAiAccessToken] = useState("");
+  const [accessNotice, setAccessNotice] = useState("");
   const [testing, setTesting] = useState<SourceKey | null>(null);
   const [statuses, setStatuses] = useState<Record<string, { ok: boolean; message: string; mode?: string }>>({});
 
   useEffect(() => {
+    setAiAccessToken(readAiAccessToken());
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) setSettings({ ...defaultSettings, ...(JSON.parse(raw) as Partial<SettingsState>) });
@@ -111,8 +115,23 @@ export default function SettingsPage() {
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <h1 className="text-3xl font-semibold tracking-normal text-slate-950">数据源设置</h1>
         <p className="mt-2 text-sm leading-6 text-slate-500">
-          API Key 只保存在当前浏览器 localStorage。热点搜索会把 Tavily / 今日热榜 Key 临时发给本站服务端转发请求，不会写入代码；没有 Key 时系统自动进入 demo/mock 模式。
+          个人 API Key 保存在当前浏览器 localStorage，并随请求发送给本站服务端调用对应接口。未填写个人 Key 时优先使用已配置的服务端数据源；不可用时使用备用源或示例数据。
         </p>
+      </section>
+
+      <section className="border-y border-slate-200 bg-white p-5">
+        <label htmlFor="ai-access-token" className="text-sm font-semibold text-slate-950">共享 AI 访问口令</label>
+        <div className="mt-3 flex flex-wrap gap-3">
+          <input id="ai-access-token" type="password" autoComplete="off" value={aiAccessToken}
+            onChange={event => { setAiAccessToken(event.target.value); setAccessNotice(""); }}
+            className="h-11 min-w-0 flex-1 rounded-md border border-slate-200 px-3 text-sm text-slate-950"
+            placeholder="留空则不使用访问口令" />
+          <button type="button" onClick={() => setAccessNotice(saveAiAccessToken(aiAccessToken) ? "已保存到当前会话" : "当前浏览器无法保存口令")}
+            className="inline-flex h-11 items-center gap-2 rounded-md bg-emerald-700 px-4 text-sm font-semibold text-white">
+            <Save className="h-4 w-4" />保存口令
+          </button>
+        </div>
+        {accessNotice ? <p role="status" className="mt-2 text-sm text-slate-600">{accessNotice}</p> : null}
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">

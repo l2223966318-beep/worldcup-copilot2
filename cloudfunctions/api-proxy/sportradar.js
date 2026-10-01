@@ -217,7 +217,6 @@ function normalizeSportradarScore(raw) {
 function normalizeTimeline(items, homeName, awayName) {
     return items
         .filter((item) => item.type || item.description)
-        .slice(-24)
         .map((item) => ({
         minute: typeof item.match_time === "number" ? item.match_time : null,
         extraMinute: typeof item.stoppage_time === "number" ? item.stoppage_time : undefined,

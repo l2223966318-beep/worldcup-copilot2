@@ -15,7 +15,7 @@ current = root / "cloudfunctions" / "api-proxy"
 backup = root / "backups" / "cloudbase-v5-20260930"
 
 for name, index in [
-    ("worldcup-api-v6.1-complete.zip", current / "index.js"),
+    ("worldcup-api-v6.3-cache-guard.zip", current / "index.js"),
     ("worldcup-api-v5-rollback.zip", backup / "index.js"),
 ]:
     if args.current_only and index.parent == backup:
@@ -24,7 +24,7 @@ for name, index in [
     with ZipFile(destination, "w", compression=ZIP_DEFLATED) as archive:
         filenames = ["index.js", "package.json", "scf_bootstrap"]
         if index.parent == current:
-            filenames.extend(["hot-sources.js", "sports-service.js", "sports-payload.js", "sportradar.js", "beijing-time.js"])
+            filenames.extend(["hot-sources.js", "sports-service.js", "sports-payload.js", "sportradar.js", "beijing-time.js", "quality.js", "evidence.js", "ai-guard.js", "hot-ai-cache.js"])
         for filename in filenames:
             source = index if filename == "index.js" else current / filename
             data = source.read_bytes().replace(b"\r\n", b"\n")

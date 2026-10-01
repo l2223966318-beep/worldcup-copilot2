@@ -7,6 +7,7 @@ import { useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, CheckCircle2, Clipboard, ExternalLink, Save, ShieldCheck, Sparkles } from "lucide-react";
 
 import type { HotTopic } from "@/lib/hot/types";
+import { getAiRequestHeaders } from "@/lib/ai/client-access";
 import {
   auditHotDraft,
   buildHotAnalysis,
@@ -122,7 +123,7 @@ export default function HotTopicDetailPage() {
 
     void fetch("/api/ai/hot-topic", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAiRequestHeaders(),
       body: JSON.stringify({ topic, apiKey: currentDeepseekKey || undefined })
     })
       .then(async (response) => {
@@ -184,7 +185,7 @@ export default function HotTopicDetailPage() {
     try {
       const response = await fetch("/api/ai/hot-topic-workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAiRequestHeaders(),
         body: JSON.stringify({
           action: "generate",
           topic,
@@ -216,7 +217,7 @@ export default function HotTopicDetailPage() {
     try {
       const response = await fetch("/api/ai/hot-topic-workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAiRequestHeaders(),
         body: JSON.stringify({
           action: "audit",
           topic,

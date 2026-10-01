@@ -8,7 +8,7 @@ import { checkDeployment } from "./check-cloudbase.mjs";
 export const TARGET = Object.freeze({
   region: "ap-shanghai", namespace: "scti-test-2026-d6g3udtld9f8e08f5", functionName: "worldcup-api-proxy1",
   origin: "https://scti-test-2026-d6g3udtld9f8e08f5-1455712258.ap-shanghai.app.tcloudbase.com",
-  version: "direct-v6.1-complete",
+  version: "direct-v6.3-cache-guard",
 });
 const MAX_BYTES = 20 * 1024 * 1024;
 const MAGIC = Buffer.from("WC_BACKUP_1\n");
@@ -22,6 +22,7 @@ export function safeReleaseFailure(error) {
     ["Target must be the existing active HTTP function.", "The target is not the expected active HTTP function."],
     ["Function environment variables could not be verified before release.", "The function environment variable list could not be verified."],
     ["SPORTRADAR_WORLD_CUP_SEASON_ID must be explicitly configured when Sportradar is enabled.", "Configure SPORTRADAR_WORLD_CUP_SEASON_ID as sr:season:digits in Tencent Cloud before releasing."],
+    ["AI_ACCESS_TOKEN or explicit AI_ALLOW_PUBLIC must be configured when shared AI is enabled.", "Configure AI_ACCESS_TOKEN in Tencent Cloud and release a compatible frontend first. AI_ALLOW_PUBLIC=true is an explicit public-access alternative, not the default."],
   ]);
   if (reasons.has(error?.message)) return reasons.get(error.message);
   if (["AuthFailure", "AuthFailure.SecretIdNotFound", "AuthFailure.SignatureFailure", "AuthFailure.TokenFailure", "AuthFailure.InvalidSecretId"].includes(error?.code)) {
@@ -120,6 +121,9 @@ export async function release({ zip, apply = false, confirmFunction = "", target
   if (configuredValue("SPORTRADAR_API_KEY") && !/^sr:season:\d+$/.test(configuredValue("SPORTRADAR_WORLD_CUP_SEASON_ID"))) {
     throw new Error("SPORTRADAR_WORLD_CUP_SEASON_ID must be explicitly configured when Sportradar is enabled.");
   }
+  if (configuredValue("DEEPSEEK_API_KEY") && !configuredValue("AI_ACCESS_TOKEN") && configuredValue("AI_ALLOW_PUBLIC") !== "true") {
+    throw new Error("AI_ACCESS_TOKEN or explicit AI_ALLOW_PUBLIC must be configured when shared AI is enabled.");
+  }
   onStage("get-backup-address");
   const address = await api.GetFunctionAddress(params);
   onStage("download-backup");
@@ -159,7 +163,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
     if (args.some(arg => arg !== "--apply" && !arg.startsWith("--confirm-function="))) throw new Error("Invalid release arguments.");
     const directory = new URL("../deliverables/cloudbase-release/", import.meta.url);
     const result = await release({
-      zip: readFileSync(new URL("../deliverables/cloudbase/worldcup-api-v6.1-complete.zip", import.meta.url)), apply, confirmFunction: confirmation,
+      zip: readFileSync(new URL("../deliverables/cloudbase/worldcup-api-v6.3-cache-guard.zip", import.meta.url)), apply, confirmFunction: confirmation,
       onStage: stage => console.log(`Release stage: ${stage}`),
       saveBackup: async bytes => {
         await mkdir(directory, { recursive: true });

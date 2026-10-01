@@ -47,7 +47,7 @@ export default function DashboardPage() {
   const hasFilters = Boolean(matchSearchQuery.trim() || dateFilter || statusFilter !== "all" || competitionFilter !== "all");
   const visibleMatches = hasFilters ? filteredMatches : filteredMatches.slice(-12).reverse();
   const isMockMode = activeStatus === "fallback";
-  const isNoDataState = !loading && !error && !hasFilters && visibleMatches.length === 0;
+  const isNoDataState = !hasFilters && visibleMatches.length === 0;
   useEffect(() => {
     setSportType(readSavedSportType());
   }, []);
@@ -92,7 +92,12 @@ export default function DashboardPage() {
         <div className="min-w-0 space-y-8">
           <section id="opportunity-pool">
             <div className="flex flex-wrap items-end justify-between gap-4">
-              <SectionTitle title="今日赛事内容机会池" />
+              <div>
+                <SectionTitle title="世界杯赛事内容机会池" />
+                <Link href="/demo" className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                  历史赛事回放 · 国赛演示 <ArrowRight className="h-4 w-4" />
+                </Link>
+              </div>
               <SourceBadge
                 status={activeStatus}
                 provider={readPayloadProvider(activePayload?.data)}
@@ -153,20 +158,20 @@ export default function DashboardPage() {
               ) : isNoDataState ? (
                 <div className="rounded-[30px] border border-dashed border-slate-300 bg-white p-10">
                   <div className="text-xl font-semibold text-slate-950">
-                    {loading ? "正在加载今日比赛数据" : error ? "今日比赛数据请求失败" : isMockMode ? "当前没有可用的真实今日比赛数据" : "今天暂未返回比赛数据"}
+                    {loading ? "正在加载世界杯赛程" : error ? "赛事数据请求失败" : isMockMode ? "当前没有可用的真实赛事数据" : "暂未返回赛事数据"}
                   </div>
                   <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
                     {loading
-                      ? "正在从服务端读取今日比赛池，稍后会自动更新。"
+                      ? "正在读取世界杯赛程，稍后会自动更新。也可直接进入历史案例。"
                       : error
-                        ? `当前接口返回错误：${error}。你可以先用经典样例完成完整演示。`
+                        ? `赛事数据暂不可用。你可以先用历史案例完成演示。`
                         : isMockMode
-                          ? "当前处于示例 / fallback 数据模式，没有拿到可展示的今日比赛。为保证演示顺畅，建议先进入经典样例走完整链路。"
-                          : "接口当前返回为空。你可以先切换筛选条件，或直接进入经典样例完整演示。"}
+                          ? "当前处于示例数据模式，可进入历史案例查看完整内容生产流程。"
+                          : "当前赛程列表为空。你可以直接进入历史案例。"}
                   </p>
                   <div className="mt-5 flex flex-wrap gap-3">
-                    <Link href="/matches/argentina-france-2022-final" className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5">
-                      进入经典样例完整演示
+                    <Link href="/demo" className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5">
+                      打开历史演示案例
                     </Link>
                     <Link href="/settings" className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5">
                       检查数据源设置
@@ -725,7 +730,7 @@ function sourceLabel(status: SourceStatus, provider?: WorldCupMatch["source"]["p
 function formatSourceIssue(message?: string) {
   if (!message) return "";
   if (/No Sportradar matches for this Beijing date/i.test(message)) {
-    return "今日 Sportradar 未返回匹配场次，已使用免费赛程源";
+    return "Sportradar 未返回匹配场次，已使用免费赛程源";
   }
   if (/429|Too Many Requests|limit exceeded/i.test(message)) return "Sportradar 当前限流，已切换兜底源";
   if (/sportradar/i.test(message)) return "Sportradar 暂不可用，已切换兜底源";
@@ -788,11 +793,11 @@ function getOpsState(input: {
   if (input.loading) {
     return {
       metrics: { priority: "…", watch: "…", low: "…" },
-      copy: "真实比赛池加载中，系统正在判断今天哪些比赛值得优先投入。",
+      copy: "真实比赛池加载中，系统正在判断当前哪些比赛值得优先投入。",
       cards: {
         priority: { value: "加载中", body: "等待接口返回后再判断优先制作场次。" },
         watch: { value: "加载中", body: "比赛池尚未完成初始化，先保留观察位。" },
-        direction: { value: "待判断", body: "等今日比赛池返回后，再决定主推方向。" },
+        direction: { value: "待判断", body: "等比赛池返回后，再决定主推方向。" },
         risk: { value: "待确认", body: "当前先不要对外输出定性判断。" }
       }
     };
@@ -814,12 +819,12 @@ function getOpsState(input: {
   if (input.filteredCount === 0 && input.status === "fallback") {
     return {
       metrics: { priority: 0, watch: 0, low: 0 },
-      copy: "当前处于示例 / fallback 数据模式，但今日比赛池没有可展示场次。建议切换到经典样例走完整链路。",
+      copy: "当前处于示例 / fallback 数据模式，但比赛池没有可展示场次。建议切换到经典样例走完整链路。",
       cards: {
         priority: { value: "示例模式", body: "当前没有真实比赛可排优先级，不展示伪判断。" },
-        watch: { value: "无今日场次", body: "今日比赛池为空，适合转入经典样例演示。" },
+        watch: { value: "无可展示场次", body: "当前比赛池为空，适合转入经典样例演示。" },
         direction: { value: "样例演示", body: "用经典样例展示赛事分析、选题、文案和审稿全链路。" },
-        risk: { value: "低", body: "演示模式下需明确标注是样例，不冒充真实今日判断。" }
+        risk: { value: "低", body: "演示模式下需明确标注是样例，不冒充实时判断。" }
       }
     };
   }
@@ -827,23 +832,23 @@ function getOpsState(input: {
   if (input.filteredCount === 0) {
     return {
       metrics: { priority: 0, watch: 0, low: 0 },
-      copy: "今天暂未返回可分析的比赛数据，建议保留样例入口，不强行输出运营结论。",
+      copy: "当前暂未返回可分析的比赛数据，建议保留样例入口，不强行输出运营结论。",
       cards: {
         priority: { value: "无数据", body: "没有比赛时不展示伪优先级。" },
         watch: { value: "无数据", body: "当前没有可观察比赛，等待接口更新。" },
-        direction: { value: "等待数据", body: "比赛池恢复后再做今日主推方向判断。" },
-        risk: { value: "低", body: "不要在无数据情况下产出看似真实的今日建议。" }
+        direction: { value: "等待数据", body: "比赛池恢复后再判断主推方向。" },
+        risk: { value: "低", body: "不要在无数据情况下产出看似真实的实时建议。" }
       }
     };
   }
 
   return {
     metrics: { priority: input.priorityCount, watch: input.watchCount, low: input.lowCount },
-    copy: "今日主推内容方向：球星叙事 + 数据解释。风险提醒：避免黑幕、保送、确认伤退等定性表达。",
+    copy: "当前比赛池可用于复盘和选题储备；是否优先制作，需结合具体赛事证据。风险提醒：避免黑幕、保送、确认伤退等定性表达。",
     cards: {
       priority: { value: `${input.priorityCount} 场`, body: "先处理高热度、强叙事、平台适配清晰的比赛。" },
       watch: { value: `${input.watchCount} 场`, body: "适合作为素材储备，等待赛后舆情和平台热度变化。" },
-      direction: { value: "人物复盘", body: "以世界杯强叙事比赛作为主线，承接长尾讨论。" },
+      direction: { value: "赛后复盘", body: "从关键事件与已确认数据切入，具体方向以单场分析为准。" },
       risk: { value: "中风险", body: "避免黑幕、保送、确认伤退等定性表达。" }
     }
   };

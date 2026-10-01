@@ -53,6 +53,10 @@ jobs:
           npm run test:card-hover
           npm run test:word-export
           npm run test:evidence-review
+          npm run test:fact-integrity
+          npm run test:ai-protection
+          npm run test:query-recovery
+          npm run test:demo
           npm run test:sportradar-today
           npm run test:match-search
           npm run test:match-detail

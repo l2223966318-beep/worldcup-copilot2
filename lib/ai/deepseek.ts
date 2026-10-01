@@ -1,3 +1,5 @@
+import { aiRequestGuard, buildAiRequestKey } from "@/lib/ai/requestGuard";
+
 type DeepSeekMessage = {
   role: "system" | "user";
   content: string;
@@ -38,6 +40,8 @@ export async function generateDeepSeekJson<T>(
     quality?: "fast" | "quality";
     maxTokens?: number;
     reasoningEffort?: "high" | "max";
+    cacheTtlMs?: number;
+    cacheKey?: string;
   } = {}
 ): Promise<DeepSeekJsonResult<T>> {
   const apiKey = options.apiKey?.trim() || process.env.DEEPSEEK_API_KEY;
@@ -54,7 +58,7 @@ export async function generateDeepSeekJson<T>(
       messages,
       stream: false,
       response_format: { type: "json_object" },
-      max_tokens: options.maxTokens ?? (isQuality ? DEFAULT_QUALITY_MAX_TOKENS : DEFAULT_FAST_MAX_TOKENS),
+      max_tokens: Math.max(1, Math.min(4096, options.maxTokens ?? (isQuality ? DEFAULT_QUALITY_MAX_TOKENS : DEFAULT_FAST_MAX_TOKENS))),
       ...(isQuality
         ? {
             thinking: { type: "enabled" },
@@ -65,25 +69,34 @@ export async function generateDeepSeekJson<T>(
           })
     };
 
-    const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal
-    });
+    if (JSON.stringify(requestBody).length > 64_000) return { ok: false, message: "AI_INPUT_LIMIT：输入内容过长，请缩小素材范围。" };
+    const key = buildAiRequestKey(apiKey, options.cacheKey ? { model, cacheKey: options.cacheKey, thinking: requestBody.thinking,
+      reasoningEffort: "reasoning_effort" in requestBody ? requestBody.reasoning_effort : undefined, maxTokens: requestBody.max_tokens } : requestBody);
+    return await aiRequestGuard.run<T>(key, async () => {
+      try {
+        const response = await fetch(`${DEEPSEEK_BASE_URL}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        });
 
-    const payload = (await response.json()) as DeepSeekResponse;
-    if (!response.ok) {
-      return { ok: false, message: payload.error?.message ?? `DeepSeek request failed with ${response.status}.` };
-    }
+        const payload = (await response.json()) as DeepSeekResponse;
+        if (!response.ok) {
+          return { ok: false, message: payload.error?.message ?? `DeepSeek request failed with ${response.status}.` };
+        }
 
-    const content = payload.choices?.[0]?.message?.content;
-    if (!content) return { ok: false, message: "DeepSeek returned empty content." };
+        const content = payload.choices?.[0]?.message?.content;
+        if (!content) return { ok: false, message: "DeepSeek returned empty content." };
 
-    return { ok: true, data: parseJsonContent<T>(content), model };
+        return { ok: true, data: parseJsonContent<T>(content), model };
+      } catch (error) {
+        return { ok: false, message: controller.signal.aborted ? "AI request timed out." : error instanceof Error ? error.message : "AI request failed." };
+      }
+    }, options.cacheTtlMs);
   } catch (error) {
     if (controller.signal.aborted) {
       return { ok: false, message: "AI request timed out." };
@@ -96,6 +109,7 @@ export async function generateDeepSeekJson<T>(
 }
 
 export function getDeepSeekFallbackMessage(message: string) {
+  if (/AI_(CALL_LIMIT|BUSY|INPUT_LIMIT)/.test(message)) return message.replace(/^AI_\w+[：:]\s*/, "");
   if (message.includes("DEEPSEEK_API_KEY")) {
     return "未检测到 DeepSeek 配置，已使用本地规则结果。";
   }

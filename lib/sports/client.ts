@@ -37,6 +37,7 @@ export function useWorldCupQuery<T>(
   useEffect(() => {
     let active = true;
     let timer: number | undefined;
+    let failures = 0;
 
     if (!enabled) {
       setState({ loading: false });
@@ -56,6 +57,7 @@ export function useWorldCupQuery<T>(
       try {
         const payload = await fetchPayloadWithRetry<T>(url);
         if (!active) return;
+        failures = 0;
         writeCachedPayload(cacheKey, payload);
         setState({ payload, loading: false });
         const nextRefreshMs = typeof refreshMs === "function" ? refreshMs(payload) : refreshMs;
@@ -69,11 +71,20 @@ export function useWorldCupQuery<T>(
           loading: false,
           error: error instanceof Error ? error.message : "\u8bf7\u6c42\u5931\u8d25"
         }));
+        failures += 1;
+        if (refreshMs && failures <= 3) {
+          timer = window.setTimeout(() => void load(), Math.min(60_000, 2_000 * 2 ** (failures - 1)));
+        }
       }
     }
 
     if (!cached || revalidateOnMount || !isFreshCache(cacheKey, staleMs)) {
       void load();
+    } else {
+      const nextRefreshMs = typeof refreshMs === "function" ? refreshMs(cached) : refreshMs;
+      if (nextRefreshMs && nextRefreshMs > 0) {
+        timer = window.setTimeout(() => void load(), nextRefreshMs);
+      }
     }
 
     return () => {
