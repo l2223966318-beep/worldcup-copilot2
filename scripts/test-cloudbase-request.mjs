@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { Readable } from "node:stream";
 import vm from "node:vm";
+import { createRequire } from "node:module";
+const localRequire = createRequire(import.meta.url);
 const context = vm.createContext({
-  require: name => name === "./sports-service" ? { createSportsService: () => ({}) } : name === "./hot-sources" ? { createSources: () => ({ health: () => [] }) } : { createServer: () => ({ listen() {} }) },
+  require: name => ["./evidence", "./ai-guard", "./hot-ai-cache"].includes(name) ? localRequire(`../cloudfunctions/api-proxy/${name}.js`) : name === "./sports-service" ? { createSportsService: () => ({}) } : name === "./hot-sources" ? { createSources: () => ({ health: () => [] }) } : { createServer: () => ({ listen() {} }) },
   process: { env: {} }, console, URL, AbortController, setTimeout, clearTimeout, Buffer,
 });
 vm.runInContext(readFileSync(new URL("../cloudfunctions/api-proxy/index.js", import.meta.url), "utf8"), context);

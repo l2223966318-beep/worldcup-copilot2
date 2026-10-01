@@ -91,6 +91,11 @@ const event = {
   competitors: [{ name: "Argentina", qualifier: "home" }, { name: "France", qualifier: "away" }],
 };
 let status = { status: "closed", match_status: "after_penalties", home_score: 3, away_score: 3 };
+const timeline = [
+  { type: "score_change", match_time: 5, team: "home", player: { name: "Early scorer" } },
+  ...Array.from({ length: 29 }, (_, i) => ({ type: "throw_in", match_time: i + 6, team: "away" })),
+  { type: "score_change", match_time: 115, team: "home", player: { name: "Messi" } }
+];
 globalThis.fetch = async input => {
   requests.push(String(input));
   return Response.json({
@@ -99,7 +104,7 @@ globalThis.fetch = async input => {
       { sport_event: { ...event, id: "sr:sport_event:wrong-season", sport_event_context: { ...event.sport_event_context, season: { id: "sr:season:2022" } } } },
     ],
     sport_event: event, sport_event_status: status,
-    timeline: [{ type: "score_change", match_time: 115, team: "home", player: { name: "Messi" } }],
+    timeline,
   });
 };
 let fixtures = await client.getSportradarWorldCupFixtures();
@@ -127,7 +132,9 @@ for (const [scores, expected] of [
 status = { status: "postponed" };
 fixtures = await client.getSportradarWorldCupFixtures();
 assert.equal(fixtures.data[0].status, "postponed");
-await client.getSportradarWorldCupMatch(event.id);
+const detail = await client.getSportradarWorldCupMatch(event.id);
+assert.equal(detail.data.events.length, timeline.length, "data normalization must retain the complete timeline");
+assert.equal(detail.data.events[0].player, "Early scorer", "later routine events must not hide early goals");
 assert.ok(requests.some(url => url.includes("/soccer/trial/v4/en/sport_events/") && url.includes("/timeline.json")), "Soccer subscription must use the Soccer timeline, not Soccer Extended");
 globalThis.fetch = async () => new Response("secret-test-key", { status: 401 });
 await assert.rejects(client.getSportradarWorldCupFixtures(), error => !error.message.includes("secret-test-key"));

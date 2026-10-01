@@ -46,7 +46,8 @@ const matchContext = {
     score: "2-1",
     stage: "决赛",
     time: "2026-07-19",
-    sourceStatus: "live"
+    sourceStatus: "live",
+    sourceName: "Sportradar"
   },
   keyEvents: [
     { minute: "81'", team: "法国", type: "goal", description: "完成进球，比分变为2-1" }
@@ -151,8 +152,8 @@ const multilingualEvents = auditDraftEvidence(
     }
   ]
 );
-assert.equal(multilingualEvents.summary.unsupportedClaims, 0);
-assert.equal(multilingualEvents.findings.length, 0);
+assert.equal(multilingualEvents.summary.unsupportedClaims, 1, "Rayan's corner record does not establish that Brazil took the corner");
+assert.equal(multilingualEvents.summary.supportedClaims, 1, "the named Martinelli goal has a matching player and minute");
 
 const basicCoverageEvidence = buildEvidencePack({
   ...matchContext,

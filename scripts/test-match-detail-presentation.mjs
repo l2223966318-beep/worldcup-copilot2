@@ -241,7 +241,8 @@ const review = buildDraftReviewFlow(
   "美国队这场彻底打爆巴拉圭，巴拉圭后卫乌龙就是灾难。",
   match
 );
-assert.equal(review.result.advice, "修改后发布");
+assert.equal(review.result.level, "待人工确认");
+assert.match(review.result.advice, /人工确认/);
 assert.ok(review.riskPoints.some((item) => item.includes("引战表达")));
 assert.ok(review.rewriteSuggestion.includes("引发讨论"));
 assert.ok(!review.rewriteSuggestion.includes("打爆"));

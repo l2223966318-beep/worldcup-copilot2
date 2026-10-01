@@ -5,8 +5,12 @@ const TIMEOUT_MS = Number(process.env.UPSTREAM_TIMEOUT_MS || 7000);
 const WORLDCUP26 = "https://worldcup26.ir";
 const STATS_FIXTURES = "https://www.thestatsapi.com/world-cup/data/fixtures.json";
 const { createSportsService } = require("./sports-service");
+const { auditDraftEvidence, calculateEvidenceRiskScore, hasCompleteReview } = require("./evidence");
+const { createAiRequestGuard, buildAiRequestKey, getAiAccessFailure } = require("./ai-guard");
+const { buildHotTopicAiFingerprint } = require("./hot-ai-cache");
+const aiRequestGuard = createAiRequestGuard(process.env);
 const sportsService = createSportsService();
-const API_VERSION = "direct-v6.1-complete";
+const API_VERSION = "direct-v6.3-cache-guard";
 
 function json(res, status, payload) {
   res.statusCode = status;
@@ -589,6 +593,8 @@ async function readJsonBody(req) {
         const text = Buffer.concat(chunks).toString("utf8");
         const body = text ? JSON.parse(text) : {};
         if (!body || typeof body !== "object" || Array.isArray(body)) throw invalid(400, "JSON object required.");
+        const denied = getAiAccessFailure(req.headers || {}, body.apiKey, process.env);
+        if (denied) return fail(invalid(denied.status, denied.message));
         resolve(body);
       } catch { fail(invalid(400, "Valid JSON object required.")); }
     });
@@ -603,7 +609,8 @@ async function callDeepSeekJson(messages, options = {}) {
 
   const model = String(options.model || process.env.DEEPSEEK_MODEL || process.env.DEEPSEEK_MODEL_FAST || DEFAULT_DEEPSEEK_MODEL).trim();
 
-  async function requestOnce({ jsonMode }) {
+  if (JSON.stringify(messages).length > 64000) return { ok: false, message: "AI_INPUT_LIMIT：输入内容过长，请缩小素材范围。" };
+  async function performRequest({ jsonMode }) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), Number(options.timeoutMs || 24000));
 
@@ -623,7 +630,7 @@ async function callDeepSeekJson(messages, options = {}) {
         model,
         messages: requestMessages,
         stream: false,
-        max_tokens: Number(options.maxTokens || 4096),
+        max_tokens: Math.max(1, Math.min(4096, Number(options.maxTokens || 4096))),
         thinking: { type: "disabled" },
         ...(jsonMode ? { response_format: { type: "json_object" } } : {})
       };
@@ -681,6 +688,12 @@ async function callDeepSeekJson(messages, options = {}) {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  async function requestOnce({ jsonMode }) {
+    const key = buildAiRequestKey(apiKey, { model, jsonMode, maxTokens: options.maxTokens || 4096,
+      input: options.cacheKey || messages });
+    return aiRequestGuard.run(key, () => performRequest({ jsonMode }), options.cacheTtlMs || 0);
   }
 
   // DeepSeek documents that JSON Output can occasionally return empty content.
@@ -791,7 +804,8 @@ async function handleAiHotTopic(req, res) {
       ].join("\n")
     },
     { role: "user", content: JSON.stringify({ topic }) }
-  ], { apiKey: body?.apiKey, timeoutMs: 24000, maxTokens: 1400 });
+  ], { apiKey: body?.apiKey, timeoutMs: 24000, maxTokens: 1400,
+    cacheTtlMs: 10 * 60000, cacheKey: `hot-topic-v2:${buildHotTopicAiFingerprint(topic)}` });
 
   if (!result.ok) {
     return json(res, 200, { sourceStatus: "fallback", intro, analysis: fallback, message: `AI 暂不可用，已使用本地规则：${result.message}` });
@@ -1011,7 +1025,9 @@ async function handleAiMatchWorkflow(req, res) {
         baselineTopics: fallbackTopics
       })
     }
-  ], { apiKey: body?.apiKey, timeoutMs: 30000, maxTokens: 4096 });
+  ], { apiKey: body?.apiKey, timeoutMs: 30000, maxTokens: 4096,
+    cacheTtlMs: match.status === "live" ? 60000 : 10 * 60000,
+    cacheKey: JSON.stringify({ kind: "match-workflow-v2", match, baselineTopics }) });
 
   if (!result.ok) {
     return json(res, 200, {
@@ -1234,9 +1250,10 @@ async function handleAiPlatformDraft(req, res) {
 
 function localReviewDraft(draft, evidence = []) {
   const text = String(draft || "");
+  const evidenceAudit = auditDraftEvidence(text, evidence);
   const risky = /(黑哨|黑幕|假球|保送|确认伤退|确认报销|确认缺席|全网都在骂|去骂|爆破|废物|垃圾)/;
   const hit = text.match(risky)?.[0];
-  const findings = hit ? [{
+  const riskFindings = hit ? [{
     type: "高风险表达",
     sentence: hit,
     reason: "当前材料不足以支撑该定性，且可能引发造谣、攻击或引战风险。",
@@ -1244,18 +1261,15 @@ function localReviewDraft(draft, evidence = []) {
     evidenceStatus: "risk",
     evidenceIds: []
   }] : [];
-  const score = findings.length ? 58 : 8;
+  const findings = [...evidenceAudit.findings, ...riskFindings];
+  const score = Math.max(hit ? 58 : 8, calculateEvidenceRiskScore(evidenceAudit.summary.unsupportedClaims));
   return {
-    level: findings.length ? "中" : "低",
+    level: "待人工确认",
     score,
     findings,
-    advice: findings.length ? "修改后发布" : "可发布",
+    advice: "审核未完成，待人工确认",
     evidence,
-    evidenceSummary: {
-      checkedClaims: 0,
-      supportedClaims: 0,
-      unsupportedClaims: findings.length
-    }
+    evidenceSummary: evidenceAudit.summary
   };
 }
 
@@ -1313,14 +1327,14 @@ async function handleAiReviewDraft(req, res) {
     }
   ], { apiKey: body?.apiKey, timeoutMs: 30000, maxTokens: 4096 });
 
-  if (!result.ok) {
+  if (!result.ok || !hasCompleteReview(result.data, draft)) {
     return json(res, 200, {
       sourceStatus: "fallback",
       result: fallbackResult,
       riskPoints: fallbackResult.findings.map((f) => `${f.type}：${f.sentence}`),
       rewriteSuggestion: fallbackResult.findings.length ? draft.replace(fallbackResult.findings[0].sentence, fallbackResult.findings[0].rewrite) : draft,
       checklist: fallbackResult.findings.map((f) => `修改“${f.sentence}”`),
-      message: `AI 暂不可用，已使用本地审稿：${result.message}`
+      message: result.ok ? "AI 审核结果不完整，待人工确认。" : `AI 暂不可用，已使用本地检查，待人工确认：${result.message}`
     });
   }
 
@@ -1345,9 +1359,12 @@ async function handleAiReviewDraft(req, res) {
       }).filter(Boolean).slice(0, 6)
     : [];
 
-  if (!findings.length && fallbackResult.findings.length) findings.push(...fallbackResult.findings);
+  for (const finding of fallbackResult.findings) {
+    if (!findings.some(item => item.sentence === finding.sentence)) findings.push(finding);
+  }
   let score = findings.length ? matchAiScore(d.score, 45) : fallbackResult.score;
   if (findings.some((f) => f.evidenceStatus === "risk")) score = Math.max(score, 50);
+  if (findings.length) score = Math.max(score, 36);
   const level = score >= 70 ? "高" : score >= 36 ? "中" : "低";
   const resultSnapshot = {
     level,
@@ -1355,11 +1372,7 @@ async function handleAiReviewDraft(req, res) {
     findings,
     advice: level === "高" ? "建议暂缓" : level === "中" ? "修改后发布" : "可发布",
     evidence,
-    evidenceSummary: {
-      checkedClaims: findings.length,
-      supportedClaims: 0,
-      unsupportedClaims: findings.filter((f) => f.evidenceStatus !== "risk").length
-    }
+    evidenceSummary: fallbackResult.evidenceSummary
   };
 
   const riskPoints = matchAiList(
@@ -1435,6 +1448,9 @@ async function handleRequest(req, res) {
         message: "DEEPSEEK_API_KEY is not available to this CloudBase function."
       });
     }
+
+    const denied = getAiAccessFailure(req.headers || {}, undefined, process.env);
+    if (denied) return json(res, denied.status, { sourceStatus: "error", message: denied.message });
 
     const result = await callDeepSeekJson(
       [
@@ -1516,8 +1532,8 @@ const server = http.createServer((req, res) => {
   handleRequest(req, res).catch(error => {
     if (res.writableEnded || res.destroyed) return;
     if (res.headersSent) return res.destroy();
-    const status = [400, 413].includes(error?.statusCode) ? error.statusCode : 500;
-    const message = status === 413 ? "Request body is too large." : status === 400 ? "Valid JSON object required." : "Request could not be completed.";
+    const status = [400, 401, 403, 413].includes(error?.statusCode) ? error.statusCode : 500;
+    const message = status === 401 || status === 403 ? error.message : status === 413 ? "Request body is too large." : status === 400 ? "Valid JSON object required." : "Request could not be completed.";
     json(res, status, payload("error", null, message));
   });
 });

@@ -404,7 +404,7 @@ function safeTurningPoint(analysis: AnalysisResult) {
 }
 
 function verifiedShotLine(match: MatchContext) {
-  if (match.verifiedStats === false) return "当前数据源未返回完整射门和射正统计";
+  if (match.verifiedStats === false || [match.stats.teamA.shots, match.stats.teamA.shotsOnTarget, match.stats.teamB.shots, match.stats.teamB.shotsOnTarget].some(value => value === null)) return "当前数据源未返回完整射门和射正统计";
   return `${match.matchInfo.teamA}射门${match.stats.teamA.shots}次、射正${match.stats.teamA.shotsOnTarget}次，${match.matchInfo.teamB}射门${match.stats.teamB.shots}次、射正${match.stats.teamB.shotsOnTarget}次`;
 }
 

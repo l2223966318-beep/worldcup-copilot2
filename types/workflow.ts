@@ -1,10 +1,10 @@
 export type TeamStatsSnapshot = {
-  possession: number;
-  shots: number;
-  shotsOnTarget: number;
-  corners: number;
-  fouls: number;
-  yellowCards: number;
+  possession: number | null;
+  shots: number | null;
+  shotsOnTarget: number | null;
+  corners: number | null;
+  fouls: number | null;
+  yellowCards: number | null;
 };
 
 export type EvidenceType = "match_stat" | "match_event" | "hot_topic";
@@ -31,6 +31,7 @@ export type MatchContext = {
     stage: string;
     time: string;
     sourceStatus: string;
+    sourceName?: string;
   };
   keyEvents: Array<{ minute: string; team: string; type: string; description: string }>;
   keyPlayers: Array<{ name: string; team: string; role: string; rating?: number }>;

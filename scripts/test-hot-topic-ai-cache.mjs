@@ -72,7 +72,16 @@ const savedAt = 1_000;
 
 writeHotTopicAiCache(storage, topic, payload, savedAt);
 assert.deepEqual(readHotTopicAiCache(storage, topic, savedAt + 1), payload);
-assert.equal(readHotTopicAiCache(storage, { ...topic, heat: 990000 }, savedAt + 1), null);
+assert.deepEqual(readHotTopicAiCache(storage, { ...topic, heat: 990000, updatedAt: "2026-08-08T15:25:00+08:00", valueScore: 87 }, savedAt + 1), payload,
+  "fetch timestamps and changing rank metrics must not repeat an unchanged topic analysis");
+assert.equal(readHotTopicAiCache(storage, { ...topic, summary: "新增已核验的事件细节。" }, savedAt + 1), null);
+
+writeHotTopicAiCache(storage, topic, payload, savedAt);
+assert.equal(readHotTopicAiCache(storage, { ...topic, url: "https://example.com/new-source" }, savedAt + 1), null);
+
+const brokenStorage = { getItem() { throw new Error("disabled"); }, setItem() { throw new Error("disabled"); }, removeItem() { throw new Error("disabled"); } };
+assert.equal(readHotTopicAiCache(brokenStorage, topic, savedAt + 1), null, "disabled storage must not break analysis");
+assert.doesNotThrow(() => writeHotTopicAiCache(brokenStorage, topic, payload, savedAt));
 
 writeHotTopicAiCache(storage, topic, payload, savedAt);
 assert.equal(readHotTopicAiCache(storage, topic, savedAt + HOT_TOPIC_AI_CACHE_TTL_MS + 1), null);

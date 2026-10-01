@@ -2,8 +2,9 @@ import type { MatchData } from "@/data/matches";
 import type { TopicIdea } from "@/lib/ai/topics";
 
 export const MATCH_AI_WORKFLOW_CACHE_TTL_MS = 7 * 24 * 60 * 60_000;
+export const MATCH_AI_LIVE_CACHE_TTL_MS = 60_000;
 
-const MATCH_AI_WORKFLOW_CACHE_VERSION = "match-analysis-v1";
+const MATCH_AI_WORKFLOW_CACHE_VERSION = "match-analysis-v2-fact-integrity";
 const MATCH_AI_WORKFLOW_CACHE_PREFIX = "worldcup.match-ai-workflow";
 
 type StorageLike = Pick<Storage, "getItem" | "setItem" | "removeItem">;
@@ -33,7 +34,8 @@ export function readMatchAiWorkflowCache<T extends CacheableAiPayload>(
       entry.version === MATCH_AI_WORKFLOW_CACHE_VERSION &&
       entry.fingerprint === buildMatchFingerprint(match, topics) &&
       entry.payload?.sourceStatus === "live" &&
-      now - entry.savedAt <= MATCH_AI_WORKFLOW_CACHE_TTL_MS;
+      Number.isFinite(entry.savedAt) && entry.savedAt <= now &&
+      now - entry.savedAt <= (match.status === "live" ? MATCH_AI_LIVE_CACHE_TTL_MS : MATCH_AI_WORKFLOW_CACHE_TTL_MS);
 
     if (!isValid) {
       storage.removeItem(key);
@@ -42,7 +44,7 @@ export function readMatchAiWorkflowCache<T extends CacheableAiPayload>(
 
     return entry.payload;
   } catch {
-    storage.removeItem(key);
+    try { storage.removeItem(key); } catch { /* Storage can be disabled. */ }
     return null;
   }
 }
@@ -75,14 +77,9 @@ function buildMatchAiCacheKey(matchId: string) {
 }
 
 function buildMatchFingerprint(match: MatchData, topics: TopicIdea[]) {
-  const source = JSON.stringify({
+  return JSON.stringify({
     version: MATCH_AI_WORKFLOW_CACHE_VERSION,
     match,
     topics
   });
-  let hash = 0;
-  for (let index = 0; index < source.length; index += 1) {
-    hash = (hash * 31 + source.charCodeAt(index)) | 0;
-  }
-  return String(hash);
 }

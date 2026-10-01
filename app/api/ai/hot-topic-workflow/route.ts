@@ -10,6 +10,8 @@ import {
   type HotGenerationConfig
 } from "@/lib/hot/hotTopicWorkflow";
 import type { HotTopic } from "@/lib/hot/types";
+import { getAiAccessFailure } from "@/lib/ai/requestGuard";
+import { buildHotTopicAiFingerprint } from "@/lib/services/hotTopicAiCache";
 
 export const dynamic = "force-dynamic";
 
@@ -29,29 +31,9 @@ type AuditPayload = {
   rewriteSuggestion?: string;
 };
 
-type GenerateCacheEntry = {
-  expiresAt: number;
-  payload: {
-    sourceStatus: "live";
-    draft: string;
-    model?: string;
-  };
-};
-
-type AuditCacheEntry = {
-  expiresAt: number;
-  payload: {
-    sourceStatus: "live";
-    audit: HotAuditResult;
-    model?: string;
-  };
-};
-
 const HOT_WORKFLOW_AI_CACHE_TTL_MS = Number(process.env.HOT_WORKFLOW_AI_CACHE_TTL_MS ?? 10 * 60_000);
 const HOT_WORKFLOW_GENERATE_TIMEOUT_MS = Number(process.env.HOT_WORKFLOW_GENERATE_TIMEOUT_MS ?? 24_000);
 const HOT_WORKFLOW_AUDIT_TIMEOUT_MS = Number(process.env.HOT_WORKFLOW_AUDIT_TIMEOUT_MS ?? 20_000);
-const generateCache = new Map<string, GenerateCacheEntry>();
-const auditCache = new Map<string, AuditCacheEntry>();
 
 export async function POST(request: Request) {
   try {
@@ -62,6 +44,8 @@ export async function POST(request: Request) {
       draft?: string;
       apiKey?: string;
     };
+    const denied = getAiAccessFailure(request.headers, body.apiKey);
+    if (denied) return NextResponse.json({ sourceStatus: "error", message: denied.message }, { status: denied.status });
 
     if (!body.topic || !body.config || !body.action) {
       return NextResponse.json(
@@ -102,13 +86,6 @@ export async function POST(request: Request) {
 
 async function handleGenerate(topic: HotTopic, config: HotGenerationConfig, apiKey?: string) {
   const fallbackDraft = qualityControl(generateHotDraft(topic, config));
-  const cacheKey = buildGenerateCacheKey(topic, config);
-  const cached = generateCache.get(cacheKey);
-
-  if (cached && cached.expiresAt > Date.now()) {
-    return NextResponse.json(cached.payload);
-  }
-
   const result = await generateDeepSeekJson<GeneratePayload>(
     [
       {
@@ -162,19 +139,11 @@ async function handleGenerate(topic: HotTopic, config: HotGenerationConfig, apiK
     draft,
     model: result.model
   } as const;
-  generateCache.set(cacheKey, { expiresAt: Date.now() + HOT_WORKFLOW_AI_CACHE_TTL_MS, payload });
   return NextResponse.json(payload);
 }
 
 async function handleAudit(topic: HotTopic, config: HotGenerationConfig, draft: string, apiKey?: string) {
   const fallbackAudit = qualityControl(auditHotDraft(draft, topic, config.platform, config.contentType));
-  const cacheKey = buildAuditCacheKey(topic, config, draft);
-  const cached = auditCache.get(cacheKey);
-
-  if (cached && cached.expiresAt > Date.now()) {
-    return NextResponse.json(cached.payload);
-  }
-
   const result = await generateDeepSeekJson<AuditPayload>(
     [
       {
@@ -204,7 +173,9 @@ async function handleAudit(topic: HotTopic, config: HotGenerationConfig, draft: 
         })
       }
     ],
-    { timeoutMs: HOT_WORKFLOW_AUDIT_TIMEOUT_MS, apiKey, quality: "fast", maxTokens: 1_500 }
+    { timeoutMs: HOT_WORKFLOW_AUDIT_TIMEOUT_MS, apiKey, quality: "fast", maxTokens: 1_500,
+      cacheTtlMs: HOT_WORKFLOW_AI_CACHE_TTL_MS,
+      cacheKey: JSON.stringify({ kind: "hot-audit-v2", topic: buildHotTopicAiFingerprint(topic), config, draft }) }
   );
 
   if (!result.ok) {
@@ -221,7 +192,6 @@ async function handleAudit(topic: HotTopic, config: HotGenerationConfig, draft: 
     audit,
     model: result.model
   } as const;
-  auditCache.set(cacheKey, { expiresAt: Date.now() + HOT_WORKFLOW_AI_CACHE_TTL_MS, payload });
   return NextResponse.json(payload);
 }
 
@@ -280,39 +250,6 @@ function lengthInstruction(config: HotGenerationConfig) {
   if (config.length === "短") return "长度：短，控制在 120-220 字或等量结构。";
   if (config.length === "长") return "长度：长，给出完整结构和可直接展开的段落。";
   return "长度：中，信息完整但避免冗长。";
-}
-
-function buildGenerateCacheKey(topic: HotTopic, config: HotGenerationConfig) {
-  return [
-    "generate-visual-v2",
-    topic.id,
-    topic.title,
-    topic.updatedAt ?? "",
-    config.platform,
-    config.contentType,
-    config.tone,
-    config.length,
-    config.useMatchFacts ? "facts" : "nofacts",
-    config.includeRiskReminder ? "risk" : "norisk"
-  ].join("::");
-}
-
-function buildAuditCacheKey(topic: HotTopic, config: HotGenerationConfig, draft: string) {
-  return [
-    "audit",
-    topic.id,
-    config.platform,
-    config.contentType,
-    simpleHash(draft)
-  ].join("::");
-}
-
-function simpleHash(value: string) {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) | 0;
-  }
-  return String(hash);
 }
 
 function normalizeDraft(value: string | undefined, fallback: string) {

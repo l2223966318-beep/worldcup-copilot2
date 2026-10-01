@@ -13,7 +13,11 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
 
   return {
     id: match.id,
+    status: match.status,
     isExample: match.source.provider === "mock",
+    sourceName: sourceProviderName(match.source.provider),
+    verifiedStats: Object.values(homeStats).every(value => value !== null)
+      && Object.values(awayStats).every(value => value !== null),
     name: `${competition}：${homeTeam} vs ${awayTeam}`,
     stage: round,
     time: match.kickoffTime,
@@ -26,32 +30,9 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
       teamA: homeStats,
       teamB: awayStats
     },
-    keyPlayers: [
-      {
-        name: homeTeam,
-        team: homeTeam,
-        role: "球队",
-        goals: match.score.home ?? 0,
-        assists: 0,
-        shots: homeStats.shots,
-        keyPasses: 0,
-        duelsWon: 0,
-        rating: 7.6
-      },
-      {
-        name: awayTeam,
-        team: awayTeam,
-        role: "球队",
-        goals: match.score.away ?? 0,
-        assists: 0,
-        shots: awayStats.shots,
-        keyPasses: 0,
-        duelsWon: 0,
-        rating: 7.4
-      }
-    ],
+    keyPlayers: [],
     keyEvents: match.events.length
-      ? match.events.map((event) => ({
+      ? match.events.filter(isKeyMatchEvent).map((event) => ({
           minute: event.minute ? `${event.minute}${event.extraMinute ? `+${event.extraMinute}` : ""}'` : "-",
           team: localizeTeamName(event.team),
           type: normalizeEventType(event.type, event.detail),
@@ -62,7 +43,7 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
             minute: "-",
             team: "数据源",
             type: "终场",
-            description: "当前 Sportradar 基础覆盖未返回事件流；可基于比分、状态和基础统计做内容判断，但不要编造进球过程、判罚、伤病或球员发言。"
+            description: `当前${sourceProviderName(match.source.provider)}未返回事件流；可基于已确认比分和状态做内容判断，但不要编造进球过程、判罚、伤病或球员发言。`
           }
         ],
     historicalMeetings: [
@@ -74,6 +55,11 @@ export function worldCupMatchToMatchData(match: WorldCupMatch): MatchData {
       }
     ]
   };
+}
+
+function isKeyMatchEvent(event: WorldCupMatch["events"][number]) {
+  if (["throw_in", "goal_kick", "ball_out"].includes(event.type.toLowerCase())) return false;
+  return /goal|score_change|card|subst|shot|save|penalty|corner|injur|var|进球|点球|黄牌|红牌|换人|射门|射正|扑救|角球|伤退|受伤|判罚|终场|比赛结束/i.test(`${event.type} ${event.detail}`);
 }
 
 function buildCoverageNote(match: WorldCupMatch) {
@@ -97,20 +83,20 @@ function statisticsToTeamStats(statistics: MatchStatistic[], teamName: string): 
   const item = statistics.find((stat) => stat.team === teamName);
 
   return {
-    possession: numberStat(item, ["Ball Possession", "控球率"], 50, true),
-    shots: numberStat(item, ["Total Shots", "Shots total", "射门"], 0),
-    shotsOnTarget: numberStat(item, ["Shots on Goal", "Shots on Target", "射正"], 0),
-    corners: numberStat(item, ["Corner Kicks", "角球"], 0),
-    fouls: numberStat(item, ["Fouls", "犯规"], 0),
-    yellowCards: numberStat(item, ["Yellow Cards", "黄牌"], 0)
+    possession: numberStat(item, ["Ball Possession", "控球率"], true),
+    shots: numberStat(item, ["Total Shots", "Shots total", "射门"]),
+    shotsOnTarget: numberStat(item, ["Shots on Goal", "Shots on Target", "射正"]),
+    corners: numberStat(item, ["Corner Kicks", "角球"]),
+    fouls: numberStat(item, ["Fouls", "犯规"]),
+    yellowCards: numberStat(item, ["Yellow Cards", "黄牌"])
   };
 }
 
-function numberStat(statistic: MatchStatistic | undefined, names: string[], fallback: number, percentage = false) {
+function numberStat(statistic: MatchStatistic | undefined, names: string[], percentage = false) {
   const value = statistic?.values.find((entry) => names.includes(entry.type))?.value;
-  if (value === null || value === undefined) return fallback;
+  if (value === null || value === undefined || (typeof value === "string" && !value.trim())) return null;
   const parsed = typeof value === "number" ? value : Number(String(value).replace("%", ""));
-  if (!Number.isFinite(parsed)) return fallback;
+  if (!Number.isFinite(parsed) || parsed < 0 || (percentage && parsed > 100)) return null;
   return percentage ? Math.round(parsed) : parsed;
 }
 
@@ -129,6 +115,7 @@ function describeMatchEvent(event: WorldCupMatch["events"][number]) {
   if (/goal|score/.test(normalized)) return assist ? `${subject}破门，${assist}送出助攻。` : `${subject}完成进球。`;
   if (/yellow/.test(normalized)) return `${subject}吃到黄牌。`;
   if (/red/.test(normalized)) return `${subject}吃到红牌。`;
+  if (/corner/.test(normalized)) return `${subject}获得角球。`;
   if (/substitution|subst|change/.test(normalized)) return `${subject}完成换人调整。`;
 
   return [subject, readableEventDetail(detail)].filter(Boolean).join("，") + "。";
@@ -142,12 +129,18 @@ function readableEventDetail(detail: string) {
 
 function normalizeEventType(type: string, detail = ""): MatchEvent["type"] {
   const normalized = `${type} ${detail}`.toLowerCase();
-  if (/goal|score/.test(normalized)) return "进球";
-  if (/card/.test(normalized)) return "黄牌";
-  if (/subst|substitution|change/.test(normalized)) return "换人";
-  if (/save|saved/.test(normalized)) return "关键扑救";
-  if (/miss|shot/.test(normalized)) return "射门";
-  return "终场";
+  if (/penalty|点球/.test(normalized)) return "点球";
+  if (/goal|score_change|进球/.test(normalized)) return "进球";
+  if (/red|红牌/.test(normalized)) return "红牌";
+  if (/card|yellow|黄牌/.test(normalized)) return "黄牌";
+  if (/corner|角球/.test(normalized)) return "角球";
+  if (/subst|substitution|change|换人/.test(normalized)) return "换人";
+  if (/save|saved|扑救/.test(normalized)) return "关键扑救";
+  if (/miss|shot|射门|射正/.test(normalized)) return "射门";
+  if (/injur|伤退|受伤/.test(normalized)) return "伤情";
+  if (/var|判罚|争议/.test(normalized)) return "争议";
+  if (/终场|比赛结束|match_ended/.test(normalized)) return "终场";
+  return "关键事件";
 }
 
 function sourceProviderName(provider: WorldCupMatch["source"]["provider"]) {

@@ -8,7 +8,7 @@ assert.match(safeReleaseFailure(new Error("A 32-byte base64 backup key is requir
 assert.match(safeReleaseFailure({ code: "AuthFailure.SecretIdNotFound", message: "private-secret" }), /credentials/);
 assert.match(safeReleaseFailure({ code: "UnauthorizedOperation", message: "private-secret" }), /permission/);
 assert.equal(safeReleaseFailure(new Error("private-secret https://private?signature=secret")).includes("private"), false);
-const zip = readFileSync(new URL("../deliverables/cloudbase/worldcup-api-v6.1-complete.zip", import.meta.url));
+const zip = readFileSync(new URL("../deliverables/cloudbase/worldcup-api-v6.3-cache-guard.zip", import.meta.url));
 const key = Buffer.alloc(32, 7).toString("base64");
 let calls = [], saved;
 const env = { TENCENTCLOUD_SECRET_ID: "test-id", TENCENTCLOUD_SECRET_KEY: "test-secret", CLOUDBASE_BACKUP_KEY: key, CLOUDBASE_RELEASE_AUTHORIZED: "true" };
@@ -65,6 +65,15 @@ await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.
     return { FunctionName: TARGET.functionName, Type: "HTTP", Status: "Active" };
   } } }), /environment variables could not be verified/);
 assert.deepEqual(calls.map(([method]) => method), ["read"]);
+calls = [];
+await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName,
+  client: { ...client, GetFunction: async params => {
+    calls.push(["read", params]);
+    return { FunctionName: TARGET.functionName, Type: "HTTP", Status: "Active",
+      Environment: { Variables: [{ Key: "DEEPSEEK_API_KEY", Value: "test-shared-key" }] } };
+  } } }), /AI_ACCESS_TOKEN/);
+assert.deepEqual(calls.map(([method]) => method), ["read"], "Missing AI access policy must stop before backup or code update");
+assert.match(safeReleaseFailure(new Error("AI_ACCESS_TOKEN or explicit AI_ALLOW_PUBLIC must be configured when shared AI is enabled.")), /AI_ACCESS_TOKEN/);
 calls = [];
 result = await release({ ...options, apply: true, confirmFunction: TARGET.functionName,
   client: { ...client, GetFunction: async params => {

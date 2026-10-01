@@ -1,6 +1,7 @@
 import type { MatchData } from "@/data/matches";
 import { cleanList, cleanTitle, diversifyPlatformText, ensurePublishable, qualityControl } from "@/lib/ai/quality";
 import type { TopicIdea } from "@/lib/ai/topics";
+import { hasVerifiedStatistics } from "@/lib/sports/statistics";
 
 export type PlatformContent = {
   bilibili: {
@@ -60,11 +61,13 @@ export type PlatformContent = {
 };
 
 export function generatePlatformContent(match: MatchData, topic: TopicIdea): PlatformContent {
-  const leadPlayer = match.keyPlayers[0];
+  const leadPlayer = match.keyPlayers[0] ?? { name: match.teamA };
   const opponentPlayer = match.keyPlayers[1] ?? leadPlayer;
   const scoreText = match.score === "vs" ? "这场球" : `${match.score}这场球`;
   const eventLine = match.keyEvents[0]?.description || `${match.teamA}和${match.teamB}的比赛走势`;
-  const dataLine = `${match.teamA}射门${match.stats.teamA.shots}次、射正${match.stats.teamA.shotsOnTarget}次，${match.teamB}射门${match.stats.teamB.shots}次、射正${match.stats.teamB.shotsOnTarget}次`;
+  const dataLine = match.verifiedStats !== false && hasVerifiedStatistics(match.stats)
+    ? `${match.teamA}射门${match.stats.teamA.shots}次、射正${match.stats.teamA.shotsOnTarget}次，${match.teamB}射门${match.stats.teamB.shots}次、射正${match.stats.teamB.shotsOnTarget}次`
+    : "技术统计尚不完整，只使用已确认比分和事件记录";
   const mainAngle = ensurePublishable(topic.coreAngle || topic.title);
   const sourceCaution = "涉及伤病、判罚、冲突和更衣室信息，只能写公开事实，发布前核验来源。";
 

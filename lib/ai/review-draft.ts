@@ -5,6 +5,7 @@ import {
   auditDraftEvidence,
   buildEvidencePack,
   calculateEvidenceRiskScore,
+  hasCompleteReview,
   finalizeReviewRiskScore
 } from "@/lib/services/evidenceService";
 import type { EvidenceItem, MatchContext, ReviewResultSnapshot } from "@/types/workflow";
@@ -96,10 +97,10 @@ export async function reviewDraftWithAi(input: {
     { timeoutMs: 30_000, apiKey: input.apiKey, quality: "fast", maxTokens: 1_600 }
   );
 
-  if (!result.ok) {
+  if (!result.ok || !hasCompleteReview(result.data, input.draft)) {
     return {
       sourceStatus: "fallback",
-      message: getDeepSeekFallbackMessage(result.message),
+      message: result.ok ? "AI 审核结果不完整，待人工确认。" : getDeepSeekFallbackMessage(result.message),
       result: fallbackResult,
       riskPoints: buildRiskPoints(fallbackResult),
       rewriteSuggestion: buildFallbackRewrite(input.draft, fallbackResult),
@@ -111,6 +112,7 @@ export async function reviewDraftWithAi(input: {
   const findings = mergeFindings(aiFindings, fallbackResult.findings);
   const baseLevel = normalizeLevel(result.data.level);
   const rawScore = Math.max(
+    findings.length ? 36 : 0,
     normalizeScore(result.data.score, baseLevel),
     evidencePenalty(evidenceAudit.summary.unsupportedClaims),
     ruleReview.score
@@ -199,13 +201,12 @@ function buildFallbackResult(
   }));
   const findings = mergeFindings(evidenceAudit.findings, ruleFindings);
   const score = Math.max(ruleReview.score, calculateEvidenceRiskScore(evidenceAudit.summary.unsupportedClaims));
-  const level = score >= 70 ? "高" : score >= 36 ? "中" : "低";
 
   return {
-    level,
+    level: "待人工确认",
     score,
     findings,
-    advice: level === "高" ? "建议暂缓" : level === "中" ? "修改后发布" : "可发布",
+    advice: "审核未完成，待人工确认",
     evidence,
     evidenceSummary: evidenceAudit.summary
   };
@@ -226,6 +227,7 @@ function mergeFindings(
 
 function buildRiskPoints(result: ReviewResultSnapshot) {
   if (!result.findings.length) {
+    if (result.level === "待人工确认") return ["AI 审核未完成，当前本地检查不能替代人工确认。"];
     return [buildSuccessMessage(result.evidenceSummary ?? { checkedClaims: 0, supportedClaims: 0, unsupportedClaims: 0 })];
   }
   return result.findings.map((finding) => {

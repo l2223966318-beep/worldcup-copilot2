@@ -1,0 +1,67 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+
+type AiResult<T> = { ok: true; data: T; model: string } | { ok: false; message: string };
+type Environment = Record<string, string | undefined>;
+type CacheEntry = { expiresAt: number; value: AiResult<unknown> };
+
+export function buildAiRequestKey(apiKey: string, request: unknown) {
+  return createHash("sha256").update(JSON.stringify(["ai-guard-v1", apiKey, request])).digest("hex");
+}
+
+export function getAiAccessFailure(headers: Headers | Record<string, string | string[] | undefined>, apiKey?: unknown, env: Environment = process.env) {
+  if (typeof apiKey === "string" && apiKey.trim()) return null;
+  if (!env.DEEPSEEK_API_KEY?.trim()) return null;
+  const expected = env.AI_ACCESS_TOKEN?.trim();
+  if (expected) {
+    const supplied = typeof (headers as Headers).get === "function"
+      ? (headers as Headers).get("x-ai-access-token") ?? ""
+      : (headers as Record<string, unknown>)["x-ai-access-token"];
+    const value = typeof supplied === "string" && supplied.length <= 1024 ? supplied : "";
+    const hash = (text: string) => createHash("sha256").update(text).digest();
+    if (value && timingSafeEqual(hash(value), hash(expected))) return null;
+    return { status: 401, message: "AI 访问口令未填写或不正确，请到设置页填写；也可使用自己的 DeepSeek API Key。" };
+  }
+  if (env.AI_ALLOW_PUBLIC === "true") return null;
+  return { status: 403, message: "共享 AI 尚未开放访问。请配置访问口令或使用自己的 DeepSeek API Key；本地规则和预置案例仍可使用。" };
+}
+
+function positiveLimit(value: string | undefined, fallback: number, max: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback;
+}
+
+// These are per-process limits. A multi-instance deployment still needs a shared quota store.
+export function createAiRequestGuard(env: Environment = process.env, now = Date.now) {
+  const maxConcurrent = positiveLimit(env.AI_MAX_CONCURRENT, 2, 8);
+  const hourlyCap = positiveLimit(env.AI_MAX_HOURLY_CALLS, 60, 1000);
+  const dailyCap = positiveLimit(env.AI_MAX_DAILY_CALLS, 200, 5000);
+  const pending = new Map<string, Promise<AiResult<unknown>>>();
+  const cache = new Map<string, CacheEntry>();
+  let active = 0, hour = -1, day = -1, hourlyCalls = 0, dailyCalls = 0;
+
+  async function run<T>(key: string, work: () => Promise<AiResult<T>>, cacheTtlMs = 0): Promise<AiResult<T>> {
+    const time = now();
+    const cached = cache.get(key);
+    if (cached && cached.expiresAt > time) return cached.value as AiResult<T>;
+    if (cached) cache.delete(key);
+    if (pending.has(key)) return pending.get(key) as Promise<AiResult<T>>;
+    if (Math.floor(time / 3_600_000) !== hour) { hour = Math.floor(time / 3_600_000); hourlyCalls = 0; }
+    if (Math.floor(time / 86_400_000) !== day) { day = Math.floor(time / 86_400_000); dailyCalls = 0; }
+    if (hourlyCalls >= hourlyCap || dailyCalls >= dailyCap) return { ok: false, message: "AI_CALL_LIMIT：当前时段调用次数已达到保护上限。" };
+    if (active >= maxConcurrent) return { ok: false, message: "AI_BUSY：当前 AI 请求较多，请稍后再试。" };
+    active++; hourlyCalls++; dailyCalls++;
+    const task = Promise.resolve().then(work).then(value => {
+      const ttl = value.ok ? Math.max(0, Math.min(Number.isFinite(cacheTtlMs) ? cacheTtlMs : 0, 7 * 86_400_000)) : 30_000;
+      if (ttl > 0) {
+        if (!cache.has(key) && cache.size >= 128) cache.delete(cache.keys().next().value!);
+        cache.set(key, { expiresAt: now() + ttl, value });
+      }
+      return value;
+    }).finally(() => { active--; pending.delete(key); });
+    pending.set(key, task);
+    return task;
+  }
+  return { run };
+}
+
+export const aiRequestGuard = createAiRequestGuard();

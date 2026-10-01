@@ -19,7 +19,8 @@ function createSportsService({ client = require("./sportradar"), env = process.e
     : { ...unavailable(diagnostics.status), diagnostics };
   async function cached(key, loader) {
     const entry = cache.get(key);
-    const lifetime = Array.isArray(entry?.result.data) && entry.result.data.some(m => m.status === "live") ? 60000 : ttl;
+    const data = entry?.result.data;
+    const lifetime = (Array.isArray(data) ? data.some(m => m.status === "live") : data?.status === "live") ? 60000 : ttl;
     if (entry && now() - entry.fetchedAt < lifetime) return { ...entry.result, sourceStatus: "cache" };
     if (pending.has(key)) return pending.get(key);
     const failure = failures.get(key);

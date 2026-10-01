@@ -23,7 +23,7 @@ function createRuntime({ fail = false, empty = false } = {}) {
       ] }) };
     };
   const context = vm.createContext({
-    require: name => name === "./sports-service" ? { createSportsService: () => createSportsService({ env: {} }) } : name === "./hot-sources" ? { createSources: () => createSources({ env: {}, fetchImpl: fakeFetch }) } : ({ createServer: callback => { handler = callback; return { listen() {} }; } }),
+    require: name => ["./evidence", "./ai-guard", "./hot-ai-cache"].includes(name) ? localRequire(`../cloudfunctions/api-proxy/${name}.js`) : name === "./sports-service" ? { createSportsService: () => createSportsService({ env: {} }) } : name === "./hot-sources" ? { createSources: () => createSources({ env: {}, fetchImpl: fakeFetch }) } : ({ createServer: callback => { handler = callback; return { listen() {} }; } }),
     process: { env: {} }, console, URL, AbortController, setTimeout, clearTimeout, Buffer,
     fetch: fakeFetch,
   });
@@ -67,7 +67,7 @@ const health = runtime.run('hotHealth()');
 assert.equal(health.providers[0].provider, "uapi");
 assert.equal(health.providers.find(p => p.provider === "tavily").status, "not-configured");
 assert.equal(runtime.calls(), 2, "health must not trigger paid or external requests");
-assert.equal((await runtime.request("/api/health")).version, "direct-v6.1-complete");
+assert.equal((await runtime.request("/api/health")).version, "direct-v6.3-cache-guard");
 assert.equal((await runtime.request("/api/hot/health")).searchMode, "multi-source-search");
 assert.equal((await runtime.request("/api/ai/health")).configured, false, "existing AI route remains available");
 runtime.run('hotPlatformCache.get("hupu").fetchedAt -= 60001');
@@ -98,7 +98,7 @@ assert.ok(audited.audit.risk.length > 0);
 const reviewed = await runtime.request("/api/ai/review-draft", {
   draft: "这是黑哨", matchContext: {}, evidence: []
 });
-assert.equal(reviewed.result.advice, "修改后发布");
+assert.equal(reviewed.result.advice, "审核未完成，待人工确认");
 assert.ok(reviewed.result.findings.length > 0);
 assert.equal(runtime.calls(), aiBefore, "AI fallback must remain usable without a key or upstream calls");
 runtime.run('callDeepSeekJson = async () => ({ ok: true, model: "test-model", data: { score: 95, findings: [], riskPoints: [], checklist: [] } })');

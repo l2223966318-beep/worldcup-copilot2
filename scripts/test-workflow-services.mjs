@@ -7,6 +7,7 @@ import ts from "typescript";
 const files = [
   "types/workflow.ts",
   "lib/ai/quality.ts",
+  "lib/sports/statistics.ts",
   "lib/services/analysisService.ts",
   "lib/services/contentService.ts",
   "lib/services/exportService.ts"
@@ -17,12 +18,14 @@ if (existsSync(outDir)) rmSync(outDir, { recursive: true, force: true });
 mkdirSync(join(outDir, "types"), { recursive: true });
 mkdirSync(join(outDir, "lib/ai"), { recursive: true });
 mkdirSync(join(outDir, "lib/services"), { recursive: true });
+mkdirSync(join(outDir, "lib/sports"), { recursive: true });
 
 for (const file of files) {
   const sourcePath = new URL(`../${file}`, import.meta.url);
   const source = readFileSync(sourcePath, "utf8")
     .replaceAll("@/types/workflow", "../../types/workflow.mjs")
     .replaceAll("@/lib/services/contentService", "./contentService.mjs")
+    .replaceAll("@/lib/sports/statistics", "../sports/statistics.mjs")
     .replaceAll("@/lib/ai/quality", "../ai/quality.mjs");
   const compiled = ts.transpileModule(source, {
     compilerOptions: {

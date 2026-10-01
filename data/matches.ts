@@ -1,10 +1,10 @@
 export type TeamStats = {
-  possession: number;
-  shots: number;
-  shotsOnTarget: number;
-  corners: number;
-  fouls: number;
-  yellowCards: number;
+  possession: number | null;
+  shots: number | null;
+  shotsOnTarget: number | null;
+  corners: number | null;
+  fouls: number | null;
+  yellowCards: number | null;
 };
 
 export type KeyPlayer = {
@@ -22,7 +22,7 @@ export type KeyPlayer = {
 export type MatchEvent = {
   minute: string;
   team: string;
-  type: "进球" | "点球" | "换人" | "黄牌" | "射门" | "关键扑救" | "争议" | "终场";
+  type: "进球" | "点球" | "换人" | "黄牌" | "红牌" | "角球" | "伤情" | "射门" | "关键扑救" | "争议" | "终场" | "关键事件";
   description: string;
 };
 
@@ -35,7 +35,10 @@ export type HistoricalMeeting = {
 
 export type MatchData = {
   id: string;
+  status?: "scheduled" | "live" | "finished" | "postponed" | "cancelled" | "unknown";
   isExample: boolean;
+  verifiedStats?: boolean;
+  sourceName?: string;
   name: string;
   stage: string;
   time: string;

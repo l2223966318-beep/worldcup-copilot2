@@ -16,7 +16,8 @@ const child = spawn(process.execPath, [fileURLToPath(new URL("./run-next.mjs", i
   windowsHide: true,
   stdio: ["ignore", "pipe", "pipe"],
   env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TEMP: process.env.TEMP,
-    TMP: process.env.TMP, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1" }
+    TMP: process.env.TMP, NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1",
+    DEEPSEEK_API_KEY: "test-only-key", AI_ACCESS_TOKEN: "test-only-access-token-123456789" }
 });
 const exited = once(child, "exit");
 let logs = "";
@@ -60,8 +61,21 @@ try {
   });
   assert.equal(video.status, 206);
   assert.equal((await video.arrayBuffer()).byteLength, 1024);
+  for (const route of ["match-workflow", "hot-topic", "hot-topic-workflow", "platform-draft", "review-draft"]) {
+    const denied = await fetch(`${origin}/api/ai/${route}`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(5000)
+    });
+    assert.equal(denied.status, 401, `${route} must reject anonymous shared AI access`);
+    assert.equal((await denied.json()).sourceStatus, "error");
+    const invalid = await fetch(`${origin}/api/ai/${route}`, {
+      method: "POST", headers: { "Content-Type": "application/json", "X-AI-Access-Token": "test-only-access-token-123456789" },
+      body: "{}", signal: AbortSignal.timeout(5000)
+    });
+    assert.equal(invalid.status, 400, `${route} must validate input after accepting the access code`);
+  }
   console.log(JSON.stringify({ pages: 5, bundles: assets.length, images: 4, videoRange: true,
-    requestedBusinessEndpoints: 0, browserInteractionsTested: false }));
+    requestedBusinessEndpoints: 10, anonymousAiRejections: 5, authenticatedInputRejections: 5,
+    browserInteractionsTested: false }));
 } finally {
   if (child.exitCode === null) child.kill();
   await exited;

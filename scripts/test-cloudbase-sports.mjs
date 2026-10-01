@@ -47,4 +47,12 @@ assert.equal(unauthorized.diagnostics.status, "unauthorized");
 const count = calls;
 await service.load("match", "sr:sport_event:2");
 assert.equal(calls, count);
+let detailCalls = 0;
+const liveDetails = factory({ client: { getSportradarWorldCupMatch: async () => {
+  detailCalls++; return { sourceStatus: "live", data: { ...sample.data[0], status: "live" }, lastUpdated: sample.lastUpdated };
+} }, env: { SPORTRADAR_API_KEY: "test" }, now: () => now });
+await liveDetails.load("match", "live-1");
+now += 60001;
+await liveDetails.load("match", "live-1");
+assert.equal(detailCalls, 2, "a live single-match payload must use the one-minute TTL too");
 console.log("CloudBase sports: shared cache, Beijing dates, empty results, stale fallback, cooldown and sanitized diagnostics passed.");

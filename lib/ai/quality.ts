@@ -24,12 +24,6 @@ const titleLimits: Record<PlatformTone, { min: number; max: number }> = {
 };
 
 const bannedFragments = [
-  "这里需要补充来源",
-  "待补充",
-  "根据数据显示但无来源",
-  "需补充来源",
-  "建议补充来源",
-  "待核验信息",
   "变量",
   "undefined",
   "null",
@@ -45,15 +39,6 @@ const templatePatterns = [
   /(.+)[：:]\s*(.+)[：:]/,
   /120\+?\d+'.*为什么/
 ];
-
-const fewShotTitles: Record<PlatformTone, string[]> = {
-  bilibili: ["梅西这场，真把剧本踢满了", "法国追平那一刻，决赛才真正开始", "阿根廷夺冠不是童话，是熬出来的"],
-  weibo: ["这场决赛后劲太大了", "法国追平时，我以为剧本要反转", "梅西终于补上最后一块拼图"],
-  xiaohongshu: ["这场世界杯决赛为什么封神", "看懂阿根廷夺冠，只要这3个瞬间", "梅西圆梦夜，最戳人的不是冠军"],
-  douyin: ["这球一进，剧本变了", "别只看比分，看这个瞬间", "三十秒看懂这场球"],
-  article: ["阿根廷夺冠，不只是梅西的童话", "这场决赛的真正转折点", "一场决赛里的时代交接"],
-  generic: ["这场球最值得看的地方", "比分之外，还有这条主线", "这场比赛后劲很足"]
-};
 
 const platformLead: Record<string, string> = {
   bilibili: "B站版",
@@ -81,9 +66,6 @@ export function cleanText(input: string) {
   }
 
   text = text
-    .replace(/根据(数据|资料|消息)显示[，,]?但?无来源/g, "")
-    .replace(/暂无(更多)?信息。?/g, "")
-    .replace(/待进一步确认。?/g, "")
     .replace(/([。！？!?])\s*\1+/g, "$1")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
@@ -92,7 +74,6 @@ export function cleanText(input: string) {
 }
 
 export function cleanTitle(input: string, platform: PlatformTone = "generic") {
-  const fallback = fewShotTitles[platform][0];
   let title = cleanText(input)
     .split("\n")[0]
     .replace(/^【.+?】/, "")
@@ -112,11 +93,7 @@ export function cleanTitle(input: string, platform: PlatformTone = "generic") {
     title = trimTitle(title, limit.max);
   }
 
-  if (countCjk(title) < limit.min && platform !== "douyin") {
-    title = fallback;
-  }
-
-  return title;
+  return title || "赛事内容待编辑";
 }
 
 export function cleanList(items: string[], platform: PlatformTone = "generic", options: { title?: boolean; max?: number } = {}) {
@@ -254,7 +231,6 @@ function isBadTitle(title: string, platform: PlatformTone) {
 }
 
 function rewriteTitle(title: string, platform: PlatformTone) {
-  const sample = fewShotTitles[platform];
   const compact = removeTitleStacking(title)
     .replace(/为什么/g, "")
     .replace(/会成为/g, "")
@@ -266,7 +242,7 @@ function rewriteTitle(title: string, platform: PlatformTone) {
     return compact;
   }
 
-  return sample[Math.abs(hashText(title)) % sample.length];
+  return compact ? trimTitle(compact, titleLimits[platform].max) : "赛事内容待编辑";
 }
 
 function rewriteText(text: string) {
@@ -314,8 +290,4 @@ function splitLongSentences(text: string) {
     .join("")
     .replace(/([。！？])\1+/g, "$1")
     .replace(/\n{3,}/g, "\n\n");
-}
-
-function hashText(text: string) {
-  return Array.from(text).reduce((hash, char) => ((hash << 5) - hash + char.charCodeAt(0)) | 0, 0);
 }
