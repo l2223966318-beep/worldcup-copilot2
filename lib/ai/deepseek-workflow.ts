@@ -36,10 +36,10 @@ export type MatchWorkflowEnhancement = {
   platformContent?: PlatformContent;
 };
 
-const DEFAULT_CATEGORY = "鏁版嵁瑙ｈ" as TopicCategory;
-const DEFAULT_RECOMMENDATION = "瑙傚療" as TopicRecommendation;
-const DEFAULT_LEVEL = "涓?" as TopicIdea["difficulty"];
-const DEFAULT_LOW_LEVEL = "浣?" as TopicIdea["riskLevel"];
+const DEFAULT_CATEGORY: TopicCategory = "数据解读";
+const DEFAULT_RECOMMENDATION: TopicRecommendation = "观察";
+const DEFAULT_LEVEL: TopicIdea["difficulty"] = "中";
+const DEFAULT_LOW_LEVEL: TopicIdea["riskLevel"] = "低";
 const PLATFORM_COPY_RULES = [
   "标题必须短、准、有平台感：B站16-28字，微博12-22字，小红书12-20字。",
   "禁止标题套标题、连续冒号、长问句、机械式“为什么……？”模板。",
@@ -50,25 +50,25 @@ const PLATFORM_COPY_RULES = [
   "mock/demo内容必须明确是演示口径，不要伪装成真实新闻。"
 ].join("\n");
 const PLATFORM_FEW_SHOTS = {
-  bilibili: ["梅西这场，真把剧本踢满了", "法国追平那一刻，决赛才真正开始", "阿根廷夺冠不是童话，是熬出来的"],
-  weibo: ["这场决赛后劲太大了", "法国追平时，我以为剧本要反转", "梅西终于补上最后一块拼图"],
-  xiaohongshu: ["这场世界杯决赛为什么封神", "看懂阿根廷夺冠，只要这3个瞬间", "梅西圆梦夜，最戳人的不是冠军"]
+  bilibili: ["这场球别只看比分", "真正的转折在这段时间线里", "一次调整，改变了比赛节奏"],
+  weibo: ["这场比赛后劲很大", "这个转折，值得再看一遍", "比分之外，还有这些细节"],
+  xiaohongshu: ["用三个瞬间看懂这场比赛", "新手也能看懂的战术变化", "一张数据卡，复盘比赛转折"]
 };
 const CATEGORY_ALIASES: Record<string, TopicCategory> = {
-  战术复盘: "鎴樻湳澶嶇洏" as TopicCategory,
-  球员叙事: "鐞冨憳鍙欎簨" as TopicCategory,
-  数据解读: "鏁版嵁瑙ｈ" as TopicCategory,
-  历史对照: "鍘嗗彶瀵圭収" as TopicCategory,
-  争议讨论: "浜夎璁ㄨ" as TopicCategory,
-  情绪共鸣: "鎯呯华鍏遍福" as TopicCategory,
-  冷知识科普: "鍐风煡璇嗙鏅?" as TopicCategory,
-  平台热点: "骞冲彴鐑偣" as TopicCategory
+  战术复盘: "战术复盘",
+  球员叙事: "球员叙事",
+  数据解读: "数据解读",
+  历史对照: "历史对照",
+  争议讨论: "争议讨论",
+  情绪共鸣: "情绪共鸣",
+  冷知识科普: "冷知识科普",
+  平台热点: "平台热点"
 };
 const RECOMMENDATION_ALIASES: Record<string, TopicRecommendation> = {
-  主推: "涓绘帹" as TopicRecommendation,
-  次推: "娆℃帹" as TopicRecommendation,
-  观察: "瑙傚療" as TopicRecommendation,
-  谨慎发布: "璋ㄦ厧鍙戝竷" as TopicRecommendation
+  主推: "主推",
+  次推: "次推",
+  观察: "观察",
+  谨慎发布: "谨慎发布"
 };
 
 export async function enhanceMatchWorkflowWithDeepSeek(input: {
@@ -128,7 +128,9 @@ export async function enhanceMatchWorkflowWithDeepSeek(input: {
         })
       }
     ],
-    { timeoutMs: 30_000, apiKey, quality: "fast", maxTokens: 1_800 }
+    { timeoutMs: 30_000, apiKey, quality: "fast", maxTokens: 1_800,
+      cacheTtlMs: match.status === "live" ? 60_000 : 10 * 60_000,
+      cacheKey: JSON.stringify({ kind: "match-workflow-v2", match, baselineTopics }) }
   );
 
   if (!result.ok) {
@@ -222,8 +224,6 @@ function normalizeRecommendation(value: unknown, fallback: TopicRecommendation):
 
 function normalizeLevel<T extends TopicIdea["difficulty"] | TopicIdea["riskLevel"] | TopicIdea["productionCost"]>(value: unknown, fallback: T): T {
   if (typeof value !== "string") return fallback;
-  if (value === "低") return "浣?" as T;
-  if (value === "中") return "涓?" as T;
-  if (value === "高") return "楂?" as T;
+  if (value === "低" || value === "中" || value === "高") return value as T;
   return fallback;
 }

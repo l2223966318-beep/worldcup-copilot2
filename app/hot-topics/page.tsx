@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle2, Clipboard, ExternalLink, Save, ShieldCheck, Sparkles } from "lucide-react";
 
 import type { HotTopic } from "@/lib/hot/types";
+import { getAiRequestHeaders } from "@/lib/ai/client-access";
 import {
   auditHotDraft,
   buildHotAnalysis,
@@ -41,11 +42,8 @@ export default function HotTopicDetailPage() {
   const [cacheMeta, setCacheMeta] = useState<{ lastUpdatedAt?: string; message?: string }>({});
   const [loaded, setLoaded] = useState(false);
   const [config, setConfig] = useState<HotGenerationConfig>(defaultConfig);
-
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const rawId = params.get("id") ?? "";
-    setTopicId(rawId ? decodeURIComponent(rawId) : "");
+    setTopicId(new URLSearchParams(window.location.search).get("id") || "");
   }, []);
   const [draft, setDraft] = useState("");
   const [audit, setAudit] = useState<HotAuditResult | null>(null);
@@ -106,8 +104,8 @@ export default function HotTopicDetailPage() {
       analysis: HotAnalysisResult;
     }>(window.localStorage, topic);
     if (cachedAnalysis) {
-      setAnalysis(normalizeHotAnalysisPayload(cachedAnalysis.analysis, fallbackAnalysisSnapshot));
-      setTopicIntro(typeof cachedAnalysis.intro === "string" ? cachedAnalysis.intro : fallbackIntro);
+      setAnalysis(cachedAnalysis.analysis);
+      setTopicIntro(cachedAnalysis.intro);
       setAnalysisStatus("cache");
       setAnalysisMessage("");
       return;
@@ -121,7 +119,7 @@ export default function HotTopicDetailPage() {
 
     void fetch("/api/ai/hot-topic", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAiRequestHeaders(),
       body: JSON.stringify({ topic, apiKey: currentDeepseekKey || undefined })
     })
       .then(async (response) => {
@@ -132,8 +130,8 @@ export default function HotTopicDetailPage() {
           message?: string;
         };
         if (!active) return;
-        const nextIntro = typeof payload.intro === "string" && payload.intro.trim() ? payload.intro : fallbackIntro;
-        const nextAnalysis = normalizeHotAnalysisPayload(payload.analysis, fallbackAnalysisSnapshot);
+        const nextIntro = payload.intro || fallbackIntro;
+        const nextAnalysis = payload.analysis || fallbackAnalysisSnapshot;
         setTopicIntro(nextIntro);
         setAnalysis(nextAnalysis);
         setAnalysisStatus(payload.sourceStatus === "live" ? "live" : payload.sourceStatus === "fallback" ? "fallback" : "error");
@@ -183,7 +181,7 @@ export default function HotTopicDetailPage() {
     try {
       const response = await fetch("/api/ai/hot-topic-workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAiRequestHeaders(),
         body: JSON.stringify({
           action: "generate",
           topic,
@@ -215,7 +213,7 @@ export default function HotTopicDetailPage() {
     try {
       const response = await fetch("/api/ai/hot-topic-workflow", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAiRequestHeaders(),
         body: JSON.stringify({
           action: "audit",
           topic,
@@ -360,7 +358,7 @@ export default function HotTopicDetailPage() {
         </div>
         <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-600">
           <div className="font-semibold text-slate-800">AI 调用诊断</div>
-          <div>DeepSeek 密钥：由 CloudBase 服务端安全管理。</div>
+          <div>本页检测到的 DeepSeek Key：{deepseekKey ? "已读取" : "未读取"}</div>
           <div>分析状态：{toStatusLabel(analysisStatus)}</div>
           <div>内容生成状态：{toStatusLabel(contentStatus)}</div>
           <div>审核状态：{toStatusLabel(auditStatus)}</div>
@@ -652,60 +650,6 @@ function getStoredDeepseekKey() {
 
 function refreshDeepseekKey(setter: (value: string) => void) {
   setter(getStoredDeepseekKey());
-}
-
-function normalizeHotAnalysisPayload(
-  value: HotAnalysisResult | undefined,
-  fallback: HotAnalysisResult
-): HotAnalysisResult {
-  if (!value || typeof value !== "object") return fallback;
-
-  const toText = (item: unknown, fallbackText = "") => {
-    if (typeof item === "string") return item;
-    if (typeof item === "number" || typeof item === "boolean") return String(item);
-    if (item && typeof item === "object") {
-      const record = item as Record<string, unknown>;
-      const parts = [record.label, record.value, record.note]
-        .filter((part) => typeof part === "string" || typeof part === "number")
-        .map(String)
-        .filter(Boolean);
-      if (parts.length) return parts.join("：");
-    }
-    return fallbackText;
-  };
-
-  const toTextList = (items: unknown, fallbackItems: string[]) => {
-    if (!Array.isArray(items)) return fallbackItems;
-    const normalized = items.map((item) => toText(item)).filter(Boolean);
-    return normalized.length ? normalized : fallbackItems;
-  };
-
-  const toInsights = (items: unknown, fallbackItems: HotAnalysisResult["overview"]) => {
-    if (!Array.isArray(items)) return fallbackItems;
-    const normalized = items
-      .map((item, index) => {
-        if (!item || typeof item !== "object") return null;
-        const record = item as Record<string, unknown>;
-        return {
-          label: toText(record.label, fallbackItems[index]?.label ?? "判断"),
-          value: toText(record.value, fallbackItems[index]?.value ?? "-"),
-          note: toText(record.note, fallbackItems[index]?.note ?? "")
-        };
-      })
-      .filter((item): item is HotAnalysisResult["overview"][number] => Boolean(item));
-    return normalized.length ? normalized.slice(0, 3) : fallbackItems;
-  };
-
-  return {
-    overview: toInsights(value.overview, fallback.overview),
-    production: toInsights(value.production, fallback.production),
-    whyCare: toTextList(value.whyCare, fallback.whyCare),
-    relation: toTextList(value.relation, fallback.relation),
-    angles: toTextList(value.angles, fallback.angles),
-    platforms: toTextList(value.platforms, fallback.platforms),
-    factsToVerify: toTextList(value.factsToVerify, fallback.factsToVerify),
-    risks: toTextList(value.risks, fallback.risks)
-  };
 }
 
 function toStatusLabel(status: "idle" | "loading" | "live" | "fallback" | "cache" | "error") {

@@ -15,6 +15,7 @@ import { HighlightedText, ReadableTextBlock } from "@/components/ui/readable-tex
 import { InsightCharts } from "@/components/worldcup/insight-charts";
 import type { MatchData } from "@/data/matches";
 import { generatePlatformContent, type PlatformContent } from "@/lib/ai/content";
+import { getAiRequestHeaders } from "@/lib/ai/client-access";
 import { reviewRisk } from "@/lib/ai/risk";
 import { extractMatchSignals, type MatchSignal } from "@/lib/ai/signals";
 import { generateTopics, type TopicIdea } from "@/lib/ai/topics";
@@ -37,6 +38,7 @@ import {
 } from "@/lib/services/matchDetailPresentation";
 import { appendHistoryRecord, writeReviewDraft, writeWorkflowState } from "@/lib/services/workflowStore";
 import { worldCupMatchToMatchData } from "@/lib/sports/adapters";
+import { hasVerifiedStatistics, statisticDifference, statisticTotal } from "@/lib/sports/statistics";
 import { useWorldCupQuery } from "@/lib/sports/client";
 import type { SourceStatus, WorldCupMatch, WorldCupPayload } from "@/lib/sports/types";
 import { getMatchSportType, getSportTheme, type SportTheme } from "@/lib/sport-theme";
@@ -51,8 +53,6 @@ const platformLabels = {
   article: "公众号"
 } as const;
 const SETTINGS_STORAGE_KEY = "worldcup.datasource.settings";
-const AI_WORKFLOW_MAX_ATTEMPTS = 2;
-const AI_WORKFLOW_RETRY_DELAY_MS = 900;
 
 type PlatformKey = keyof typeof platformLabels;
 type PlatformFit = "主推" | "可做" | "谨慎";
@@ -92,15 +92,16 @@ const platformMeta: Record<PlatformKey, { title: string; positioning: string; ac
 
 export default function MatchAnalysisPage() {
   const [fixtureId, setFixtureId] = useState("argentina-france-2022-final");
-
+  const [routeReady, setRouteReady] = useState(false);
   useEffect(() => {
-    const queryId = new URLSearchParams(window.location.search).get("id");
-    if (queryId) setFixtureId(queryId);
+    setFixtureId(new URLSearchParams(window.location.search).get("id") || "argentina-france-2022-final");
+    setRouteReady(true);
   }, []);
   const { payload, loading, error } = useWorldCupQuery<WorldCupMatch>(
     `/api/worldcup/matches/${fixtureId}`,
     matchRefreshPolicy,
     {
+      enabled: routeReady,
       cacheKey: `worldcup.match.${fixtureId}`,
       staleMs: 120_000
     }
@@ -149,10 +150,7 @@ export default function MatchAnalysisPage() {
     () => buildMatchContext(match, matchSignals, payload?.sourceStatus ?? "fallback"),
     [match, matchSignals, payload?.sourceStatus]
   );
-  const platformDecisions = useMemo(
-    () => buildPlatformDecisions(match, matchSignals, selectedTopic, matchContext.verifiedStats !== false),
-    [match, matchContext.verifiedStats, matchSignals, selectedTopic]
-  );
+  const platformDecisions = useMemo(() => buildPlatformDecisions(match, matchSignals, selectedTopic), [match, matchSignals, selectedTopic]);
   const matchHotspots = useMemo(
     () => buildMatchHotspotShortlist({ match, signals: matchSignals, hotItems: matchHotItems }),
     [match, matchHotItems, matchSignals]
@@ -175,6 +173,7 @@ export default function MatchAnalysisPage() {
   const markdown = useMemo(() => buildMarkdown(match.name, selectedTopic, content, reviewFlow?.result.advice ?? "待审核"), [content, match.name, reviewFlow?.result.advice, selectedTopic]);
 
   useEffect(() => {
+    if (!routeReady) return;
     if (loading && !payload) return;
 
     const controller = new AbortController();
@@ -192,49 +191,35 @@ export default function MatchAnalysisPage() {
 
     async function loadAiWorkflow() {
       const requestBody = JSON.stringify({ match, baselineTopics, apiKey: getStoredDeepseekKey() || undefined });
-      let latestPayload: AiWorkflowEnhancement | null = null;
-
-      for (let attempt = 1; attempt <= AI_WORKFLOW_MAX_ATTEMPTS; attempt += 1) {
-        try {
-          const response = await fetch("/api/ai/match-workflow", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: requestBody,
-            signal: controller.signal
-          });
-          const payload = (await response.json()) as AiWorkflowEnhancement;
-          if (!response.ok) throw new Error(payload.message || `AI workflow request failed with ${response.status}.`);
-          latestPayload = payload;
-          if (payload.sourceStatus === "live") break;
-        } catch (error) {
-          if (controller.signal.aborted) return;
-          latestPayload = {
-            sourceStatus: "error",
-            conclusions: [],
-            topics: [],
-            message: error instanceof Error ? error.message : "AI workflow request failed."
-          };
-        }
-
-        if (attempt < AI_WORKFLOW_MAX_ATTEMPTS) {
-          await new Promise<void>((resolve) => setTimeout(resolve, AI_WORKFLOW_RETRY_DELAY_MS));
-          if (controller.signal.aborted) return;
-        }
-      }
-
-      if (!controller.signal.aborted) {
-        if (latestPayload) {
-          setAiEnhancement(latestPayload);
-          writeMatchAiWorkflowCache(window.localStorage, match, baselineTopics, latestPayload);
-        }
-        setAiLoading(false);
+      try {
+        const response = await fetch("/api/ai/match-workflow", {
+          method: "POST",
+          headers: getAiRequestHeaders(),
+          body: requestBody,
+          signal: controller.signal
+        });
+        const payload = (await response.json()) as AiWorkflowEnhancement;
+        if (!response.ok) throw new Error(payload.message || `AI workflow request failed with ${response.status}.`);
+        if (controller.signal.aborted) return;
+        setAiEnhancement(payload);
+        writeMatchAiWorkflowCache(window.localStorage, match, baselineTopics, payload);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setAiEnhancement({
+          sourceStatus: "error",
+          conclusions: [],
+          topics: [],
+          message: error instanceof Error ? error.message : "AI workflow request failed."
+        });
+      } finally {
+        if (!controller.signal.aborted) setAiLoading(false);
       }
     }
 
     void loadAiWorkflow();
 
     return () => controller.abort();
-  }, [baselineTopics, loading, match, payload]);
+  }, [baselineTopics, loading, match, payload, routeReady]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -323,6 +308,10 @@ export default function MatchAnalysisPage() {
   }
 
   async function handleGeneratePlatformDraft() {
+    if (!selectedHotspot) {
+      showWorkflowNotice("请先选择一个热点。");
+      return;
+    }
     const analysisSnapshot = manualAnalysis ?? createRuleBasedAnalysis(evidenceContext);
     const fallbackDraft = createPlatformDraft(toWorkflowPlatform(activePlatform), evidenceContext, workflowTopic, analysisSnapshot, { contentType: activeContentType, topicMode: activeTopicMode });
     setDraftLoading(true);
@@ -331,7 +320,7 @@ export default function MatchAnalysisPage() {
     try {
       const response = await fetch("/api/ai/platform-draft", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAiRequestHeaders(),
         body: JSON.stringify({
           platform: toWorkflowPlatform(activePlatform),
           contentType: activeContentType,
@@ -383,7 +372,7 @@ export default function MatchAnalysisPage() {
     try {
       const response = await fetch("/api/ai/review-draft", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAiRequestHeaders(),
         body: JSON.stringify({
           draft: draftSnapshot,
           matchContext: evidenceContext,
@@ -475,13 +464,7 @@ export default function MatchAnalysisPage() {
       <section className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
         <SectionTitle eyebrow="CHART INSIGHTS" title="图表服务内容创作" description="每张图表都配运营解释和可复制金句，用来快速变成脚本、标题或长文段落。" />
         <div className="mt-6">
-          {matchContext.verifiedStats !== false ? (
-            <InsightCharts match={match} theme={theme} dataAngles={workflow.dataAngles} />
-          ) : (
-            <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-sm leading-6 text-slate-500">
-              当前赛事数据源未返回可核验的控球、射门、射正等技术统计，因此不展示占位图表，避免把默认值误当成真实比赛数据。
-            </div>
-          )}
+          <InsightCharts match={match} theme={theme} dataAngles={workflow.dataAngles} />
         </div>
       </section>
 
@@ -588,7 +571,7 @@ export default function MatchAnalysisPage() {
               score: match.score,
               stage: match.stage,
               platforms: [platformMeta[activePlatform].title],
-              route: `/matches/${match.id}`,
+              route: `/matches/?id=${encodeURIComponent(match.id)}`,
               summary: workflowTopic.title,
               sourceStatus: matchContext.matchInfo.sourceStatus
             });
@@ -740,7 +723,7 @@ export default function MatchAnalysisPage() {
               score: match.score,
               stage: match.stage,
               platforms: ["Word 报告"],
-              route: `/matches/${match.id}`,
+              route: `/matches/?id=${encodeURIComponent(match.id)}`,
               summary: workflowTopic.title,
               sourceStatus: matchContext.matchInfo.sourceStatus
             });
@@ -901,7 +884,7 @@ function AiBrainStatus({
       ? fromCache
         ? `已复用本场比赛的${liveModules || "运营分析"}，比赛数据更新后会自动重新分析。`
         : `当前页面的${liveModules || "运营分析"}由 DS API 生成，硬数据来自项目服务端比赛接口。切换到非主推选题时，平台内容会使用本地规则补齐。`
-      : enhancement?.message ?? "CloudBase AI 暂不可用，页面继续使用本地规则引擎。DeepSeek 密钥由服务端环境变量管理。";
+      : enhancement?.message ?? "未配置 DeepSeek key 或接口暂不可用，页面继续使用本地规则引擎。";
 
   return (
     <section className="card-lift card-lift-light rounded-[24px] border bg-white px-5 py-4 shadow-[0_14px_40px_rgba(15,23,42,0.05)]" style={{ borderColor: theme.border }}>
@@ -1179,7 +1162,7 @@ function PlatformPreview({
           >
             {hotspots.length ? hotspots.map((hotspot) => (
               <option key={hotspot.id} value={hotspot.id}>{hotspot.title}</option>
-            )) : <option value="">当前 AI 选题</option>}
+            )) : <option value="">暂无可选热点</option>}
           </select>
         </label>
         <label className="text-sm font-semibold text-slate-600">
@@ -1218,23 +1201,16 @@ function getPublishableDraftText(draft: PlatformDraft) {
   return draft.sections.find((section) => section.title.includes("可直接发布"))?.content ?? draft.body;
 }
 
-function buildPlatformDecisions(
-  match: MatchData,
-  signals: MatchSignal[],
-  topic: TopicIdea,
-  hasVerifiedStats: boolean
-): Record<PlatformKey, PlatformDecision> {
-  const eventCount = match.keyEvents.filter((event) => event.minute !== "-" && event.team !== "数据源").length;
-  const playerCount = hasVerifiedStats ? match.keyPlayers.filter((player) => player.rating > 0).length : 0;
+function buildPlatformDecisions(match: MatchData, signals: MatchSignal[], topic: TopicIdea): Record<PlatformKey, PlatformDecision> {
+  const eventCount = match.keyEvents.length;
+  const playerCount = match.keyPlayers.length;
   const scoreParts = match.score.match(/\d+/g)?.map(Number) ?? [];
   const goalTotal = scoreParts.reduce((sum, item) => sum + item, 0);
-  const shotGap = hasVerifiedStats ? Math.abs(match.stats.teamA.shots - match.stats.teamB.shots) : 0;
-  const onTargetTotal = hasVerifiedStats ? match.stats.teamA.shotsOnTarget + match.stats.teamB.shotsOnTarget : 0;
+  const shotGap = Math.abs(statisticDifference(match.stats.teamA.shots, match.stats.teamB.shots) ?? 0);
+  const onTargetTotal = statisticTotal(match.stats.teamA.shotsOnTarget, match.stats.teamB.shotsOnTarget) ?? 0;
   const signalValue = Math.max(...signals.map((signal) => signal.contentValue), 0);
   const hasPenalty = Boolean(match.penaltyScore) || match.keyEvents.some((event) => event.type.includes("点"));
-  const hasLateEvent = match.keyEvents.some(
-    (event) => event.minute !== "-" && event.team !== "数据源" && /8\d|9\d|加时|点球|终场/.test(event.minute)
-  );
+  const hasLateEvent = match.keyEvents.some((event) => /8\d|9\d|加时|点球|终场/.test(event.minute));
 
   const deepScore = clampPlatformScore(58 + eventCount * 4 + playerCount * 3 + Math.min(shotGap, 12) + (hasPenalty ? 8 : 0));
   const weiboScore = clampPlatformScore(56 + goalTotal * 5 + (hasLateEvent ? 10 : 0) + Math.round(signalValue / 8));
@@ -1373,9 +1349,10 @@ function buildMatchWorkflow(
   const scores = buildOpportunityScores(match, primaryTopic);
   const possessionLeader = leaderBy(match, "possession");
   const shotLeader = leaderBy(match, "shotsOnTarget");
-  const possessionGap = Math.abs(match.stats.teamA.possession - match.stats.teamB.possession);
-  const shotTotal = match.stats.teamA.shots + match.stats.teamB.shots;
-  const onTargetTotal = match.stats.teamA.shotsOnTarget + match.stats.teamB.shotsOnTarget;
+  const hasStats = match.verifiedStats !== false && hasVerifiedStatistics(match.stats);
+  const possessionGap = Math.abs(statisticDifference(match.stats.teamA.possession, match.stats.teamB.possession) ?? 0);
+  const shotTotal = statisticTotal(match.stats.teamA.shots, match.stats.teamB.shots) ?? 0;
+  const onTargetTotal = statisticTotal(match.stats.teamA.shotsOnTarget, match.stats.teamB.shotsOnTarget) ?? 0;
   const scoreText = match.score === "vs" ? "当前赛程还没有比分" : `比分已经定格为 ${match.score}`;
   const priority = scores.heat >= 90 && scores.narrative >= 88 ? "S" : scores.heat >= 78 ? "A" : "B";
 
@@ -1385,7 +1362,9 @@ function buildMatchWorkflow(
     conclusions: aiEnhancement?.sourceStatus === "live" && aiEnhancement.conclusions.length ? aiEnhancement.conclusions : [
       {
         title: "为什么值得做",
-        body: `${scoreText}，并且已经有${possessionGap}%控球差、${onTargetTotal}次射正等可解释数据。内容不应只报赛果，而要拆成“${primaryTopic.title}”这样的运营主线。`
+        body: hasStats
+          ? `${scoreText}，并且已经有${possessionGap}%控球差、${onTargetTotal}次射正等可解释数据。可以围绕“${primaryTopic.title}”组织复盘。`
+          : `${scoreText}，技术统计尚不完整。先围绕已确认比分和事件组织“${primaryTopic.title}”，不推断控球优势或射门效率。`
       },
       {
         title: "先做什么",
@@ -1397,7 +1376,7 @@ function buildMatchWorkflow(
         body: `${analysis.contentValue} 但真实 API 只提供结构化数据，缺少画面、采访和未公开信息时，不要写“确认伤退”“黑幕”“全网都在骂”等定性说法。`
       }
     ],
-    dataAngles: [
+    dataAngles: hasStats ? [
       {
         label: "控球率",
         value: `${match.stats.teamA.possession}% / ${match.stats.teamB.possession}%`,
@@ -1416,7 +1395,7 @@ function buildMatchWorkflow(
           : "当前接口没有返回射门细项，页面先保留结构，发布时应补充技术统计来源。",
         angle: "适合转成 B站机会质量复盘、微博赛后讨论题和短视频数据钩子。"
       }
-    ],
+    ] : [],
     risks: [
       { title: "舆情风险", level: "中", advice: `围绕 ${match.teamA} vs ${match.teamB} 做讨论时，避免制造球迷对立，把重点放在数据、赛程和公开事实。` },
       { title: "表达风险", level: "低", advice: "当前内容可以发布为运营建议，但涉及判罚、伤病、内部矛盾时必须写“需核实”或“建议补充来源”。" },
@@ -1429,8 +1408,7 @@ function buildMatchWorkflow(
 
 function buildOpportunityScores(match: MatchData, topic: TopicIdea): OpportunityScores {
   const totalGoals = scoreTotal(match.score);
-  const shotVolume = match.stats.teamA.shots + match.stats.teamB.shots;
-  const hasStats = shotVolume > 0 || match.stats.teamA.possession !== 50 || match.stats.teamB.possession !== 50;
+  const hasStats = match.verifiedStats !== false && hasVerifiedStatistics(match.stats);
 
   return {
     heat: clampScore(72 + totalGoals * 4 + (match.penaltyScore ? 8 : 0) + (match.isExample ? 8 : 0)),
@@ -1443,6 +1421,7 @@ function buildOpportunityScores(match: MatchData, topic: TopicIdea): Opportunity
 function leaderBy(match: MatchData, key: keyof MatchData["stats"]["teamA"]) {
   const a = match.stats.teamA[key];
   const b = match.stats.teamB[key];
+  if (a === null || b === null) return { name: "暂无数据", value: null };
   if (a === b) return { name: "双方", value: a };
   return a > b ? { name: match.teamA, value: a } : { name: match.teamB, value: b };
 }
@@ -1468,7 +1447,8 @@ function buildMatchContext(match: MatchData, signals: MatchSignal[], sourceStatu
       score: match.score,
       stage: match.stage,
       time: match.time,
-      sourceStatus
+      sourceStatus,
+      sourceName: match.sourceName || (match.isExample ? "示例数据" : "赛事数据")
     },
     keyEvents: match.keyEvents.map((event) => ({
       minute: event.minute,
@@ -1483,7 +1463,7 @@ function buildMatchContext(match: MatchData, signals: MatchSignal[], sourceStatu
       rating: player.rating
     })),
     stats: match.stats,
-    verifiedStats: !/基础覆盖未返回事件流|未返回事件流和完整技术统计|基础进球数据/.test(match.summary),
+    verifiedStats: match.verifiedStats !== false && hasVerifiedStatistics(match.stats),
     hotSignals: signals.map((signal) => ({
       label: signal.label,
       topicSeed: signal.topicSeed,

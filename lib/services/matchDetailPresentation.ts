@@ -38,8 +38,8 @@ export function buildTeamRadarData(match: MatchData): TeamRadarRow[] {
   const teamB = match.teamB;
   const statsA = match.stats.teamA;
   const statsB = match.stats.teamB;
-  const disciplineA = statsA.fouls + statsA.yellowCards * 3;
-  const disciplineB = statsB.fouls + statsB.yellowCards * 3;
+  const disciplineA = statsA.fouls === null || statsA.yellowCards === null ? null : statsA.fouls + statsA.yellowCards * 3;
+  const disciplineB = statsB.fouls === null || statsB.yellowCards === null ? null : statsB.fouls + statsB.yellowCards * 3;
 
   return [
     buildRadarRow("控球", teamA, statsA.possession, teamB, statsB.possession, "谁掌握比赛节奏"),
@@ -47,7 +47,7 @@ export function buildTeamRadarData(match: MatchData): TeamRadarRow[] {
     buildRadarRow("射正", teamA, statsA.shotsOnTarget, teamB, statsB.shotsOnTarget, "谁的威胁更接近进球"),
     buildRadarRow("角球", teamA, statsA.corners, teamB, statsB.corners, "谁更常把球推进到危险区域"),
     buildRadarRow("纪律", teamA, disciplineA, teamB, disciplineB, "犯规和黄牌越少越稳定", true)
-  ];
+  ].filter((row): row is TeamRadarRow => row !== null);
 }
 
 export function buildMatchHotspotShortlist({
@@ -107,12 +107,12 @@ export function buildDraftReviewFlow(draft: string, match: MatchData, result?: R
   const review = normalizeReviewResult(result ?? simpleReviewRisk(draft));
   const riskPoints = review.findings.length
     ? review.findings.map((finding) => `${finding.type}：${finding.sentence || finding.reason}`)
-    : ["未发现需要修改的具体句子。"];
+    : ["本地表达检查未发现具体问题，事实仍需人工确认。"];
   const rewriteSuggestion = buildRewriteSuggestion(draft, match, review);
 
   return {
     draft,
-    result: review,
+    result: { ...review, level: "待人工确认", advice: "本地表达检查完成，事实仍需人工确认" },
     riskPoints,
     rewriteSuggestion,
     checklist: [
@@ -135,13 +135,18 @@ function normalizeReviewResult(result: DraftReviewFlow["result"]): DraftReviewFl
 }
 
 export function buildChartCopy(match: MatchData) {
+  if (match.verifiedStats === false || [...Object.values(match.stats.teamA), ...Object.values(match.stats.teamB)].some(value => value === null)) {
+    const unavailable = { operation: "技术统计尚不完整，不据此比较两队表现。", quote: "先使用已确认比分与事件，技术统计需补充来源。" };
+    return { possession: unavailable, shots: unavailable, radar: unavailable,
+      context: { operation: match.summary, quote: "比赛背景与具体事件分别核验。" } };
+  }
   const shotAccuracyA = percent(match.stats.teamA.shotsOnTarget, match.stats.teamA.shots);
   const shotAccuracyB = percent(match.stats.teamB.shotsOnTarget, match.stats.teamB.shots);
   const firstEvent = match.keyEvents[0];
   const keyEventText = firstEvent ? `${firstEvent.minute}${firstEvent.team}${firstEvent.description}` : "当前接口暂未返回关键事件";
   const shotLeader = match.stats.teamA.shotsOnTarget === match.stats.teamB.shotsOnTarget
     ? "双方"
-    : match.stats.teamA.shotsOnTarget > match.stats.teamB.shotsOnTarget
+    : match.stats.teamA.shotsOnTarget !== null && match.stats.teamB.shotsOnTarget !== null && match.stats.teamA.shotsOnTarget > match.stats.teamB.shotsOnTarget
       ? match.teamA
       : match.teamB;
 
@@ -174,12 +179,13 @@ export function buildChartCopy(match: MatchData) {
 function buildRadarRow(
   metric: string,
   teamA: string,
-  valueA: number,
+  valueA: number | null,
   teamB: string,
-  valueB: number,
+  valueB: number | null,
   note: string,
   inverse = false
-): TeamRadarRow {
+): TeamRadarRow | null {
+  if (valueA === null || valueB === null) return null;
   const [scoreA, scoreB] = normalizePair(valueA, valueB, inverse);
   return {
     metric,
@@ -446,8 +452,8 @@ function numericHeat(value: unknown) {
   return parsed;
 }
 
-function percent(part: number, total: number) {
-  if (!total) return "暂无";
+function percent(part: number | null, total: number | null) {
+  if (part === null || total === null || !total) return "暂无";
   return `${Math.round((part / total) * 100)}%`;
 }
 

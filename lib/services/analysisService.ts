@@ -1,10 +1,11 @@
 import type { AnalysisResult, MatchContext } from "@/types/workflow";
+import { hasVerifiedStatistics, statisticDifference } from "@/lib/sports/statistics";
 
 export function createRuleBasedAnalysis(matchContext: MatchContext): AnalysisResult {
   const { matchInfo, stats, keyEvents, hotSignals } = matchContext;
-  const hasVerifiedStats = matchContext.verifiedStats !== false;
-  const possessionGap = Math.abs(stats.teamA.possession - stats.teamB.possession);
-  const shotGap = stats.teamA.shotsOnTarget - stats.teamB.shotsOnTarget;
+  const hasVerifiedStats = matchContext.verifiedStats !== false && hasVerifiedStatistics(stats);
+  const possessionGap = Math.abs(statisticDifference(stats.teamA.possession, stats.teamB.possession) ?? 0);
+  const shotGap = statisticDifference(stats.teamA.shotsOnTarget, stats.teamB.shotsOnTarget);
   const leadingTeam = scoreLeader(matchInfo.score, matchInfo.teamA, matchInfo.teamB);
   const topEvent = keyEvents[0];
   const topSignal = hotSignals[0];

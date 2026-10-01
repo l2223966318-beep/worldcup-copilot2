@@ -85,7 +85,7 @@ const sanitizedDraft = addHotDraftVisualAnchors("1. 📊 用xG与射门预期值
 assert.doesNotMatch(sanitizedDraft, /xG|预期进球|射门预期值/i);
 assert.match(sanitizedDraft, /射门与射正数据/);
 
-const pageSource = readFileSync(new URL("../app/hot-topics/[id]/page.tsx", import.meta.url), "utf8");
+const pageSource = readFileSync(new URL("../app/hot-topics/page.tsx", import.meta.url), "utf8");
 assert.match(pageSource, /label="生成类型"/);
 assert.match(pageSource, /label="风格类型"/);
 assert.doesNotMatch(pageSource, /label="内容类型"/);
@@ -96,13 +96,5 @@ assert.match(pageSource, /function isDraftTitleLine/);
 assert.match(pageSource, /font-bold text-slate-950/);
 assert.match(pageSource, /contentEditable/);
 
-const routeSource = readFileSync(new URL("../app/api/ai/hot-topic-workflow/route.ts", import.meta.url), "utf8");
-assert.match(routeSource, /contentTypeInstruction\(config\)/);
-assert.match(routeSource, /styleInstruction\(config\)/);
-assert.match(routeSource, /addHotDraftVisualAnchors\(normalizedDraft, config\)/);
-assert.match(routeSource, /topicNumbers\.length !== 5/);
-assert.match(routeSource, /每行最多 1 个/);
-assert.match(routeSource, /没有具体问题时对应数组返回空数组/);
-assert.doesNotMatch(routeSource, /信息不足时必须写“需核实”/);
-
-console.log("hot topic workflow ok");
+// Server handler assertions remain in main; this branch only exports the frontend.
+console.log("static hot topic workflow ok");

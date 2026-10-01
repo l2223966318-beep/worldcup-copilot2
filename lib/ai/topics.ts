@@ -1,6 +1,7 @@
 import type { MatchData } from "@/data/matches";
 import { cleanList, cleanTitle, ensurePublishable, qualityControl } from "@/lib/ai/quality";
 import { extractMatchSignals, type MatchSignal } from "@/lib/ai/signals";
+import { hasVerifiedStatistics, statisticDifference } from "@/lib/sports/statistics";
 
 export type TopicCategory =
   | "战术复盘"
@@ -42,21 +43,24 @@ export function generateTopics(match: MatchData): TopicIdea[] {
     .filter((signal) => signal.priority !== "watch")
     .slice(0, 3)
     .map((signal, index) => signalToTopic(match, signal, index));
-  const topPlayer = [...match.keyPlayers].sort((a, b) => b.rating - a.rating)[0];
+  const topPlayer = [...match.keyPlayers].sort((a, b) => b.rating - a.rating)[0] ?? { name: match.teamA, role: "球队" };
+  const hasStats = match.verifiedStats !== false && hasVerifiedStatistics(match.stats);
   const isTeamSubject = topPlayer.role === "球队";
   const leadSubject = isTeamSubject ? `${topPlayer.name}这条比赛线` : topPlayer.name;
   const leadEvidence = isTeamSubject
-    ? `${topPlayer.name}的比分、射门、射正和控球表现`
+    ? hasStats ? `${topPlayer.name}的比分、射门、射正和控球表现` : `${topPlayer.name}的已确认比分和事件记录`
     : `${topPlayer.name}的进球、关键传球、对抗和评分`;
-  const possessionGap = Math.abs(match.stats.teamA.possession - match.stats.teamB.possession);
+  const possessionGap = Math.abs(statisticDifference(match.stats.teamA.possession, match.stats.teamB.possession) ?? 0);
 
   const topics = match.id === "argentina-france-2022-final"
     ? worldCupFinalTopics(match)
     : [
         createTopic(match, {
           id: "control-gap",
-          title: `${match.teamA}真的控制住比赛了吗？`,
-          coreAngle: `控球率差距 ${possessionGap}% 不等于内容结论，需要结合射正、射门效率和关键事件判断比赛控制权。`,
+          title: hasStats ? `${match.teamA}真的控制住比赛了吗？` : `${match.name}赛况复盘`,
+          coreAngle: hasStats
+            ? `控球率差距 ${possessionGap}% 不等于内容结论，需要结合射正、射门效率和关键事件判断比赛控制权。`
+            : `当前只使用比分 ${match.score} 和已返回事件，不推断控球优势或射门效率。`,
           category: "战术复盘",
           recommendation: "主推",
           scores: [86, 84, 82, 91, 58, 78, 84],
@@ -64,7 +68,7 @@ export function generateTopics(match: MatchData): TopicIdea[] {
           difficulty: "中",
           productionCost: "中",
           riskLevel: "低",
-          scoreReason: "战术抓手明确，数据支撑充分，适合做专业度展示。",
+          scoreReason: hasStats ? "战术抓手明确，数据支撑充分，适合做专业度展示。" : "技术统计不完整，先以赛果和已确认事件作为依据。",
           businessExplanation: "能把普通赛果报道升级成“可解释比赛”的运营内容，适合作为主线选题。",
           reason: "适合用数据解释比赛观感与真实威胁之间的差异。",
           sampleTitles: [`控球更多就踢得更好吗？复盘${match.name}`, `${match.score} 背后的真实胜负手`]

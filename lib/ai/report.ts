@@ -4,6 +4,7 @@ import type { PlatformContent } from "@/lib/ai/content";
 import { cleanText, cleanTitle, ensurePublishable, qualityControl } from "@/lib/ai/quality";
 import type { RiskReviewResult } from "@/lib/ai/risk";
 import type { TopicIdea } from "@/lib/ai/topics";
+import { formatStatistic } from "@/lib/sports/statistics";
 
 type ReportInput = {
   match: MatchData;
@@ -43,7 +44,7 @@ export function createMarkdownReport(input: ReportInput) {
     `- 时间：${match.time}`,
     `- 对阵：${match.teamA} vs ${match.teamB}`,
     `- 比分：${match.score}${match.penaltyScore ? `，点球 ${match.penaltyScore}` : ""}`,
-    "- 数据来源：示例数据。正式发布前需替换为授权体育数据或公开统计口径。",
+    `- 数据来源：${match.sourceName || (match.isExample ? "示例数据" : "赛事数据，需核对来源")}。`,
     "",
     "## 内容优先级",
     ...safeTopics.slice(0, 6).map((topic, index) => `${index + 1}. ${topic.recommendation}｜${cleanTitle(topic.title)}｜适合平台：${topic.recommendedFormat}｜风险：${topic.riskLevel}`),
@@ -56,8 +57,8 @@ export function createMarkdownReport(input: ReportInput) {
     `- 公众号 / 专栏：${content.article.title}。建议按完整文章大纲推进，图表插入位置写入执行清单。`,
     "",
     "## 数据洞察",
-    `- 控球率：${match.teamA} ${match.stats.teamA.possession}%，${match.teamB} ${match.stats.teamB.possession}%。运营解释应强调控球不等于控制比赛。`,
-    `- 射门 / 射正：${match.teamA} ${match.stats.teamA.shots}/${match.stats.teamA.shotsOnTarget}，${match.teamB} ${match.stats.teamB.shots}/${match.stats.teamB.shotsOnTarget}。可用来解释机会质量。`,
+    `- 控球率：${match.teamA} ${formatStatistic(match.stats.teamA.possession, "%")}，${match.teamB} ${formatStatistic(match.stats.teamB.possession, "%")}。未知统计不用于判断比赛优势。`,
+    `- 射门 / 射正：${match.teamA} ${formatStatistic(match.stats.teamA.shots)}/${formatStatistic(match.stats.teamA.shotsOnTarget)}，${match.teamB} ${formatStatistic(match.stats.teamB.shots)}/${formatStatistic(match.stats.teamB.shotsOnTarget)}。统计完整后再解释机会质量。`,
     "- 时间线：用关键事件做短视频节奏点，不要只罗列比分。",
     "",
     "## 发布节奏",

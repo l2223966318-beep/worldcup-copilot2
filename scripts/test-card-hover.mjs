@@ -16,8 +16,8 @@ const lightCardFiles = [
   "../app/page.tsx",
   "../components/worldcup/hot-topic-radar-panel.tsx",
   "../components/worldcup/insight-charts.tsx",
-  "../app/matches/[id]/page.tsx",
-  "../app/hot-topics/[id]/page.tsx",
+  "../app/matches/page.tsx",
+  "../app/hot-topics/page.tsx",
   "../app/settings/page.tsx"
 ];
 
