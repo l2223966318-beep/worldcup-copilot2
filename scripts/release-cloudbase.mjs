@@ -87,6 +87,12 @@ export async function release({ zip, apply = false, confirmFunction = "", target
   if (current.FunctionName !== TARGET.functionName || current.Type !== "HTTP" || current.Status !== "Active") {
     throw new Error("Target must be the existing active HTTP function.");
   }
+  const variables = current.Environment?.Variables;
+  if (!Array.isArray(variables)) throw new Error("Function environment variables could not be verified before release.");
+  const configuredValue = key => variables.find(variable => variable.Key === key)?.Value?.trim() || "";
+  if (configuredValue("SPORTRADAR_API_KEY") && !/^sr:season:\d+$/.test(configuredValue("SPORTRADAR_WORLD_CUP_SEASON_ID"))) {
+    throw new Error("SPORTRADAR_WORLD_CUP_SEASON_ID must be explicitly configured when Sportradar is enabled.");
+  }
   const address = await api.GetFunctionAddress(params);
   const backup = await downloadBackup(address.Url, fetchImpl);
   await saveBackup(encryptBackup(backup, env.CLOUDBASE_BACKUP_KEY));
