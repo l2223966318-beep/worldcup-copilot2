@@ -1,0 +1,99 @@
+name: CloudBase Backend Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview only; no Tencent API calls"
+        type: boolean
+        default: true
+        required: true
+      confirm_function:
+        description: "For release, enter worldcup-api-proxy1"
+        type: string
+        default: ""
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudbase-worldcup-api-proxy1
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build and package backend
+        run: |
+          npm ci
+          npm run build:cloudbase-sports
+          python scripts/package-cloudbase.py --current-only
+      - name: Offline regression and startup tests
+        run: |
+          npm run test:sportradar-today
+          npm run test:cloudbase
+          npm run test:cloudbase-sources
+          npm run test:cloudbase-request
+          npm run test:cloudbase-sports
+          npm run test:cloudbase-api
+          npm run test:cloudbase-startup
+          npm run test:cloudbase-release
+          node scripts/test-cloudbase-workflow.mjs
+          npm run build
+          npm run preview:cloudbase-release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cloudbase-candidate
+          path: deliverables/cloudbase/worldcup-api-v6.1-complete.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    if: ${{ !inputs.dry_run }}
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: cloudbase-production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/download-artifact@v4
+        with:
+          name: cloudbase-candidate
+          path: deliverables/cloudbase
+      - name: Install isolated official SDK
+        run: npm ci --prefix scripts/cloudbase-deploy --ignore-scripts --no-audit --no-fund
+      - name: Encrypted live backup, code-only update and health checks
+        id: publish
+        env:
+          TENCENTCLOUD_SECRET_ID: ${{ secrets.TENCENTCLOUD_SECRET_ID }}
+          TENCENTCLOUD_SECRET_KEY: ${{ secrets.TENCENTCLOUD_SECRET_KEY }}
+          TENCENTCLOUD_SESSION_TOKEN: ${{ secrets.TENCENTCLOUD_SESSION_TOKEN }}
+          CLOUDBASE_BACKUP_KEY: ${{ secrets.CLOUDBASE_BACKUP_KEY }}
+          CLOUDBASE_RELEASE_AUTHORIZED: ${{ vars.CLOUDBASE_RELEASE_AUTHORIZED }}
+          CONFIRM_FUNCTION: ${{ inputs.confirm_function }}
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          node -e 'if (process.env.RELEASE_REF !== "refs/heads/main") { console.error("Only main may release the backend"); process.exit(1); }'
+          node scripts/release-cloudbase.mjs --apply "--confirm-function=$CONFIRM_FUNCTION"
+      - name: Retain encrypted backup even if acceptance fails
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-live-backup-${{ github.run_id }}
+          path: deliverables/cloudbase-release/*.zip.enc
+          if-no-files-found: ignore
+          retention-days: 30

@@ -8,6 +8,20 @@ const DEFAULT_ACCESS_LEVEL = "trial";
 const DEFAULT_LANGUAGE_CODE = "en";
 const REQUEST_TIMEOUT_MS = Number(process.env.SPORTRADAR_TIMEOUT_MS ?? 12_000);
 const SEASON_SCHEDULE_PAGE_SIZE = 1000;
+const intervalConfig = Number(process.env.SPORTRADAR_REQUEST_INTERVAL_MS ?? 1100);
+const REQUEST_INTERVAL_MS = Number.isFinite(intervalConfig) ? Math.max(10, Math.min(60000, intervalConfig)) : 1100;
+let requestGate = Promise.resolve();
+let nextRequestAt = 0;
+
+async function waitForRequestSlot() {
+  const slot = requestGate.then(async () => {
+    const delay = nextRequestAt - Date.now();
+    if (delay > 0) await new Promise<void>(resolve => setTimeout(resolve, delay));
+    nextRequestAt = Date.now() + REQUEST_INTERVAL_MS;
+  });
+  requestGate = slot.catch(() => {});
+  await slot;
+}
 
 type SportradarNamed = {
   id?: string;
@@ -163,7 +177,7 @@ export async function getSportradarWorldCupToday(date: string): Promise<WorldCup
 
   const dates = adjacentDates(date);
   const settled = await Promise.allSettled(
-    dates.map((day) => fetchSportradarJson<SportradarScheduleResponse>(config, `schedules/${day}/schedules.json`))
+    dates.map(async (day) => validateSchedules(await fetchSportradarJson<SportradarScheduleResponse>(config, `schedules/${day}/schedules.json`)))
   );
 
   const schedules = settled.flatMap((result) =>
@@ -185,34 +199,36 @@ async function getSeasonSchedules(config: SportradarConfig) {
     throw new Error("SPORTRADAR_WORLD_CUP_SEASON_ID is required for season schedules.");
   }
 
-  return fetchSportradarJson<SportradarScheduleResponse>(
+  return validateSchedules(await fetchSportradarJson<SportradarScheduleResponse>(
     config,
     `seasons/${encodeURIComponent(config.seasonId)}/schedules.json`,
     false,
     { limit: String(SEASON_SCHEDULE_PAGE_SIZE) }
-  );
+  ));
+}
+
+function validateSchedules(payload: SportradarScheduleResponse) {
+  if (!payload || !Array.isArray(payload.schedules)) throw new Error("Invalid Sportradar schedule response.");
+  return payload;
 }
 
 export async function getSportradarWorldCupLive(): Promise<WorldCupPayload<WorldCupMatch[]>> {
   const config = getSportradarConfig();
-  const payload = await fetchSportradarJson<SportradarScheduleResponse>(config, "schedules/live/schedules.json");
+  const payload = validateSchedules(await fetchSportradarJson<SportradarScheduleResponse>(config, "schedules/live/schedules.json"));
   return createPayload("live", dedupeMatches(normalizeSchedules(payload.schedules ?? [], payload.generated_at)));
 }
 
 export async function getSportradarWorldCupMatch(fixtureId: string): Promise<WorldCupPayload<WorldCupMatch>> {
   const config = getSportradarConfig();
   const eventId = safeDecode(fixtureId);
-  const [summary, timeline] = await Promise.all([
-    fetchSportradarJson<SportradarSummaryResponse>(
+  const summary = await fetchSportradarJson<SportradarSummaryResponse>(
       config,
       `sport_events/${encodeURIComponent(eventId)}/summary.json`
-    ),
-    fetchSportradarJson<SportradarSummaryResponse>(
+    );
+  const timeline = await fetchSportradarJson<SportradarSummaryResponse>(
       config,
-      `sport_events/${encodeURIComponent(eventId)}/timeline.json`,
-      true
-    ).catch(() => undefined)
-  ]);
+      `sport_events/${encodeURIComponent(eventId)}/timeline.json`
+    ).catch(() => undefined);
 
   const match = normalizeSchedule(
     {
@@ -224,8 +240,8 @@ export async function getSportradarWorldCupMatch(fixtureId: string): Promise<Wor
     summary.generated_at
   );
 
-  if (!match) throw new Error(`Sportradar fixture ${fixtureId} was not found.`);
-  return createPayload("live", match);
+  if (!match || !shouldKeepSchedule({ sport_event: summary.sport_event })) throw new Error("Sportradar fixture is outside the configured competition or season.");
+  return createPayload("live", match, timeline ? undefined : "Timeline unavailable; summary data only.");
 }
 
 export async function getSportradarWorldCupStandings(): Promise<WorldCupPayload<unknown[]>> {
@@ -236,10 +252,10 @@ export async function getSportradarWorldCupStandings(): Promise<WorldCupPayload<
 
   const payload = await fetchSportradarJson<SportradarStandingsResponse>(
     config,
-    `seasons/${encodeURIComponent(config.seasonId)}/standings.json`,
-    true
+    `seasons/${encodeURIComponent(config.seasonId)}/standings.json`
   );
-  return createPayload("live", payload.standings ?? []);
+  if (!payload || !Array.isArray(payload.standings)) throw new Error("Invalid Sportradar standings response.");
+  return createPayload("live", payload.standings);
 }
 
 function normalizeSchedules(schedules: SportradarSchedule[], generatedAt?: string) {
@@ -296,9 +312,8 @@ function shouldKeepSchedule(schedule: SportradarSchedule) {
   const competitionId = context?.competition?.id;
   const seasonId = context?.season?.id;
 
-  if (config.seasonId && seasonId === config.seasonId) return true;
-  if (config.competitionId && competitionId === config.competitionId) return true;
-  if (config.seasonId || config.competitionId) return false;
+  if (config.seasonId) return seasonId === config.seasonId;
+  if (config.competitionId) return competitionId === config.competitionId;
 
   const text = [
     context?.competition?.name,
@@ -316,11 +331,11 @@ function shouldKeepSchedule(schedule: SportradarSchedule) {
 function normalizeSportradarStatus(raw?: SportradarStatus): WorldCupMatch["status"] {
   const value = `${raw?.status ?? ""} ${raw?.match_status ?? ""}`.toLowerCase();
   if (!value.trim()) return "unknown";
-  if (/(not_started|scheduled|postponed|delayed|time_to_be_defined)/.test(value)) return "scheduled";
-  if (/(live|1st_half|2nd_half|halftime|overtime|penalties|awaiting_extra|awaiting_penalties)/.test(value)) return "live";
-  if (/(closed|ended|aet|ap|after_penalties|after_extra_time)/.test(value)) return "finished";
-  if (/postponed/.test(value)) return "postponed";
   if (/(cancelled|abandoned)/.test(value)) return "cancelled";
+  if (/postponed/.test(value)) return "postponed";
+  if (/(closed|ended|aet|after_penalties|after_extra_time)/.test(value) || /\bap\b/.test(value)) return "finished";
+  if (/(not_started|scheduled|delayed|time_to_be_defined)/.test(value)) return "scheduled";
+  if (/(live|1st_half|2nd_half|halftime|overtime|penalties|awaiting_extra)/.test(value)) return "live";
   return "unknown";
 }
 
@@ -445,8 +460,11 @@ async function fetchSportradarJson<T>(
 ): Promise<T> {
   const baseUrl = extended ? config.soccerExtendedBaseUrl : config.soccerBaseUrl;
   const url = new URL(`${baseUrl.replace(/\/$/, "")}/${path.replace(/^\//, "")}`);
+  if (url.protocol !== "https:" || url.username || url.password) throw new Error("Invalid Sportradar HTTPS endpoint.");
   url.searchParams.set("api_key", config.apiKey);
   for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+
+  await waitForRequestSlot();
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -458,12 +476,14 @@ async function fetchSportradarJson<T>(
         "x-api-key": config.apiKey
       },
       signal: controller.signal,
-      cache: "no-store"
+      cache: "no-store",
+      redirect: "error"
     });
 
     if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      throw new Error(`Sportradar ${path} returned ${response.status}${body ? `: ${body.slice(0, 160)}` : ""}`);
+      const error = new Error(`Sportradar request returned ${response.status}.`);
+      Object.assign(error, { upstreamStatus: response.status });
+      throw error;
     }
 
     return (await response.json()) as T;

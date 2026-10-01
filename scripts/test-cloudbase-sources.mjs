@@ -1,0 +1,57 @@
+import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+const url = new URL("../cloudfunctions/api-proxy/hot-sources.js", import.meta.url);
+assert.ok(existsSync(url), "supplemental provider module must exist");
+const { createSources } = createRequire(import.meta.url)(url.pathname.replace(/^\/([A-Za-z]:)/, "$1"));
+let requests = [];
+let now = 1000;
+const service = createSources({ env: { TAVILY_API_KEY: "private-key", REDFOX_API_KEY: "red-key" }, now: () => now,
+  fetchImpl: async (url, init) => {
+    requests.push({ url: String(url), init });
+    if (String(url).includes("tavily")) return new Response(JSON.stringify({ results: [{ title: "Argentina football", url: "https://example.org/story", content: "World Cup", score: 0.8 }] }));
+    if (String(url).includes("redfox")) return new Response(JSON.stringify({ code: 2000, data: [{ noteTitle: "足球", photoJumpUrl: "https://www.xiaohongshu.com/explore/123" }] }));
+    return new Response(JSON.stringify({ code: 200, data: [] }));
+  },
+});
+const [first, shared] = await Promise.all([service.search("tavily", "Argentina"), service.search("tavily", "Argentina")]);
+assert.equal(requests.length, 1);
+assert.equal(first.status, "success");
+assert.equal(first.items[0].provider, "tavily");
+assert.equal(first.items[0].source, "全网搜索");
+assert.equal(first.items[0].publishedAt, undefined, "fetch time is not publication time");
+assert.equal(requests[0].init.headers.Authorization, "Bearer private-key");
+assert.equal(JSON.parse(requests[0].init.body).query, "Argentina");
+assert.equal((await service.search("tavily", "Argentina")).cached, true);
+assert.equal(JSON.stringify(service.health()).includes("private-key"), false);
+assert.equal((await service.search("tophubdata", "Argentina")).status, "not-configured");
+assert.equal(requests.length, 1);
+now += 61000;
+await service.search("tavily", "Argentina");
+assert.equal(requests.length, 2);
+await service.search("tavily", "France");
+assert.equal(requests.length, 3, "queries must not share results");
+const xhs = await service.redfox();
+assert.equal(xhs.items[0].platform, "小红书");
+assert.equal(requests[3].init.headers["X-API-KEY"], "red-key");
+assert.equal(new URL(requests[3].url).searchParams.get("category"), "体育锻炼");
+const bad = createSources({ env: { TAVILY_API_KEY: "key" }, fetchImpl: async () => new Response('{"error":"private-key"}', { status: 429 }) });
+const badResult = await bad.search("tavily", "Football");
+assert.equal(badResult.status, "rate-limited");
+assert.equal(JSON.stringify(badResult).includes("private-key"), false);
+const malformed = createSources({ env: { TAVILY_API_KEY: "key" }, fetchImpl: async () => new Response('{"unexpected":true}') });
+assert.equal((await malformed.search("tavily", "Football")).status, "invalid-response");
+const empty = createSources({ env: { TAVILY_API_KEY: "key" }, fetchImpl: async () => new Response('{"results":[]}') });
+assert.equal((await empty.search("tavily", "Football")).status, "empty");
+const unsafe = createSources({ env: { TAVILY_API_KEY: "key" }, fetchImpl: async () => new Response(JSON.stringify({ results: [{ title: "football", url: "javascript:alert(1)" }] })) });
+assert.equal((await unsafe.search("tavily", "Football")).items.length, 0);
+let limitedCalls = 0;
+const limited = createSources({ env: { TAVILY_API_KEY: "key", HOT_SEARCH_REQUESTS_PER_MINUTE: "1" }, fetchImpl: async () => {
+  limitedCalls++;
+  return new Response('{"results":[]}');
+} });
+await limited.search("tavily", "Argentina");
+assert.equal((await limited.search("tavily", "France")).status, "local-rate-limited");
+assert.equal((await limited.search("tavily", "Argentina")).cached, true);
+assert.equal(limitedCalls, 1);
+console.log("Supplemental sources: auth, attribution, cache, query isolation, failure states and safe URLs passed.");

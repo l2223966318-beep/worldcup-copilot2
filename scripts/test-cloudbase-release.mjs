@@ -1,0 +1,62 @@
+import assert from "node:assert/strict";
+import { existsSync, readFileSync } from "node:fs";
+const source = new URL("./release-cloudbase.mjs", import.meta.url);
+assert.ok(existsSync(source), "an offline-by-default release script must exist");
+const { release, TARGET, encryptBackup, decryptBackup } = await import(source);
+const zip = readFileSync(new URL("../deliverables/cloudbase/worldcup-api-v6.1-complete.zip", import.meta.url));
+const key = Buffer.alloc(32, 7).toString("base64");
+let calls = [], saved;
+const env = { TENCENTCLOUD_SECRET_ID: "test-id", TENCENTCLOUD_SECRET_KEY: "test-secret", CLOUDBASE_BACKUP_KEY: key, CLOUDBASE_RELEASE_AUTHORIZED: "true" };
+const client = {
+  GetFunction: async params => { calls.push(["read", params]); return { FunctionName: TARGET.functionName, Type: "HTTP", Status: "Active" }; },
+  GetFunctionAddress: async params => { calls.push(["backup", params]); return { Url: "https://code.cos.ap-shanghai.myqcloud.com/download?signature=private" }; },
+  UpdateFunctionCode: async params => { calls.push(["update", params]); return { RequestId: "test" }; },
+};
+let fetchCount = 0;
+const fakeFetch = async url => {
+  fetchCount++;
+  const path = new URL(url).pathname;
+  if (path === "/download") return new Response(zip);
+  if (path === "/api/health") return Response.json({ ok: true, version: TARGET.version });
+  if (path === "/api/hot/health") return Response.json({ ok: true, providers: [] });
+  return Response.json({ ok: true, configured: true, seasonConfigured: true });
+};
+const options = { zip, env, client, fetchImpl: fakeFetch, saveBackup: async data => { saved = data; }, wait: async () => {} };
+let result = await release(options);
+assert.equal(result.mode, "preview");
+assert.equal(calls.length, 0, "default preview must never contact Tencent");
+assert.equal(fetchCount, 0);
+await assert.rejects(release({ ...options, apply: true, confirmFunction: "another" }), /confirmation/);
+await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName, env: {} }), /credentials/);
+await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName, env: { ...env, CLOUDBASE_RELEASE_AUTHORIZED: "false" } }), /authorization/);
+await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName, env: { ...env, CLOUDBASE_BACKUP_KEY: "invalid" } }), /backup key/);
+await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName, target: { ...TARGET, namespace: "another" } }), /target/);
+assert.equal(calls.length, 0, "invalid authorization/input must fail before any SDK call");
+const encrypted = encryptBackup(zip, key);
+assert.deepEqual(decryptBackup(encrypted, key), zip);
+assert.equal(encrypted.includes(Buffer.from("index.js")), false);
+await assert.rejects(async () => decryptBackup(encrypted, Buffer.alloc(32, 8).toString("base64")));
+result = await release({ ...options, apply: true, confirmFunction: TARGET.functionName });
+assert.equal(result.mode, "verified");
+assert.deepEqual(decryptBackup(saved, key), zip);
+const update = calls.find(([method]) => method === "update")[1];
+assert.equal(update.FunctionName, TARGET.functionName);
+assert.equal(update.Namespace, TARGET.namespace);
+assert.equal(update.Publish, "FALSE");
+assert.deepEqual(Buffer.from(update.ZipFile, "base64"), zip);
+assert.deepEqual(Object.keys(update).sort(), ["CodeSource", "FunctionName", "Namespace", "Publish", "ZipFile"].sort(), "release must not change runtime, env vars or routes");
+assert.equal(JSON.stringify(result).includes("private"), false);
+assert.equal(JSON.stringify(result).includes("test-secret"), false);
+calls = [];
+await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName, saveBackup: async () => { throw new Error("disk failure"); } }), /disk failure/);
+assert.equal(calls.some(([method]) => method === "update"), false, "failed backup must prevent release");
+calls = [];
+await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName, fetchImpl: async () => new Response(zip, { status: 403 }) }), /backup/);
+assert.equal(calls.some(([method]) => method === "update"), false);
+calls = [];
+await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName,
+  client: { ...client, GetFunction: async () => ({ FunctionName: TARGET.functionName, Type: "Event", Status: "Active" }) } }), /HTTP/);
+assert.equal(calls.length, 0);
+await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName,
+  fetchImpl: async url => new URL(url).pathname === "/download" ? new Response(zip) : Response.json({ ok: true, version: "old", providers: [], configured: true }) }), /verification/);
+console.log("CloudBase release: offline default, authorization guards, encrypted backups, code-only updates and version acceptance passed (all network mocked).");
