@@ -32,6 +32,10 @@ console is needed once the deployment account has hosting permissions.
 ## Safety and acceptance
 
 - Release code always comes from main, never from the downloaded artifact.
+- COS requests use the public `tencentcos.cn` domain, matching the official
+  CloudBase manager SDK. An existing homepage read verifies object access
+  before backup. Failures expose only the operation, public file key, status,
+  request ID and a known diagnostic category, never provider headers or keys.
 - Back up every overwritten file before the first write. Backups are encrypted
   using the existing 32-byte Base64 `CLOUDBASE_BACKUP_KEY` and retained as a
   GitHub artifact for 30 days. Losing this key loses access to those backups.

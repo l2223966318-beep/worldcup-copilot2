@@ -15,6 +15,11 @@ function authorize(env) {
   if (env.CLOUDBASE_FRONTEND_RELEASE_AUTHORIZED !== "true") throw new Error("Frontend deployment authorization is required.");
   if (!env.TENCENTCLOUD_SECRET_ID || !env.TENCENTCLOUD_SECRET_KEY) throw new Error("Authorized deployment credentials are required.");
 }
+export function hostingCosOptions(env) {
+  return { SecretId: env.TENCENTCLOUD_SECRET_ID, SecretKey: env.TENCENTCLOUD_SECRET_KEY,
+    ...(env.TENCENTCLOUD_SESSION_TOKEN ? { SecurityToken: env.TENCENTCLOUD_SESSION_TOKEN } : {}),
+    Domain: "{Bucket}.cos.{Region}.tencentcos.cn", Protocol: "https:" };
+}
 function sdk(env) {
   const { tcb } = require("tencentcloud-sdk-nodejs-tcb");
   const COS = require("cos-nodejs-sdk-v5");
@@ -23,8 +28,7 @@ function sdk(env) {
   return {
     client: new tcb.v20180608.Client({ credential, region: TARGET.region,
       profile: { httpProfile: { endpoint: "tcb.tencentcloudapi.com", reqTimeout: 30 } } }),
-    cos: new COS({ SecretId: credential.secretId, SecretKey: credential.secretKey,
-      ...(credential.token ? { SecurityToken: credential.token } : {}) }),
+    cos: new COS(hostingCosOptions(env)),
   };
 }
 function prefix(value = "") {
@@ -91,7 +95,16 @@ const contentTypes = { ".html": "text/html; charset=utf-8", ".js": "application/
   ".css": "text/css", ".json": "application/json", ".txt": "text/plain; charset=utf-8",
   ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".mp4": "video/mp4", ".ico": "image/x-icon" };
 function cosCall(cos, method, params) {
-  return new Promise((resolve, reject) => cos[method](params, (error, data) => error ? reject(error) : resolve(data)));
+  return new Promise((resolve, reject) => cos[method](params, (error, data) => {
+    if (!error) { resolve(data); return; }
+    const safe = value => typeof value === "string" && /^[A-Za-z0-9_./-]{1,512}$/.test(value) ? value : undefined;
+    const hints = new Map([["Access Denied.", "permission-denied"],
+      ["You are denied by bucket referer rule", "bucket-referer-rule"], ["Request has expired", "signature-expired"]]);
+    reject(Object.assign(new Error("COS operation failed."), { code: error.code,
+      releaseDetails: { operation: method, object: safe(params.Key), requestId: safe(error.RequestId),
+        status: Number.isInteger(error.statusCode) ? error.statusCode : undefined,
+        hint: hints.get(error.error?.Message) } }));
+  }));
 }
 export async function publishStatic({ directory, commit, env = process.env, client, cos,
   saveBackup, fetchImpl = fetch, wait = ms => new Promise(resolve => setTimeout(resolve, ms)), onStage = () => {} } = {}) {
@@ -108,6 +121,8 @@ export async function publishStatic({ directory, commit, env = process.env, clie
     files.map(file => [file.key, hash(file.bytes)]).sort().map(item => item.join(":")).join("\n"))) };
   if (files.some(file => file.key === "frontend-release.json")) throw new Error("Artifact must not supply its own release marker.");
   files.push({ key: "frontend-release.json", bytes: Buffer.from(JSON.stringify(marker)) });
+  onStage("check-existing-home-page");
+  await cosCall(cos, "getObject", params("index.html"));
   onStage("backup-overwritten-files");
   const backup = []; let backupBytes = 0;
   for (const file of files) {
@@ -170,6 +185,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
     console.log(JSON.stringify(report, null, 2));
   } catch (error) {
     const code = typeof error?.code === "string" && /^[A-Za-z0-9_.-]{1,100}$/.test(error.code) ? error.code : "RELEASE_FAILED";
+    if (error.releaseDetails) console.error(`COS failure context: ${JSON.stringify(error.releaseDetails)}`);
     console.error(`Frontend release stopped: ${code}. Raw errors and credentials are suppressed; review the last stage.`);
     process.exitCode = 1;
   }
