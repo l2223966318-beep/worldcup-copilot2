@@ -14,9 +14,9 @@ for (const page of ["index.html", "pitch/index.html", "demo/index.html", "matche
   }
 }
 assert.ok(readFileSync(resolve(root, "pitch/index.html"), "utf8").includes("国赛答辩"));
-assert.ok(readFileSync(resolve(root, "settings/index.html"), "utf8").includes("AI 访问口令"));
+assert.ok(!readFileSync(resolve(root, "settings/index.html"), "utf8").includes("AI 访问口令"));
 assert.ok(readFileSync(resolve(root, "data-notes/index.html"), "utf8").includes("Sportradar"));
 for (const file of readdirSync(root, { recursive: true })) {
   assert.ok(!/(?:^|[\\/])(?:\.env[^\\/]*|node_modules)(?:[\\/]|$)|\.zip\.enc$/.test(file), file);
 }
-console.log(JSON.stringify({ pages: 7, localResourceReferences: references, sourceNotes: true, accessSettings: true, browserInteractionsTested: false }));
+console.log(JSON.stringify({ pages: 7, localResourceReferences: references, sourceNotes: true, sharedAiTokenInput: false, browserInteractionsTested: false }));

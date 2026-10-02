@@ -10,6 +10,7 @@ assert.match(hot, /new URLSearchParams\(window.location.search\)/);
 for (const path of ["app/page.tsx", "app/history/page.tsx", "app/matches/page.tsx"]) {
   assert.doesNotMatch(read(path), /(?:href|route):?=?[\s{]*[`"]\/matches\/(?!\?)/, path);
 }
-assert.match(read("app/settings/page.tsx"), /saveAiAccessToken/);
+assert.doesNotMatch(read("app/settings/page.tsx"), /saveAiAccessToken|ai-access-token|共享 AI 访问口令/);
+assert.doesNotMatch(hot, /本页检测到的 DeepSeek Key/);
 assert.match(match + hot, /getAiRequestHeaders/);
-console.log("Static routes preserve query IDs, defer data/AI until ready, and expose shared-AI access settings.");
+console.log("Static routes preserve query IDs, defer data/AI until ready, and require no shared-AI access settings.");

@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash } from "node:crypto";
 
 type AiResult<T> = { ok: true; data: T; model: string } | { ok: false; message: string };
 type Environment = Record<string, string | undefined>;
@@ -6,23 +6,6 @@ type CacheEntry = { expiresAt: number; value: AiResult<unknown> };
 
 export function buildAiRequestKey(apiKey: string, request: unknown) {
   return createHash("sha256").update(JSON.stringify(["ai-guard-v1", apiKey, request])).digest("hex");
-}
-
-export function getAiAccessFailure(headers: Headers | Record<string, string | string[] | undefined>, apiKey?: unknown, env: Environment = process.env) {
-  if (typeof apiKey === "string" && apiKey.trim()) return null;
-  if (!env.DEEPSEEK_API_KEY?.trim()) return null;
-  const expected = env.AI_ACCESS_TOKEN?.trim();
-  if (expected) {
-    const supplied = typeof (headers as Headers).get === "function"
-      ? (headers as Headers).get("x-ai-access-token") ?? ""
-      : (headers as Record<string, unknown>)["x-ai-access-token"];
-    const value = typeof supplied === "string" && supplied.length <= 1024 ? supplied : "";
-    const hash = (text: string) => createHash("sha256").update(text).digest();
-    if (value && timingSafeEqual(hash(value), hash(expected))) return null;
-    return { status: 401, message: "AI 访问口令未填写或不正确，请到设置页填写；也可使用自己的 DeepSeek API Key。" };
-  }
-  if (env.AI_ALLOW_PUBLIC === "true") return null;
-  return { status: 403, message: "共享 AI 尚未开放访问。请配置访问口令或使用自己的 DeepSeek API Key；本地规则和预置案例仍可使用。" };
 }
 
 function positiveLimit(value: string | undefined, fallback: number, max: number) {
