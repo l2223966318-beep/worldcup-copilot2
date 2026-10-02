@@ -20,11 +20,9 @@ export async function inspectConfiguration({ env = process.env, client } = {}) {
   const variables = current.Environment?.Variables;
   if (!Array.isArray(variables)) throw new Error("Function environment variables could not be verified before release.");
   const value = key => variables.find(variable => variable.Key === key)?.Value?.trim() || "";
-  const tokenConfigured = Boolean(value("AI_ACCESS_TOKEN"));
-  const publicAllowed = value("AI_ALLOW_PUBLIC") === "true";
   return { functionName: TARGET.functionName, namespace: TARGET.namespace, region: TARGET.region,
-    sharedAiConfigured: Boolean(value("DEEPSEEK_API_KEY")), aiAccessTokenConfigured: tokenConfigured,
-    publicAiExplicitlyAllowed: publicAllowed, sharedAiProtected: tokenConfigured || publicAllowed,
+    sharedAiConfigured: Boolean(value("DEEPSEEK_API_KEY")),
+    releaseAiAccessMode: "public", releaseRequiresBrowserKey: false,
     sportsConfigured: Boolean(value("SPORTRADAR_API_KEY")), sportsSeasonFormatValid: /^sr:season:\d+$/.test(value("SPORTRADAR_WORLD_CUP_SEASON_ID")),
     cloudCodeUpdated: false, configurationUpdated: false };
 }

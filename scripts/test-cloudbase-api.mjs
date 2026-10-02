@@ -122,14 +122,14 @@ try {
   assert.notEqual(unchecked.result.advice, "可发布");
   assert.equal(unchecked.result.evidenceSummary.unsupportedClaims, 1);
   env.DEEPSEEK_API_KEY = "ai-test-secret";
+  env.AI_ACCESS_TOKEN = "legacy-token-not-required";
   for (const [path, body] of aiRequests) {
     response = await fetch(`${origin}/api/ai/${path}`, { method: "POST", body: JSON.stringify(body) });
-    assert.equal(response.status, 403, "shared AI must be private unless deliberately opened");
+    assert.equal(response.status, 200, `${path} must use configured server AI without a browser key or token`);
   }
-  response = await fetch(`${origin}/api/ai/health?probe=1`);
-  assert.equal(response.status, 403, "paid health probes require the same access policy");
-  assert.equal(calls.length, beforeAi, "denied calls must not reach the model");
-  env.AI_ALLOW_PUBLIC = "true";
+  response = await fetch(`${origin}/api/ai/health`);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).accessMode, "public", "health must disclose default shared AI access");
   response = await fetch(`${origin}/api/ai/review-draft`, { method: "POST", body: JSON.stringify({
     draft: "比赛复盘", matchContext: {}, evidence: []
   }) });

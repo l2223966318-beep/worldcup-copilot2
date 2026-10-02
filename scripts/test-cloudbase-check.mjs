@@ -33,6 +33,8 @@ assert.equal(report.checks[1].state, "request-failed");
 assert.equal(JSON.stringify(report).includes("never-print-this"), false);
 assert.equal(inspectResponse("/api/worldcup/health", 200, { ok: true, configured: true, seasonConfigured: false }).seasonConfigured, false);
 assert.equal(inspectResponse("/api/ai/health", 200, { ok: true, configured: false }).state, "configuration-present");
+assert.equal(inspectResponse("/api/ai/health", 200, { ok: true, configured: true, accessMode: "public" }).accessMode, "public");
+assert.equal(inspectResponse("/api/ai/health", 200, { ok: true, configured: true }).accessMode, "unknown");
 assert.equal(inspectResponse("/api/hot/health", 200, { unexpected: true }).state, "unknown-contract");
 await assert.rejects(() => checkDeployment("https://user:password@example.com"), /origin/);
 console.log("CloudBase check: version, missing routes, fallback, attribution and safe failures passed.");

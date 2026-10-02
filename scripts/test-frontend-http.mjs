@@ -65,16 +65,16 @@ try {
     const denied = await fetch(`${origin}/api/ai/${route}`, {
       method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", signal: AbortSignal.timeout(5000)
     });
-    assert.equal(denied.status, 401, `${route} must reject anonymous shared AI access`);
+    assert.equal(denied.status, 400, `${route} must accept anonymous access and validate input without a paid call`);
     assert.equal((await denied.json()).sourceStatus, "error");
     const invalid = await fetch(`${origin}/api/ai/${route}`, {
       method: "POST", headers: { "Content-Type": "application/json", "X-AI-Access-Token": "test-only-access-token-123456789" },
       body: "{}", signal: AbortSignal.timeout(5000)
     });
-    assert.equal(invalid.status, 400, `${route} must validate input after accepting the access code`);
+    assert.equal(invalid.status, 400, `${route} must ignore legacy access headers and validate input`);
   }
   console.log(JSON.stringify({ pages: 5, bundles: assets.length, images: 4, videoRange: true,
-    requestedBusinessEndpoints: 10, anonymousAiRejections: 5, authenticatedInputRejections: 5,
+    requestedBusinessEndpoints: 10, anonymousInputRejections: 5, legacyHeaderInputRejections: 5,
     browserInteractionsTested: false }));
 } finally {
   if (child.exitCode === null) child.kill();

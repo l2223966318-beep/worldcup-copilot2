@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { generatePlatformDraftWithAi } from "@/lib/ai/platform-draft";
-import { getAiAccessFailure } from "@/lib/ai/requestGuard";
 import type { ContentTypeKey, TopicModeKey } from "@/lib/services/contentService";
 import type { AnalysisResult, MatchContext, PlatformKey, WorkflowTopic } from "@/types/workflow";
 
@@ -18,8 +17,6 @@ export async function POST(request: Request) {
       analysis?: AnalysisResult;
       apiKey?: string;
     };
-    const denied = getAiAccessFailure(request.headers, body.apiKey);
-    if (denied) return NextResponse.json({ sourceStatus: "error", message: denied.message }, { status: denied.status });
 
     if (!body.platform || !body.contentType || !body.topicMode || !body.matchContext || !body.topic || !body.analysis) {
       return NextResponse.json({ sourceStatus: "error", message: "Missing platform draft inputs." }, { status: 400 });

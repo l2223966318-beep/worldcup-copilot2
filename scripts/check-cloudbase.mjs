@@ -19,6 +19,7 @@ export function inspectResponse(path, status, body) {
   if (path === "/api/worldcup/health" || path === "/api/ai/health") {
     return { ...result, state: body.ok === true && typeof body.configured === "boolean" ? "configuration-present" : "unknown-contract",
       configured: body.configured === true,
+      ...(path === "/api/ai/health" ? { accessMode: body.accessMode === "public" ? "public" : "unknown" } : {}),
       ...(path === "/api/worldcup/health" ? { seasonConfigured: body.seasonConfigured === true } : {}),
     };
   }

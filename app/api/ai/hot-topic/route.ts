@@ -9,7 +9,6 @@ import {
 import type { HotTopic } from "@/lib/hot/types";
 import { buildHotTopicAiFingerprint } from "@/lib/services/hotTopicAiCache";
 import { normalizeHotAnalysis } from "@/lib/hot/normalizeHotAnalysis";
-import { getAiAccessFailure } from "@/lib/ai/requestGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -31,8 +30,6 @@ type HotTopicAiPayload = {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { topic?: HotTopic; apiKey?: string };
-    const denied = getAiAccessFailure(request.headers, body.apiKey);
-    if (denied) return NextResponse.json({ sourceStatus: "error", message: denied.message }, { status: denied.status });
     if (!body.topic) {
       return NextResponse.json(
         {

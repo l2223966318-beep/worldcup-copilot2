@@ -10,7 +10,6 @@ import {
   type HotGenerationConfig
 } from "@/lib/hot/hotTopicWorkflow";
 import type { HotTopic } from "@/lib/hot/types";
-import { getAiAccessFailure } from "@/lib/ai/requestGuard";
 import { buildHotTopicAiFingerprint } from "@/lib/services/hotTopicAiCache";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +43,6 @@ export async function POST(request: Request) {
       draft?: string;
       apiKey?: string;
     };
-    const denied = getAiAccessFailure(request.headers, body.apiKey);
-    if (denied) return NextResponse.json({ sourceStatus: "error", message: denied.message }, { status: denied.status });
 
     if (!body.topic || !body.config || !body.action) {
       return NextResponse.json(

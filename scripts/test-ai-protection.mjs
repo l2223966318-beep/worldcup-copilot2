@@ -13,17 +13,7 @@ function load(path) {
   vm.runInThisContext(`(function(require,module,exports){${code}\n})`)(require, module, module.exports);
   return module.exports;
 }
-const { createAiRequestGuard, buildAiRequestKey, getAiAccessFailure } = load("../lib/ai/requestGuard.ts");
-const secret = "test-only-access-token-123456789";
-const env = { DEEPSEEK_API_KEY: "server-key", AI_ACCESS_TOKEN: secret };
-assert.equal(getAiAccessFailure({}, undefined, env).status, 401);
-assert.equal(getAiAccessFailure({ "x-ai-access-token": "wrong" }, undefined, env).status, 401);
-assert.equal(getAiAccessFailure({ "x-ai-access-token": secret }, undefined, env), null);
-assert.equal(getAiAccessFailure({}, "personal-key", env), null);
-assert.equal(getAiAccessFailure({}, undefined, { DEEPSEEK_API_KEY: "server-key" }).status, 403,
-  "a shared paid key must not be publicly usable by default");
-assert.equal(getAiAccessFailure({}, undefined, { DEEPSEEK_API_KEY: "server-key", AI_ALLOW_PUBLIC: "true" }), null);
-assert.equal(getAiAccessFailure({}, undefined, {}), null, "free local fallback remains available");
+const { createAiRequestGuard, buildAiRequestKey } = load("../lib/ai/requestGuard.ts");
 const key = buildAiRequestKey("secret-api-key", { prompt: "test" });
 assert.equal(key.includes("secret-api-key"), false);
 assert.notEqual(key, buildAiRequestKey("other-api-key", { prompt: "test" }));
@@ -55,23 +45,17 @@ const recover = createAiRequestGuard({ AI_MAX_CONCURRENT: "1" }, () => now);
 await assert.rejects(recover.run("throws", async () => { throw new Error("test failure"); }));
 assert.equal((await recover.run("after", async () => ({ ok: true, data: {}, model: "test" }))).ok, true,
   "exceptions release a concurrency slot");
-const storage = new Map();
 const clientModule = { exports: {} };
-const clientWindow = { sessionStorage: {
-  getItem: key => storage.get(key) ?? null,
-  setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key)
-} };
+const clientWindow = {};
+for (const name of ["sessionStorage", "localStorage"]) {
+  Object.defineProperty(clientWindow, name, { get() { throw new Error("disabled storage"); } });
+}
 vm.runInNewContext(ts.transpileModule(readFileSync(new URL("../lib/ai/client-access.ts", import.meta.url), "utf8"), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText, { module: clientModule, exports: clientModule.exports, window: clientWindow });
 const client = clientModule.exports;
-assert.equal(client.readAiAccessToken(), "");
-assert.equal(client.saveAiAccessToken(` ${secret} `), true);
-assert.equal(client.getAiRequestHeaders()["X-AI-Access-Token"], secret);
-assert.equal(client.saveAiAccessToken(""), true);
-assert.equal(client.getAiRequestHeaders()["X-AI-Access-Token"], undefined);
-clientWindow.sessionStorage.getItem = () => { throw new Error("disabled storage"); };
-clientWindow.sessionStorage.setItem = () => { throw new Error("disabled storage"); };
-assert.equal(client.readAiAccessToken(), "");
-assert.equal(client.saveAiAccessToken(secret), false);
-console.log("AI protection: private access, session storage, BYOK isolation, deduplication, cache, cooldown and call caps.");
+assert.equal(JSON.stringify(client.getAiRequestHeaders()), '{"Content-Type":"application/json"}',
+  "new visitors need no token, key or browser storage");
+assert.doesNotMatch(readFileSync(new URL("../app/settings/page.tsx", import.meta.url), "utf8"),
+  /ai-access-token|saveAiAccessToken|共享 AI 访问口令/);
+console.log("AI protection: default anonymous access, BYOK isolation, deduplication, cache, cooldown and call caps.");

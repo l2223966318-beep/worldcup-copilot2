@@ -67,7 +67,7 @@ const health = runtime.run('hotHealth()');
 assert.equal(health.providers[0].provider, "uapi");
 assert.equal(health.providers.find(p => p.provider === "tavily").status, "not-configured");
 assert.equal(runtime.calls(), 2, "health must not trigger paid or external requests");
-assert.equal((await runtime.request("/api/health")).version, "direct-v6.3.1-hot-analysis-fix");
+assert.equal((await runtime.request("/api/health")).version, "direct-v6.3.2-default-ai");
 assert.equal((await runtime.request("/api/hot/health")).searchMode, "multi-source-search");
 assert.equal((await runtime.request("/api/ai/health")).configured, false, "existing AI route remains available");
 runtime.run('hotPlatformCache.get("hupu").fetchedAt -= 60001');
