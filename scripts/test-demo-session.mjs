@@ -17,6 +17,11 @@ try {
   const seed = createDemoSession();
   assert.equal(Object.keys(seed.entries).length, 6);
   assert.deepEqual(parseDemoSession(JSON.stringify(seed)), seed);
+  assert.equal(DEMO_MAX_JSON_LENGTH, 1_000_000, "keep the existing JSON code-unit limit fixed");
+  assert.equal(DEMO_MAX_FILE_BYTES, 3_000_000, "keep the UTF-8 file byte limit fixed");
+  const atLimit = JSON.stringify(seed).padEnd(1_000_000, " ");
+  assert.deepEqual(parseDemoSession(atLimit), seed, "valid JSON at the exact length limit must be accepted");
+  assert.equal(parseDemoSession(`${atLimit} `), null, "valid JSON one code unit above the limit must be rejected");
   const changed = updateDemoEntry(seed, "timeline:bilibili", "Edited copy", "edited", "2026-09-28T08:00:00Z");
   assert.equal(changed.entries["timeline:bilibili"].review, null, "editing invalidates the old review");
   assert.equal(seed.entries["timeline:bilibili"].origin, "example", "the preset remains immutable");
