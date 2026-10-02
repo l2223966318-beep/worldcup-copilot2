@@ -94,6 +94,11 @@ function filesIn(directory) {
 const contentTypes = { ".html": "text/html; charset=utf-8", ".js": "application/javascript",
   ".css": "text/css", ".json": "application/json", ".txt": "text/plain; charset=utf-8",
   ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".mp4": "video/mp4", ".ico": "image/x-icon" };
+function metadata(file) {
+  const extension = file.key.match(/\.[^.\/]+$/)?.[0];
+  return { ContentType: contentTypes[extension] || "application/octet-stream",
+    CacheControl: /\.(?:html|json|txt)$/.test(file.key) ? "no-cache" : "public, max-age=3600" };
+}
 function cosCall(cos, method, params) {
   return new Promise((resolve, reject) => cos[method](params, (error, data) => {
     if (!error) { resolve(data); return; }
@@ -135,10 +140,15 @@ export async function publishStatic({ directory, commit, env = process.env, clie
   await request("getObject", params("index.html"));
   onStage("backup-overwritten-files");
   const backup = []; let backupBytes = 0;
+  const unchanged = new Set();
   for (const file of files) {
     try {
       const object = await request("getObject", params(file.key));
       const bytes = Buffer.from(object.Body);
+      const expected = metadata(file);
+      if (file.key !== "frontend-release.json" && hash(bytes) === hash(file.bytes) &&
+          object.headers?.["content-type"] === expected.ContentType &&
+          object.headers?.["cache-control"] === expected.CacheControl) unchanged.add(file.key);
       backupBytes += bytes.length;
       if (backupBytes > MAX_BYTES) throw new Error("Frontend backup exceeds release limits.");
       backup.push({ key: file.key, body: bytes.toString("base64"), headers: {
@@ -155,10 +165,11 @@ export async function publishStatic({ directory, commit, env = process.env, clie
   const ordered = [...files].sort((a, b) => priority(a.key) - priority(b.key));
   onStage("upload-static-assets-and-pages");
   for (const file of ordered) {
-    const extension = file.key.match(/\.[^.\/]+$/)?.[0];
-    await request("putObject", { ...params(file.key), Body: file.bytes,
-      ContentType: contentTypes[extension] || "application/octet-stream",
-      CacheControl: /\.(?:html|json|txt)$/.test(file.key) ? "no-cache" : "public, max-age=3600" });
+    if (unchanged.has(file.key)) {
+      onProgress({ operation: "putObject", key: params(file.key).Key, bytes: file.bytes.length, event: "skip" });
+      continue;
+    }
+    await request("putObject", { ...params(file.key), Body: file.bytes, ...metadata(file) });
   }
   onStage("verify-uploaded-files");
   for (const file of files) {
@@ -171,7 +182,8 @@ export async function publishStatic({ directory, commit, env = process.env, clie
       { redirect: "error", signal: AbortSignal.timeout(20000), headers: { "Cache-Control": "no-cache" } });
     const body = await response.json().catch(() => null);
     if (response.ok && body?.commit === commit && body?.contentHash === marker.contentHash) {
-      return { mode: "verified", origin: TARGET.origin, sourceCommit: commit, filesUploaded: files.length,
+      return { mode: "verified", origin: TARGET.origin, sourceCommit: commit,
+        filesUploaded: files.length - unchanged.size, filesSkipped: unchanged.size, filesVerified: files.length,
         backup: "encrypted", oldAssetsDeleted: false, cloudFilesUpdated: true, browserInteractionsTested: false };
     }
     await wait(5000);

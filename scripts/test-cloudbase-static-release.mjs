@@ -87,6 +87,7 @@ try {
       return { ok: true, json: async () => JSON.parse(objects.get("frontend-release.json")) };
     } });
   assert.equal(result.mode, "verified");
+  assert.equal(result.filesSkipped, 0, "matching bytes with different metadata must still upload");
   const uploads = progress.filter(item => item.operation === "putObject");
   assert.equal(uploads.length, puts.length * 2, "each upload must report start and completion");
   assert.deepEqual(uploads.slice(0, 2).map(item => [item.key, item.event]),
@@ -98,6 +99,41 @@ try {
   assert.equal(puts.at(-1), "frontend-release.json", "the public marker must be uploaded last");
   assert.equal(objects.get("old-hashed.js").toString(), "keep");
   assert.deepEqual(objects.get("assets/image.png"), Buffer.from([0, 255, 1, 128]));
+  const identicalProgress = [];
+  const identicalCos = { ...cos,
+    getObject: (params, callback) => params.Key === "assets/image.png" ? callback(null, {
+      Body: objects.get(params.Key), headers: { "content-type": "image/png", "cache-control": "public, max-age=3600" }
+    }) : cos.getObject(params, callback),
+    putObject: (params, callback) => {
+      assert.notEqual(params.Key, "assets/image.png", "identical content and metadata must not be uploaded again");
+      cos.putObject(params, callback);
+    }
+  };
+  const identicalResult = await publishStatic({ env, client, cos: identicalCos, directory, commit,
+    saveBackup: async () => {}, onProgress: item => identicalProgress.push(item),
+    fetchImpl: async () => ({ ok: true, json: async () => JSON.parse(objects.get("frontend-release.json")) }) });
+  assert.equal(identicalResult.filesSkipped, 1);
+  assert.equal(identicalResult.filesUploaded, 5);
+  assert.equal(identicalResult.filesVerified, 6, "skipped files must still pass remote hash verification");
+  assert.equal(identicalProgress.filter(item => item.event === "skip").length, 1);
+  let oldImageRead = false;
+  let changedImageUploaded = false;
+  const changedCos = { ...cos,
+    getObject: (params, callback) => {
+      if (params.Key === "assets/image.png" && !oldImageRead) {
+        oldImageRead = true;
+        callback(null, { Body: Buffer.from([9]), headers: {
+          "content-type": "image/png", "cache-control": "public, max-age=3600" } });
+      } else cos.getObject(params, callback);
+    },
+    putObject: (params, callback) => {
+      if (params.Key === "assets/image.png") changedImageUploaded = true;
+      cos.putObject(params, callback);
+    }
+  };
+  await publishStatic({ env, client, cos: changedCos, directory, commit, saveBackup: async () => {},
+    fetchImpl: async () => ({ ok: true, json: async () => JSON.parse(objects.get("frontend-release.json")) }) });
+  assert.equal(changedImageUploaded, true, "matching metadata must not hide changed content");
   const previous = JSON.parse(decryptBackup(backup, env.CLOUDBASE_BACKUP_KEY));
   assert.equal(Buffer.from(previous.backup.find(item => item.key === "index.html").body, "base64").toString(), "old-home");
   await assert.rejects(publishStatic({ env, client, cos, directory, commit,
