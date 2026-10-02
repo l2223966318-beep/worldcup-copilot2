@@ -8,7 +8,7 @@ import { getAiRequestHeaders } from "@/lib/ai/client-access";
 import { DEMO_COLLECTED_AT, demoAnalysis, demoContext, demoEvidence, demoMatch, demoPlatforms, demoSources, demoTopics, type DemoPlatform } from "@/data/national-demo";
 import { copyToClipboard, downloadTextFile } from "@/lib/download";
 import { createContentPackage, createPackageMarkdown, createPendingReviewResult } from "@/lib/services/exportService";
-import { createDemoSession, DEMO_STORAGE_KEY, demoEntryKey, parseDemoReview, parseDemoSession, updateDemoEntry, type DemoOrigin } from "@/lib/services/demoSession";
+import { createDemoSession, DEMO_MAX_FILE_BYTES, DEMO_STORAGE_KEY, demoEntryKey, parseDemoReview, parseDemoSession, serializeDemoSession, updateDemoEntry, type DemoOrigin } from "@/lib/services/demoSession";
 import { downloadWordReport } from "@/lib/word-export";
 import "./demo.css";
 
@@ -99,7 +99,7 @@ export default function NationalDemoPage() {
   async function importCase(file?: File) {
     if (!file || activeRequest.current) return;
     try {
-      if (file.size > 1_000_000) throw new Error("案例包不能超过 1 MB。");
+      if (file.size > DEMO_MAX_FILE_BYTES) throw new Error("案例包不能超过 3 MB。");
       const saved = parseDemoSession(await file.text());
       if (activeRequest.current) return;
       if (!saved) throw new Error("不是有效的本案例文件，现有内容已保留。");
@@ -107,6 +107,14 @@ export default function NationalDemoPage() {
       setEditing(false);
       setNotice("案例包已载入。");
     } catch (error) { setNotice(error instanceof Error ? error.message : "案例包读取失败。"); }
+  }
+
+  function downloadCase() {
+    try {
+      downloadTextFile("worldcup-national-demo.json", serializeDemoSession(session), "application/json");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "案例包导出失败，现有内容已保留。");
+    }
   }
 
   async function exportWord() {
@@ -131,7 +139,7 @@ export default function NationalDemoPage() {
         <div className="demo-top-actions">
           <span className="demo-save-state" role="status">{saveState}</span>
           <button disabled={!ready || Boolean(busy)} title="导入案例包" aria-label="导入案例包" onClick={() => fileInput.current?.click()}><FileUp size={18} /></button>
-          <button disabled={!ready} title="下载完整案例包" aria-label="下载完整案例包" onClick={() => downloadTextFile("worldcup-national-demo.json", JSON.stringify(session, null, 2), "application/json")}><FileDown size={18} /></button>
+          <button disabled={!ready} title="下载完整案例包" aria-label="下载完整案例包" onClick={downloadCase}><FileDown size={18} /></button>
           <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={(event) => { void importCase(event.target.files?.[0]); event.target.value = ""; }} />
           <Link href="/">赛事工作台 <ArrowRight size={15} /></Link>
         </div>
@@ -180,7 +188,7 @@ export default function NationalDemoPage() {
         <div className="demo-section-heading"><div><span className="demo-kicker">REVIEW & DELIVERY</span><h2>核验依据，再形成交付</h2></div><div className="demo-tools"><button className="demo-command" disabled={!ready || Boolean(busy) || !entry.body.trim()} onClick={() => void runAi("review")}><ShieldCheck size={17} />{busy === "review" ? "审核中" : "重新审核"}</button><button className="demo-command demo-primary" disabled={!ready || Boolean(busy)} onClick={() => void exportWord()}><Download size={17} />导出 Word</button></div></div>
         <div className="demo-review-context">{demoPlatforms.find((item) => item.id === platform)!.label} · {topic.title}</div>
         {review ? <div className="demo-review"><span className="demo-origin">{review.origin === "example" ? "预置审核示例" : originLabels[review.origin]}</span><h3>{review.result.level}</h3><p>{review.result.advice}</p>{review.result.findings.map((finding, index) => <article key={index}><strong>{finding.type}</strong><p>{finding.sentence}</p><p>{finding.reason}</p><p className="demo-review-suggestion">{finding.rewrite}</p></article>)}<p className="demo-footnote">审核针对当前文案；编辑或重新生成后，原审核结果自动失效。</p></div> : <div className="demo-review"><h3>当前文案待审核</h3><p>文案已变更。点击重新审核，或导出明确标注“待审核”的报告。</p></div>}
-        <div className="demo-export-note"><FileDown size={20} /><p>案例包包含两条选题、三个平台的文案和对应审核结果，可在另一台电脑导入。<br />本地运行时，已保存内容不依赖外部数据接口。</p><button className="demo-command" disabled={!ready || Boolean(busy)} onClick={() => downloadTextFile("worldcup-national-demo.json", JSON.stringify(session, null, 2), "application/json")}>下载案例包</button></div>
+        <div className="demo-export-note"><FileDown size={20} /><p>案例包包含两条选题、三个平台的文案和对应审核结果，可在另一台电脑导入。<br />本地运行时，已保存内容不依赖外部数据接口。</p><button className="demo-command" disabled={!ready || Boolean(busy)} onClick={downloadCase}>下载案例包</button></div>
       </section> : null}
 
       <footer className="demo-footer"><span>WorldCup Copilot · {String(step + 1).padStart(2, "0")} / 04</span><div><button disabled={step === 0} onClick={() => setStep(step - 1)} aria-label="上一步" title="上一步"><ArrowLeft size={18} /></button>{step < 3 ? <button className="demo-command demo-primary" onClick={() => setStep(step + 1)}>{steps[step + 1].label}<ArrowRight size={17} /></button> : <Link href="/">返回赛事工作台 <ArrowRight size={17} /></Link>}</div></footer>
