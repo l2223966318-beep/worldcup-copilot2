@@ -18,7 +18,7 @@ function authorize(env) {
 export function hostingCosOptions(env) {
   return { SecretId: env.TENCENTCLOUD_SECRET_ID, SecretKey: env.TENCENTCLOUD_SECRET_KEY,
     ...(env.TENCENTCLOUD_SESSION_TOKEN ? { SecurityToken: env.TENCENTCLOUD_SESSION_TOKEN } : {}),
-    Domain: "{Bucket}.cos.{Region}.tencentcos.cn", Protocol: "https:" };
+    Domain: "{Bucket}.cos.{Region}.tencentcos.cn", Protocol: "https:", Timeout: 60000 };
 }
 function sdk(env) {
   const { tcb } = require("tencentcloud-sdk-nodejs-tcb");
@@ -107,7 +107,8 @@ function cosCall(cos, method, params) {
   }));
 }
 export async function publishStatic({ directory, commit, env = process.env, client, cos,
-  saveBackup, fetchImpl = fetch, wait = ms => new Promise(resolve => setTimeout(resolve, ms)), onStage = () => {} } = {}) {
+  saveBackup, fetchImpl = fetch, wait = ms => new Promise(resolve => setTimeout(resolve, ms)),
+  onStage = () => {}, onProgress = () => {} } = {}) {
   authorize(env);
   if (!/^[a-f0-9]{40}$/.test(commit || "")) throw new Error("An exact source commit is required.");
   if (typeof saveBackup !== "function") throw new Error("Encrypted frontend backup storage is required.");
@@ -117,17 +118,26 @@ export async function publishStatic({ directory, commit, env = process.env, clie
   const target = await inspectHosting({ env, client, onStage });
   const params = key => ({ Bucket: target.bucket, Region: TARGET.region,
     Key: [target.objectPrefix, key].filter(Boolean).join("/") });
+  const request = async (method, options) => {
+    const start = Date.now();
+    const progress = { operation: method, key: options.Key, bytes: options.Body?.length };
+    onProgress({ ...progress, event: "start" });
+    const object = await cosCall(cos, method, options);
+    onProgress({ ...progress, bytes: object.Body?.length ?? progress.bytes,
+      event: "complete", elapsedMs: Date.now() - start });
+    return object;
+  };
   const marker = { commit, fileCount: files.length, contentHash: hash(Buffer.from(
     files.map(file => [file.key, hash(file.bytes)]).sort().map(item => item.join(":")).join("\n"))) };
   if (files.some(file => file.key === "frontend-release.json")) throw new Error("Artifact must not supply its own release marker.");
   files.push({ key: "frontend-release.json", bytes: Buffer.from(JSON.stringify(marker)) });
   onStage("check-existing-home-page");
-  await cosCall(cos, "getObject", params("index.html"));
+  await request("getObject", params("index.html"));
   onStage("backup-overwritten-files");
   const backup = []; let backupBytes = 0;
   for (const file of files) {
     try {
-      const object = await cosCall(cos, "getObject", params(file.key));
+      const object = await request("getObject", params(file.key));
       const bytes = Buffer.from(object.Body);
       backupBytes += bytes.length;
       if (backupBytes > MAX_BYTES) throw new Error("Frontend backup exceeds release limits.");
@@ -146,13 +156,13 @@ export async function publishStatic({ directory, commit, env = process.env, clie
   onStage("upload-static-assets-and-pages");
   for (const file of ordered) {
     const extension = file.key.match(/\.[^.\/]+$/)?.[0];
-    await cosCall(cos, "putObject", { ...params(file.key), Body: file.bytes,
+    await request("putObject", { ...params(file.key), Body: file.bytes,
       ContentType: contentTypes[extension] || "application/octet-stream",
       CacheControl: /\.(?:html|json|txt)$/.test(file.key) ? "no-cache" : "public, max-age=3600" });
   }
   onStage("verify-uploaded-files");
   for (const file of files) {
-    const object = await cosCall(cos, "getObject", params(file.key));
+    const object = await request("getObject", params(file.key));
     if (hash(Buffer.from(object.Body)) !== hash(file.bytes)) throw new Error("Uploaded frontend does not match candidate; encrypted backup retained.");
   }
   onStage("verify-original-product-url");
@@ -176,6 +186,7 @@ if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToP
     if (args.length === 1 && args[0] === "--inspect") report = await inspectHosting({ onStage });
     else if (args.length === 2 && args[0] === "--apply") {
       report = await publishStatic({ directory: args[1], commit: process.env.FRONTEND_SOURCE_SHA, onStage,
+        onProgress: item => console.log(`Frontend file progress: ${JSON.stringify(item)}`),
         saveBackup: async bytes => {
           const path = new URL("../deliverables/frontend-release/", import.meta.url);
           await mkdir(path, { recursive: true });
