@@ -8,9 +8,10 @@ const { createSportsService } = require("./sports-service");
 const { auditDraftEvidence, calculateEvidenceRiskScore, hasCompleteReview } = require("./evidence");
 const { createAiRequestGuard, buildAiRequestKey, getAiAccessFailure } = require("./ai-guard");
 const { buildHotTopicAiFingerprint } = require("./hot-ai-cache");
+const { normalizeHotAnalysis } = require("./hot-analysis");
 const aiRequestGuard = createAiRequestGuard(process.env);
 const sportsService = createSportsService();
-const API_VERSION = "direct-v6.3-cache-guard";
+const API_VERSION = "direct-v6.3.1-hot-analysis-fix";
 
 function json(res, status, payload) {
   res.statusCode = status;
@@ -812,16 +813,7 @@ async function handleAiHotTopic(req, res) {
   }
 
   const d = result.data || {};
-  const analysis = {
-    overview: Array.isArray(d.overview) && d.overview.length ? d.overview.slice(0, 3) : fallback.overview,
-    production: Array.isArray(d.production) && d.production.length ? d.production.slice(0, 3) : fallback.production,
-    whyCare: Array.isArray(d.whyCare) && d.whyCare.length ? d.whyCare.slice(0, 2) : fallback.whyCare,
-    relation: Array.isArray(d.relation) && d.relation.length ? d.relation.slice(0, 2) : fallback.relation,
-    angles: Array.isArray(d.angles) && d.angles.length ? d.angles.slice(0, 2) : fallback.angles,
-    platforms: Array.isArray(d.platforms) && d.platforms.length ? d.platforms.slice(0, 2) : fallback.platforms,
-    factsToVerify: Array.isArray(d.factsToVerify) && d.factsToVerify.length ? d.factsToVerify.slice(0, 2) : fallback.factsToVerify,
-    risks: Array.isArray(d.risks) && d.risks.length ? d.risks.slice(0, 2) : fallback.risks
-  };
+  const analysis = normalizeHotAnalysis(d, fallback);
   return json(res, 200, {
     sourceStatus: "live",
     intro: typeof d.intro === "string" && d.intro.trim() ? d.intro.trim() : intro,

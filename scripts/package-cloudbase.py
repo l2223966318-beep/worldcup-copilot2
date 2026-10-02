@@ -24,7 +24,7 @@ for name, index in [
     with ZipFile(destination, "w", compression=ZIP_DEFLATED) as archive:
         filenames = ["index.js", "package.json", "scf_bootstrap"]
         if index.parent == current:
-            filenames.extend(["hot-sources.js", "sports-service.js", "sports-payload.js", "sportradar.js", "beijing-time.js", "quality.js", "evidence.js", "ai-guard.js", "hot-ai-cache.js"])
+            filenames.extend(["hot-sources.js", "sports-service.js", "sports-payload.js", "sportradar.js", "beijing-time.js", "quality.js", "evidence.js", "ai-guard.js", "hot-ai-cache.js", "hot-analysis.js"])
         for filename in filenames:
             source = index if filename == "index.js" else current / filename
             data = source.read_bytes().replace(b"\r\n", b"\n")
