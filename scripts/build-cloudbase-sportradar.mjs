@@ -10,6 +10,7 @@ const files = [
   ["lib/services/evidenceService.ts", "evidence.js"],
   ["lib/ai/requestGuard.ts", "ai-guard.js"],
   ["lib/services/hotTopicAiCache.ts", "hot-ai-cache.js"],
+  ["lib/hot/normalizeHotAnalysis.ts", "hot-analysis.js"],
 ];
 for (const [source, output] of files) {
   const code = readFileSync(new URL(source, root), "utf8")

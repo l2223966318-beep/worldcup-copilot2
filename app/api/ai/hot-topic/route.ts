@@ -4,11 +4,11 @@ import { generateDeepSeekJson, getDeepSeekFallbackMessage } from "@/lib/ai/deeps
 import {
   buildHotAnalysis,
   buildTopicIntro,
-  type HotAnalysisResult,
   type HotInsight
 } from "@/lib/hot/hotTopicWorkflow";
 import type { HotTopic } from "@/lib/hot/types";
 import { buildHotTopicAiFingerprint } from "@/lib/services/hotTopicAiCache";
+import { normalizeHotAnalysis } from "@/lib/hot/normalizeHotAnalysis";
 import { getAiAccessFailure } from "@/lib/ai/requestGuard";
 
 export const dynamic = "force-dynamic";
@@ -93,7 +93,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const analysis = normalizeAnalysis(result.data, fallbackAnalysis);
+    const analysis = normalizeHotAnalysis(result.data, fallbackAnalysis);
     const intro = normalizeIntro(result.data.intro, fallbackIntro);
 
     const payload = {
@@ -119,41 +119,4 @@ function normalizeIntro(value: string | undefined, fallback: string) {
   if (typeof value !== "string") return fallback;
   const next = value.trim();
   return next || fallback;
-}
-
-function normalizeAnalysis(input: HotTopicAiPayload, fallback: HotAnalysisResult): HotAnalysisResult {
-  return {
-    overview: normalizeInsights(input.overview, fallback.overview),
-    production: normalizeInsights(input.production, fallback.production),
-    whyCare: normalizeList(input.whyCare, fallback.whyCare, 2),
-    relation: normalizeList(input.relation, fallback.relation, 2),
-    angles: normalizeList(input.angles, fallback.angles, 2),
-    platforms: normalizeList(input.platforms, fallback.platforms, 2),
-    factsToVerify: normalizeList(input.factsToVerify, fallback.factsToVerify, 2),
-    risks: normalizeList(input.risks, fallback.risks, 2)
-  };
-}
-
-function normalizeInsights(input: Partial<HotInsight>[] | undefined, fallback: HotInsight[]) {
-  if (!Array.isArray(input)) return fallback;
-  const list = input
-    .filter((item) => item && typeof item === "object")
-    .map((item) => ({
-      label: typeof item.label === "string" && item.label.trim() ? item.label.trim() : "",
-      value: typeof item.value === "string" && item.value.trim() ? item.value.trim() : "",
-      note: typeof item.note === "string" && item.note.trim() ? item.note.trim() : ""
-    }))
-    .filter((item) => item.label && item.value && item.note)
-    .slice(0, 3);
-  return list.length ? list : fallback;
-}
-
-function normalizeList(input: string[] | undefined, fallback: string[], limit: number) {
-  if (!Array.isArray(input)) return fallback;
-  const list = input
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, limit);
-  return list.length ? list : fallback.slice(0, limit);
 }

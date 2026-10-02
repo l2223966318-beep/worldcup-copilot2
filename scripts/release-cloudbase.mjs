@@ -8,7 +8,7 @@ import { checkDeployment } from "./check-cloudbase.mjs";
 export const TARGET = Object.freeze({
   region: "ap-shanghai", namespace: "scti-test-2026-d6g3udtld9f8e08f5", functionName: "worldcup-api-proxy1",
   origin: "https://scti-test-2026-d6g3udtld9f8e08f5-1455712258.ap-shanghai.app.tcloudbase.com",
-  version: "direct-v6.3-cache-guard",
+  version: "direct-v6.3.1-hot-analysis-fix",
 });
 const MAX_BYTES = 20 * 1024 * 1024;
 const MAGIC = Buffer.from("WC_BACKUP_1\n");

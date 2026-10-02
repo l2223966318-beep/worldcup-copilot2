@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 
-for (const [source, output] of [["lib/time/beijingTime.ts", "beijing-time.js"], ["lib/sports/sportradarClient.ts", "sportradar.js"], ["lib/ai/quality.ts", "quality.js"], ["lib/services/evidenceService.ts", "evidence.js"], ["lib/ai/requestGuard.ts", "ai-guard.js"], ["lib/services/hotTopicAiCache.ts", "hot-ai-cache.js"]]) {
+for (const [source, output] of [["lib/time/beijingTime.ts", "beijing-time.js"], ["lib/sports/sportradarClient.ts", "sportradar.js"], ["lib/ai/quality.ts", "quality.js"], ["lib/services/evidenceService.ts", "evidence.js"], ["lib/ai/requestGuard.ts", "ai-guard.js"], ["lib/services/hotTopicAiCache.ts", "hot-ai-cache.js"], ["lib/hot/normalizeHotAnalysis.ts", "hot-analysis.js"]]) {
   const code = readFileSync(new URL(`../${source}`, import.meta.url), "utf8")
     .replaceAll("@/lib/sports/normalizers", "./sports-payload").replaceAll("@/lib/time/beijingTime", "./beijing-time").replaceAll("@/lib/ai/quality", "./quality");
   const compiled = ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
@@ -30,7 +30,7 @@ try {
   for (let i = 0; i < 40 && !exited; i++) {
     try {
       const response = await fetch(`${origin}/api/health`, { signal: AbortSignal.timeout(500) });
-      assert.equal((await response.json()).version, "direct-v6.3-cache-guard");
+      assert.equal((await response.json()).version, "direct-v6.3.1-hot-analysis-fix");
       ready = true; break;
     } catch { await new Promise(resolve => setTimeout(resolve, 100)); }
   }

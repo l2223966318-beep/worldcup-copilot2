@@ -41,7 +41,7 @@ vm.runInNewContext(readFileSync(new URL("../cloudfunctions/api-proxy/sportradar.
 });
 const sportsService = createSportsService({ client: clientModule.exports, env });
 const context = vm.createContext({
-  require: name => ["./evidence", "./ai-guard", "./hot-ai-cache"].includes(name) ? localRequire(`../cloudfunctions/api-proxy/${name}.js`) : name === "./sports-service" ? { createSportsService: () => sportsService } : name === "./hot-sources" ? { createSources: () => createSources({ env, fetchImpl: fakeFetch }) } : { createServer: fn => { handler = fn; return { listen() {} }; } },
+  require: name => ["./evidence", "./ai-guard", "./hot-ai-cache", "./hot-analysis"].includes(name) ? localRequire(`../cloudfunctions/api-proxy/${name}.js`) : name === "./sports-service" ? { createSportsService: () => sportsService } : name === "./hot-sources" ? { createSources: () => createSources({ env, fetchImpl: fakeFetch }) } : { createServer: fn => { handler = fn; return { listen() {} }; } },
   process: { env }, fetch: fakeFetch, URL, AbortController, Buffer, setTimeout, clearTimeout, console,
 });
 vm.runInContext(readFileSync(new URL("../cloudfunctions/api-proxy/index.js", import.meta.url), "utf8"), context);
@@ -177,6 +177,25 @@ try {
     method: "POST", body: JSON.stringify({ topic: { title: "Argentina football" } })
   });
   assert.equal((await response.json()).model, "preferred-model", "MODEL takes precedence over MODEL_FAST");
+  modelResult = {
+    overview: [null, { label: "Value", value: { label: "Rating", value: "High", note: "Verify first" }, note: "Source" }],
+    production: [{ label: "Platform", value: "Video", note: "Explain context" }],
+    whyCare: [{ label: "Reason", value: "Public discussion", note: "Verify source" }],
+    angles: [{ label: "Angle", value: "Explain the event", note: "Use facts" }],
+    factsToVerify: [null, { label: "Source", value: "Original link", note: "Check date" }],
+    risks: [{ label: "Risk", value: "Unverified", note: "Do not claim certainty" }]
+  };
+  response = await fetch(`${origin}/api/ai/hot-topic`, {
+    method: "POST", body: JSON.stringify({ topic: { title: "Structured model output regression" } })
+  });
+  const structuredAnalysis = (await response.json()).analysis;
+  for (const field of ["whyCare", "relation", "angles", "platforms", "factsToVerify", "risks"]) {
+    assert.ok(structuredAnalysis[field].every(item => typeof item === "string"), `${field} must contain renderable text, not model objects`);
+  }
+  for (const field of ["overview", "production"]) {
+    assert.ok(structuredAnalysis[field].every(item => item && [item.label, item.value, item.note].every(value => typeof value === "string")),
+      `${field} must reject null entries and normalize nested model objects`);
+  }
   console.log("CloudBase HTTP: Sportradar routes, five AI fallback handlers, multi-source search, safe errors and cached quota protection passed.");
 } finally {
   server.closeAllConnections();
