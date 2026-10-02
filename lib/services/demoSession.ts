@@ -2,6 +2,9 @@ import { DEMO_CASE_ID, demoAnalysis, demoDrafts, demoEvidence, demoPlatforms, de
 import type { ReviewResultSnapshot } from "@/types/workflow";
 
 export const DEMO_STORAGE_KEY = "worldcup.national-demo.v1";
+export const DEMO_MAX_JSON_LENGTH = 1_000_000;
+// A UTF-16 code unit can occupy up to three bytes in a UTF-8 JSON file.
+export const DEMO_MAX_FILE_BYTES = DEMO_MAX_JSON_LENGTH * 3;
 export type DemoOrigin = "example" | "ai" | "edited";
 export type DemoReview = { draft: string; result: ReviewResultSnapshot; origin: DemoOrigin; updatedAt: string };
 export type DemoEntry = { body: string; origin: DemoOrigin; updatedAt: string; review: DemoReview | null };
@@ -76,7 +79,7 @@ export function parseDemoReview(value: unknown): ReviewResultSnapshot | null {
 
 // Reconstruct known fields so a portable case never imports credentials or unrelated state.
 export function parseDemoSession(raw: string): DemoSession | null {
-  if (raw.length > 1_000_000) return null;
+  if (raw.length > DEMO_MAX_JSON_LENGTH) return null;
   try {
     const value: unknown = JSON.parse(raw);
     if (!isObject(value) || value.version !== 1 || value.caseId !== DEMO_CASE_ID || !isDate(value.savedAt) || !isObject(value.analysis) || !isObject(value.entries)) return null;
@@ -100,4 +103,10 @@ export function parseDemoSession(raw: string): DemoSession | null {
   } catch {
     return null;
   }
+}
+
+export function serializeDemoSession(session: DemoSession): string {
+  const raw = JSON.stringify(session, null, 2);
+  if (!parseDemoSession(raw)) throw new Error("案例包内容过多或格式不完整，请先导出 Word 保存当前文案。");
+  return raw;
 }
