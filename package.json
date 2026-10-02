@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "test:hot-analysis-render": "node scripts/test-hot-analysis-render.mjs",
     "dev": "node scripts/run-next.mjs dev",
     "build": "node scripts/run-next.mjs build",
     "start": "node scripts/run-next.mjs start",

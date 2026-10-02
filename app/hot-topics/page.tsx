@@ -19,6 +19,7 @@ import {
   type HotRadarCache
 } from "@/lib/hot/hotTopicWorkflow";
 import { readHotTopicAiCache, writeHotTopicAiCache } from "@/lib/services/hotTopicAiCache";
+import { normalizeHotAnalysis } from "@/lib/hot/normalizeHotAnalysis";
 import { formatBeijingDateTime } from "@/lib/time/beijingTime";
 
 const defaultConfig: HotGenerationConfig = {
@@ -104,8 +105,10 @@ export default function HotTopicDetailPage() {
       analysis: HotAnalysisResult;
     }>(window.localStorage, topic);
     if (cachedAnalysis) {
-      setAnalysis(cachedAnalysis.analysis);
-      setTopicIntro(cachedAnalysis.intro);
+      const safeAnalysis = normalizeHotAnalysis(cachedAnalysis.analysis, fallbackAnalysisSnapshot);
+      const safeIntro = typeof cachedAnalysis.intro === "string" ? cachedAnalysis.intro : fallbackIntro;
+      setAnalysis(safeAnalysis);
+      setTopicIntro(safeIntro);
       setAnalysisStatus("cache");
       setAnalysisMessage("");
       return;
@@ -130,8 +133,8 @@ export default function HotTopicDetailPage() {
           message?: string;
         };
         if (!active) return;
-        const nextIntro = payload.intro || fallbackIntro;
-        const nextAnalysis = payload.analysis || fallbackAnalysisSnapshot;
+        const nextIntro = typeof payload.intro === "string" && payload.intro.trim() ? payload.intro : fallbackIntro;
+        const nextAnalysis = normalizeHotAnalysis(payload.analysis, fallbackAnalysisSnapshot);
         setTopicIntro(nextIntro);
         setAnalysis(nextAnalysis);
         setAnalysisStatus(payload.sourceStatus === "live" ? "live" : payload.sourceStatus === "fallback" ? "fallback" : "error");
