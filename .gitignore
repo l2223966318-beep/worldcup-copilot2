@@ -13,3 +13,4 @@ pnpm-debug.log*
 .vercel
 .codex/npm-cache/
 deliverables/cloudbase-release/
+deliverables/frontend-release/

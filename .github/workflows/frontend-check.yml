@@ -8,12 +8,15 @@ on:
       - 'lib/**'
       - 'types/**'
       - 'scripts/test-*.mjs'
+      - 'scripts/release-cloudbase-static.mjs'
+      - 'scripts/cloudbase-hosting/**'
       - 'scripts/run-next.mjs'
       - 'package*.json'
       - '*.config.*'
       - 'tsconfig.json'
       - '.eslintrc.json'
       - '.github/workflows/frontend-check.yml'
+      - '.github/workflows/cloudbase-static-release.yml'
   workflow_dispatch:
 
 permissions:
@@ -65,3 +68,4 @@ jobs:
           npm run test:time
           npm run test:worldcup-route
           npm run test:pitch
+          npm run test:cloudbase-static-release

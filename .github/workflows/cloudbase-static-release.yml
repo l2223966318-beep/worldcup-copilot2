@@ -1,0 +1,128 @@
+name: CloudBase Frontend Release
+
+on:
+  workflow_run:
+    workflows: ["Competition static build"]
+    types: [completed]
+    branches: [competition-static]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Read-only permission check, or publish the latest successful static build"
+        type: choice
+        options: [inspect, deploy]
+        default: inspect
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cloudbase-static-site
+  cancel-in-progress: false
+
+jobs:
+  select:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'competition-static' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       vars.CLOUDBASE_FRONTEND_AUTO_DEPLOY == 'true')
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.source.outputs.mode }}
+      run_id: ${{ steps.source.outputs.run_id }}
+      sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/github-script@v7
+        id: source
+        with:
+          script: |
+            const mode = context.eventName === 'workflow_dispatch' ? context.payload.inputs.mode : 'deploy';
+            core.setOutput('mode', mode);
+            if (mode === 'inspect') return;
+            const {owner, repo} = context.repo;
+            let run = context.payload.workflow_run;
+            if (!run) {
+              const result = await github.rest.actions.listWorkflowRuns({owner, repo,
+                workflow_id: 'competition-static-build.yml', branch: 'competition-static',
+                event: 'push', status: 'success', per_page: 1});
+              run = result.data.workflow_runs[0];
+            }
+            const branch = await github.rest.repos.getBranch({owner, repo, branch: 'competition-static'});
+            if (!run || run.conclusion !== 'success' || run.event !== 'push' || run.head_branch !== 'competition-static' ||
+                run.head_sha !== branch.data.commit.sha || run.head_repository.full_name !== context.repo.owner + '/' + context.repo.repo)
+              throw new Error('Only the latest successful build of our competition-static branch may deploy.');
+            const files = await github.rest.actions.listWorkflowRunArtifacts({owner, repo, run_id: run.id});
+            const artifact = files.data.artifacts.find(item => item.name === 'worldcup-v6.3-static-site' && !item.expired);
+            if (!artifact) throw new Error('A verified static artifact is required.');
+            core.setOutput('run_id', String(run.id));
+            core.setOutput('sha', run.head_sha);
+
+  release:
+    needs: select
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: cloudbase-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Restrict production release to main
+        env:
+          RELEASE_REF: ${{ github.ref }}
+        run: test "$RELEASE_REF" = "refs/heads/main"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install isolated official hosting SDKs
+        run: npm ci --prefix scripts/cloudbase-hosting --ignore-scripts --no-audit --no-fund
+      - name: Audit release tools
+        run: npm audit --prefix scripts/cloudbase-hosting --omit=dev --audit-level=low
+      - name: Offline release safety tests
+        run: node scripts/test-cloudbase-static-release.mjs
+      - name: Read-only hosting permission check
+        env:
+          TENCENTCLOUD_SECRET_ID: ${{ secrets.TENCENTCLOUD_SECRET_ID }}
+          TENCENTCLOUD_SECRET_KEY: ${{ secrets.TENCENTCLOUD_SECRET_KEY }}
+          TENCENTCLOUD_SESSION_TOKEN: ${{ secrets.TENCENTCLOUD_SESSION_TOKEN }}
+          CLOUDBASE_FRONTEND_RELEASE_AUTHORIZED: ${{ vars.CLOUDBASE_FRONTEND_RELEASE_AUTHORIZED }}
+        run: node scripts/release-cloudbase-static.mjs --inspect
+      - uses: actions/download-artifact@v4
+        if: needs.select.outputs.mode == 'deploy'
+        with:
+          name: worldcup-v6.3-static-site
+          path: frontend-candidate
+          repository: ${{ github.repository }}
+          run-id: ${{ needs.select.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Recheck latest source before uploading
+        if: needs.select.outputs.mode == 'deploy'
+        uses: actions/github-script@v7
+        env:
+          EXPECTED_SHA: ${{ needs.select.outputs.sha }}
+        with:
+          script: |
+            const branch = await github.rest.repos.getBranch({...context.repo, branch: 'competition-static'});
+            if (branch.data.commit.sha !== process.env.EXPECTED_SHA) throw new Error('Source changed while awaiting approval.');
+      - name: Backup, upload and verify original website
+        if: needs.select.outputs.mode == 'deploy'
+        env:
+          TENCENTCLOUD_SECRET_ID: ${{ secrets.TENCENTCLOUD_SECRET_ID }}
+          TENCENTCLOUD_SECRET_KEY: ${{ secrets.TENCENTCLOUD_SECRET_KEY }}
+          TENCENTCLOUD_SESSION_TOKEN: ${{ secrets.TENCENTCLOUD_SESSION_TOKEN }}
+          CLOUDBASE_BACKUP_KEY: ${{ secrets.CLOUDBASE_BACKUP_KEY }}
+          CLOUDBASE_FRONTEND_RELEASE_AUTHORIZED: ${{ vars.CLOUDBASE_FRONTEND_RELEASE_AUTHORIZED }}
+          FRONTEND_SOURCE_SHA: ${{ needs.select.outputs.sha }}
+        run: node scripts/release-cloudbase-static.mjs --apply frontend-candidate
+      - name: Retain encrypted frontend backup
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: encrypted-frontend-backup-${{ github.run_id }}
+          path: deliverables/frontend-release/*.json.enc
+          if-no-files-found: ignore
+          retention-days: 30
