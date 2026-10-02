@@ -45,6 +45,10 @@ console is needed once the deployment account has hosting permissions.
   GitHub artifact for 30 days. Losing this key loses access to those backups.
 - Upload assets before pages and the version marker last. Keep old hashed
   assets for cached pages. No object deletion occurs.
+- Files whose SHA-256, content type and cache policy match the backed-up
+  object are not reuploaded. Every candidate file is still downloaded and
+  hash-verified after publishing; the version marker is always uploaded last.
+  Reports distinguish uploaded, skipped and verified file counts.
 - Check every uploaded object's SHA-256, then check `frontend-release.json`
   on the original public URL. A green build alone is not deployment evidence.
 - The script does not change API routing, backend configuration, CAM policies,
