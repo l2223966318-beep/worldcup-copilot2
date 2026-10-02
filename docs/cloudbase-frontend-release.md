@@ -36,6 +36,10 @@ console is needed once the deployment account has hosting permissions.
   CloudBase manager SDK. An existing homepage read verifies object access
   before backup. Failures expose only the operation, public file key, status,
   request ID and a known diagnostic category, never provider headers or keys.
+- COS requests have a 60-second network timeout. Each file logs its operation,
+  public key, byte count and completion time, not its contents or credentials.
+  If a release stalls, inspect the last started file before retrying; do not
+  assume a green backup means uploads or public verification have completed.
 - Back up every overwritten file before the first write. Backups are encrypted
   using the existing 32-byte Base64 `CLOUDBASE_BACKUP_KEY` and retained as a
   GitHub artifact for 30 days. Losing this key loses access to those backups.

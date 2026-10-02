@@ -16,6 +16,7 @@ assert.equal(typeof hostingCosOptions, "function", "hosting must explicitly use 
 const options = hostingCosOptions(env);
 assert.equal(options.Domain, "{Bucket}.cos.{Region}.tencentcos.cn");
 assert.equal(options.Protocol, "https:");
+assert.equal(options.Timeout, 60000, "a stalled COS request must not consume the whole release job");
 assert.equal(options.SecretId, env.TENCENTCLOUD_SECRET_ID);
 assert.equal(hostingCosOptions({ ...env, TENCENTCLOUD_SESSION_TOKEN: "test-token" }).SecurityToken, "test-token");
 const client = {
@@ -77,13 +78,22 @@ try {
     saveBackup: async () => { throw new Error("Disk failure"); } }), /Disk failure/);
   assert.equal(puts.length, 0, "a failed backup must prevent all uploads");
   let backup;
+  const progress = [];
   const result = await publishStatic({ env, client, cos, directory, commit,
+    onProgress: item => progress.push(item),
     saveBackup: async bytes => { backup = bytes; },
     fetchImpl: async url => {
       assert.equal(new URL(url).origin, TARGET.origin);
       return { ok: true, json: async () => JSON.parse(objects.get("frontend-release.json")) };
     } });
   assert.equal(result.mode, "verified");
+  const uploads = progress.filter(item => item.operation === "putObject");
+  assert.equal(uploads.length, puts.length * 2, "each upload must report start and completion");
+  assert.deepEqual(uploads.slice(0, 2).map(item => [item.key, item.event]),
+    [["assets/image.png", "start"], ["assets/image.png", "complete"]]);
+  assert.equal(uploads[0].bytes, 4);
+  assert.ok(uploads[1].elapsedMs >= 0);
+  assert.doesNotMatch(JSON.stringify(progress), /test-id|test-secret|old-home/);
   assert.equal(puts[0], "assets/image.png");
   assert.equal(puts.at(-1), "frontend-release.json", "the public marker must be uploaded last");
   assert.equal(objects.get("old-hashed.js").toString(), "keep");
