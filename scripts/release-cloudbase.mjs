@@ -8,7 +8,7 @@ import { checkDeployment } from "./check-cloudbase.mjs";
 export const TARGET = Object.freeze({
   region: "ap-shanghai", namespace: "scti-test-2026-d6g3udtld9f8e08f5", functionName: "worldcup-api-proxy1",
   origin: "https://scti-test-2026-d6g3udtld9f8e08f5-1455712258.ap-shanghai.app.tcloudbase.com",
-  version: "direct-v6.3.1-hot-analysis-fix",
+  version: "direct-v6.3.2-default-ai",
 });
 const MAX_BYTES = 20 * 1024 * 1024;
 const MAGIC = Buffer.from("WC_BACKUP_1\n");
@@ -22,7 +22,6 @@ export function safeReleaseFailure(error) {
     ["Target must be the existing active HTTP function.", "The target is not the expected active HTTP function."],
     ["Function environment variables could not be verified before release.", "The function environment variable list could not be verified."],
     ["SPORTRADAR_WORLD_CUP_SEASON_ID must be explicitly configured when Sportradar is enabled.", "Configure SPORTRADAR_WORLD_CUP_SEASON_ID as sr:season:digits in Tencent Cloud before releasing."],
-    ["AI_ACCESS_TOKEN or explicit AI_ALLOW_PUBLIC must be configured when shared AI is enabled.", "Configure AI_ACCESS_TOKEN in Tencent Cloud and release a compatible frontend first. AI_ALLOW_PUBLIC=true is an explicit public-access alternative, not the default."],
   ]);
   if (reasons.has(error?.message)) return reasons.get(error.message);
   if (["AuthFailure", "AuthFailure.SecretIdNotFound", "AuthFailure.SignatureFailure", "AuthFailure.TokenFailure", "AuthFailure.InvalidSecretId"].includes(error?.code)) {
@@ -121,9 +120,6 @@ export async function release({ zip, apply = false, confirmFunction = "", target
   if (configuredValue("SPORTRADAR_API_KEY") && !/^sr:season:\d+$/.test(configuredValue("SPORTRADAR_WORLD_CUP_SEASON_ID"))) {
     throw new Error("SPORTRADAR_WORLD_CUP_SEASON_ID must be explicitly configured when Sportradar is enabled.");
   }
-  if (configuredValue("DEEPSEEK_API_KEY") && !configuredValue("AI_ACCESS_TOKEN") && configuredValue("AI_ALLOW_PUBLIC") !== "true") {
-    throw new Error("AI_ACCESS_TOKEN or explicit AI_ALLOW_PUBLIC must be configured when shared AI is enabled.");
-  }
   onStage("get-backup-address");
   const address = await api.GetFunctionAddress(params);
   onStage("download-backup");
@@ -147,9 +143,19 @@ export async function release({ zip, apply = false, confirmFunction = "", target
   for (let attempt = 0; attempt < 6; attempt++) {
     const report = await checkDeployment(TARGET.origin, { fetchImpl });
     const checks = report.checks;
-    if (checks.length === 4 && checks[0].version === TARGET.version && checks.every(check =>
+    if (checks.length === 4 && checks[0].version === TARGET.version && checks[3].accessMode === "public" && checks.every(check =>
       ["healthy", "diagnostics-present", "configuration-present"].includes(check.state))) {
-      return { mode: "verified", ...TARGET, sha256, checks, backup: "encrypted", businessProvidersTested: false };
+      onStage("verify-anonymous-ai-input");
+      const response = await fetchImpl(new URL("/api/ai/hot-topic", TARGET.origin), {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+        redirect: "error", signal: AbortSignal.timeout(20000),
+      });
+      const body = await response.json().catch(() => null);
+      if (response.status !== 400 || body?.sourceStatus !== "error") {
+        throw new Error("Anonymous AI input verification failed. Encrypted backup retained.");
+      }
+      return { mode: "verified", ...TARGET, sha256, checks, anonymousAiInputAccepted: true,
+        backup: "encrypted", businessProvidersTested: false };
     }
     await wait(2000);
   }

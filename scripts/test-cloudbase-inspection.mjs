@@ -20,8 +20,8 @@ const client = { GetFunction: async params => {
 const report = await inspection.inspectConfiguration({ client, env });
 assert.equal(reads, 1);
 assert.equal(report.sharedAiConfigured, true);
-assert.equal(report.aiAccessTokenConfigured, false);
-assert.equal(report.sharedAiProtected, false);
+assert.equal(report.releaseAiAccessMode, "public");
+assert.equal(report.releaseRequiresBrowserKey, false);
 assert.equal(report.sportsSeasonFormatValid, true);
 assert.doesNotMatch(JSON.stringify(report), /private-model|private-sports|test-key|Variables|sr:season:123/);
 await assert.rejects(inspection.inspectConfiguration({ client, env: { ...env, CLOUDBASE_RELEASE_AUTHORIZED: "false" } }));

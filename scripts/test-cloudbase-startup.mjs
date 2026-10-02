@@ -30,7 +30,7 @@ try {
   for (let i = 0; i < 40 && !exited; i++) {
     try {
       const response = await fetch(`${origin}/api/health`, { signal: AbortSignal.timeout(500) });
-      assert.equal((await response.json()).version, "direct-v6.3.1-hot-analysis-fix");
+      assert.equal((await response.json()).version, "direct-v6.3.2-default-ai");
       ready = true; break;
     } catch { await new Promise(resolve => setTimeout(resolve, 100)); }
   }

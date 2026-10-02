@@ -3,31 +3,10 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.aiRequestGuard = void 0;
 exports.buildAiRequestKey = buildAiRequestKey;
-exports.getAiAccessFailure = getAiAccessFailure;
 exports.createAiRequestGuard = createAiRequestGuard;
 const node_crypto_1 = require("node:crypto");
 function buildAiRequestKey(apiKey, request) {
     return (0, node_crypto_1.createHash)("sha256").update(JSON.stringify(["ai-guard-v1", apiKey, request])).digest("hex");
-}
-function getAiAccessFailure(headers, apiKey, env = process.env) {
-    if (typeof apiKey === "string" && apiKey.trim())
-        return null;
-    if (!env.DEEPSEEK_API_KEY?.trim())
-        return null;
-    const expected = env.AI_ACCESS_TOKEN?.trim();
-    if (expected) {
-        const supplied = typeof headers.get === "function"
-            ? headers.get("x-ai-access-token") ?? ""
-            : headers["x-ai-access-token"];
-        const value = typeof supplied === "string" && supplied.length <= 1024 ? supplied : "";
-        const hash = (text) => (0, node_crypto_1.createHash)("sha256").update(text).digest();
-        if (value && (0, node_crypto_1.timingSafeEqual)(hash(value), hash(expected)))
-            return null;
-        return { status: 401, message: "AI 访问口令未填写或不正确，请到设置页填写；也可使用自己的 DeepSeek API Key。" };
-    }
-    if (env.AI_ALLOW_PUBLIC === "true")
-        return null;
-    return { status: 403, message: "共享 AI 尚未开放访问。请配置访问口令或使用自己的 DeepSeek API Key；本地规则和预置案例仍可使用。" };
 }
 function positiveLimit(value, fallback, max) {
     const parsed = Number(value);

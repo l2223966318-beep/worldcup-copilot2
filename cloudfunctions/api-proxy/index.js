@@ -6,12 +6,12 @@ const WORLDCUP26 = "https://worldcup26.ir";
 const STATS_FIXTURES = "https://www.thestatsapi.com/world-cup/data/fixtures.json";
 const { createSportsService } = require("./sports-service");
 const { auditDraftEvidence, calculateEvidenceRiskScore, hasCompleteReview } = require("./evidence");
-const { createAiRequestGuard, buildAiRequestKey, getAiAccessFailure } = require("./ai-guard");
+const { createAiRequestGuard, buildAiRequestKey } = require("./ai-guard");
 const { buildHotTopicAiFingerprint } = require("./hot-ai-cache");
 const { normalizeHotAnalysis } = require("./hot-analysis");
 const aiRequestGuard = createAiRequestGuard(process.env);
 const sportsService = createSportsService();
-const API_VERSION = "direct-v6.3.1-hot-analysis-fix";
+const API_VERSION = "direct-v6.3.2-default-ai";
 
 function json(res, status, payload) {
   res.statusCode = status;
@@ -594,8 +594,6 @@ async function readJsonBody(req) {
         const text = Buffer.concat(chunks).toString("utf8");
         const body = text ? JSON.parse(text) : {};
         if (!body || typeof body !== "object" || Array.isArray(body)) throw invalid(400, "JSON object required.");
-        const denied = getAiAccessFailure(req.headers || {}, body.apiKey, process.env);
-        if (denied) return fail(invalid(denied.status, denied.message));
         resolve(body);
       } catch { fail(invalid(400, "Valid JSON object required.")); }
     });
@@ -1424,6 +1422,7 @@ async function handleRequest(req, res) {
       return json(res, 200, {
         ok: true,
         configured,
+        accessMode: "public",
         model,
         note: configured
           ? "DeepSeek API key is available to the CloudBase function."
@@ -1435,14 +1434,12 @@ async function handleRequest(req, res) {
       return json(res, 200, {
         ok: false,
         configured: false,
+        accessMode: "public",
         model,
         probe: "skipped",
         message: "DEEPSEEK_API_KEY is not available to this CloudBase function."
       });
     }
-
-    const denied = getAiAccessFailure(req.headers || {}, undefined, process.env);
-    if (denied) return json(res, denied.status, { sourceStatus: "error", message: denied.message });
 
     const result = await callDeepSeekJson(
       [
@@ -1455,6 +1452,7 @@ async function handleRequest(req, res) {
     return json(res, 200, {
       ok: result.ok,
       configured: true,
+      accessMode: "public",
       model,
       probe: result.ok ? "success" : "failed",
       ...(result.ok ? { responseModel: result.model } : { message: result.message })

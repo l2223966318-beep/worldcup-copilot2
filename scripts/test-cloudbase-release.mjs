@@ -24,7 +24,8 @@ const fakeFetch = async url => {
   if (path === "/download") return new Response(zip);
   if (path === "/api/health") return Response.json({ ok: true, version: TARGET.version });
   if (path === "/api/hot/health") return Response.json({ ok: true, providers: [] });
-  return Response.json({ ok: true, configured: true, seasonConfigured: true });
+  if (path === "/api/ai/hot-topic") return Response.json({ sourceStatus: "error", message: "Topic required." }, { status: 400 });
+  return Response.json({ ok: true, configured: true, seasonConfigured: true, accessMode: "public" });
 };
 const options = { zip, env, client, fetchImpl: fakeFetch, saveBackup: async data => { saved = data; }, wait: async () => {} };
 const stages = [];
@@ -66,14 +67,15 @@ await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.
   } } }), /environment variables could not be verified/);
 assert.deepEqual(calls.map(([method]) => method), ["read"]);
 calls = [];
-await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName,
+result = await release({ ...options, apply: true, confirmFunction: TARGET.functionName,
   client: { ...client, GetFunction: async params => {
     calls.push(["read", params]);
     return { FunctionName: TARGET.functionName, Type: "HTTP", Status: "Active",
       Environment: { Variables: [{ Key: "DEEPSEEK_API_KEY", Value: "test-shared-key" }] } };
-  } } }), /AI_ACCESS_TOKEN/);
-assert.deepEqual(calls.map(([method]) => method), ["read"], "Missing AI access policy must stop before backup or code update");
-assert.match(safeReleaseFailure(new Error("AI_ACCESS_TOKEN or explicit AI_ALLOW_PUBLIC must be configured when shared AI is enabled.")), /AI_ACCESS_TOKEN/);
+  } } });
+assert.equal(result.mode, "verified", "a configured shared key requires no access token");
+assert.equal(result.anonymousAiInputAccepted, true);
+assert.ok(calls.some(([method]) => method === "update"));
 calls = [];
 result = await release({ ...options, apply: true, confirmFunction: TARGET.functionName,
   client: { ...client, GetFunction: async params => {
@@ -106,4 +108,8 @@ await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.
 assert.equal(calls.length, 0);
 await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName,
   fetchImpl: async url => new URL(url).pathname === "/download" ? new Response(zip) : Response.json({ ok: true, version: "old", providers: [], configured: true }) }), /verification/);
+await assert.rejects(release({ ...options, apply: true, confirmFunction: TARGET.functionName,
+  fetchImpl: async url => new URL(url).pathname === "/api/ai/hot-topic"
+    ? Response.json({ sourceStatus: "error" }, { status: 401 }) : fakeFetch(url) }), /Anonymous AI input verification/,
+  "public health alone must not hide an access gate on the AI endpoint");
 console.log("CloudBase release: offline default, authorization guards, encrypted backups, code-only updates and version acceptance passed (all network mocked).");
