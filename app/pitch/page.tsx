@@ -106,6 +106,10 @@ export default function PitchPage() {
     document.body.style.overflow = "hidden";
 
     function onKeyDown(event: KeyboardEvent) {
+      if (materialExpanded || event.defaultPrevented || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+      const target = event.target as Element | null;
+      if (target?.closest?.("input, select, textarea, [role='textbox'], [role='combobox'], [contenteditable]:not([contenteditable='false'])")) return;
+      if ([" ", "Enter"].includes(event.key) && target?.closest?.("button, a, [role='button']")) return;
       if (["ArrowDown", "ArrowRight", "PageDown", " "].includes(event.key)) {
         event.preventDefault();
         setActive((current) => Math.min(chapters.length - 1, current + 1));
@@ -142,9 +146,10 @@ export default function PitchPage() {
       window.removeEventListener("keydown", onKeyDown);
       document.removeEventListener("fullscreenchange", onFullscreenChange);
     };
-  }, []);
+  }, [materialExpanded]);
 
   function handleWheel(event: ReactWheelEvent<HTMLDivElement>) {
+    if (materialExpanded || event.defaultPrevented) return;
     if (!window.matchMedia("(min-width: 821px)").matches || Math.abs(event.deltaY) < 20) return;
     const now = Date.now();
     if (now - lastWheelAt.current < 720) return;
@@ -174,6 +179,7 @@ export default function PitchPage() {
             playsInline
             preload="auto"
             onEnded={finishCoverVideo}
+            onError={finishCoverVideo}
             onPause={() => setCoverPaused(true)}
             onPlay={() => setCoverPaused(false)}
             onTimeUpdate={(event) => {
@@ -181,7 +187,7 @@ export default function PitchPage() {
               setCoverProgress(video.duration > 0 ? Math.min(1, video.currentTime / video.duration) : 0);
             }}
           >
-            <source src="/videos/worldcup-hero.mp4" type="video/mp4" />
+            <source src="/videos/worldcup-hero.mp4" type="video/mp4" onError={finishCoverVideo} />
           </video>
           <div className="pitch-cover-shade" />
           <div className={`pitch-cover-copy ${coverRevealed ? "is-visible" : ""}`} aria-hidden={!coverRevealed}>
