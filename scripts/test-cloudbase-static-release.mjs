@@ -7,11 +7,17 @@ import { decryptBackup } from "./release-cloudbase.mjs";
 
 const script = new URL("./release-cloudbase-static.mjs", import.meta.url);
 assert.ok(existsSync(script), "frontend needs a real hosting release script, not just a ZIP artifact");
-const { inspectHosting, publishStatic, TARGET } = await import(script);
+const { inspectHosting, publishStatic, hostingCosOptions, TARGET } = await import(script);
 let reads = 0;
 const env = { CLOUDBASE_FRONTEND_RELEASE_AUTHORIZED: "true",
   TENCENTCLOUD_SECRET_ID: "test-id", TENCENTCLOUD_SECRET_KEY: "test-secret",
   CLOUDBASE_BACKUP_KEY: Buffer.alloc(32, 7).toString("base64") };
+assert.equal(typeof hostingCosOptions, "function", "hosting must explicitly use the official CloudBase COS endpoint");
+const options = hostingCosOptions(env);
+assert.equal(options.Domain, "{Bucket}.cos.{Region}.tencentcos.cn");
+assert.equal(options.Protocol, "https:");
+assert.equal(options.SecretId, env.TENCENTCLOUD_SECRET_ID);
+assert.equal(hostingCosOptions({ ...env, TENCENTCLOUD_SESSION_TOKEN: "test-token" }).SecurityToken, "test-token");
 const client = {
   DescribeStaticStore: async () => { reads++; return { Data: [{
     EnvId: TARGET.namespace, Status: "online", Bucket: "test-hosting-1455712258",
@@ -57,6 +63,16 @@ try {
       callback(Object.assign(new Error("Missing"), { code: "NoSuchKey" })),
     putObject: ({ Key, Body }, callback) => { puts.push(Key); objects.set(Key, Buffer.from(Body)); callback(null, {}); },
   };
+  await assert.rejects(publishStatic({ env, client, directory, commit, saveBackup: async () => {},
+    cos: { getObject: (_params, callback) => callback({ code: "AccessDenied", statusCode: 403,
+      RequestId: "safe-request-id", error: { Message: "Access Denied." }, headers: { authorization: "never-log-secret" } }) }
+  }), error => {
+    assert.deepEqual(error.releaseDetails, { operation: "getObject", object: "index.html",
+      requestId: "safe-request-id", status: 403, hint: "permission-denied" });
+    assert.doesNotMatch(JSON.stringify(error), /never-log-secret/);
+    return error.code === "AccessDenied";
+  });
+  assert.equal(puts.length, 0);
   await assert.rejects(publishStatic({ env, client, cos, directory, commit,
     saveBackup: async () => { throw new Error("Disk failure"); } }), /Disk failure/);
   assert.equal(puts.length, 0, "a failed backup must prevent all uploads");
