@@ -34,6 +34,7 @@ jobs:
     timeout-minutes: 15
     env:
       NEXT_TELEMETRY_DISABLED: '1'
+      CLOUDBASE_PUBLIC_ORIGIN: 'https://scti-test-2026-d6g3udtld9f8e08f5-1455712258.ap-shanghai.app.tcloudbase.com'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
