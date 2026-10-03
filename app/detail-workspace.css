@@ -1,0 +1,78 @@
+.detail-workspace {
+  letter-spacing: 0;
+}
+
+.detail-workspace .workspace-section {
+  min-width: 0;
+  border-top: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+  padding: 24px;
+}
+
+.detail-workspace .workspace-select {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  border: 1px solid #dbe3ec;
+  border-radius: 6px;
+  background: #fff;
+  padding: 0 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #334155;
+}
+
+.detail-workspace .workspace-select:focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 2px;
+}
+
+.detail-workspace .workspace-button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color 160ms, border-color 160ms;
+}
+
+.detail-workspace .workspace-button:focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 3px;
+}
+
+.detail-workspace .workspace-button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.detail-workspace .workspace-icon-button {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: #475569;
+}
+
+.detail-workspace .workspace-icon-button:hover {
+  color: #0f766e;
+  background: #f0fdfa;
+}
+
+.detail-workspace .workspace-icon-button:focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 2px;
+}
+
+@media (max-width: 639px) {
+  .detail-workspace .workspace-section {
+    padding: 20px 16px;
+  }
+}

@@ -5,8 +5,12 @@ import type { ReactNode } from "react";
 import {
   Bar,
   BarChart,
+  Cell,
   CartesianGrid,
-  Legend,
+  Label,
+  LabelList,
+  Pie,
+  PieChart,
   PolarAngleAxis,
   PolarGrid,
   PolarRadiusAxis,
@@ -17,6 +21,7 @@ import {
   XAxis,
   YAxis
 } from "recharts";
+import { BarChart3, Check, ChevronDown, Clipboard } from "lucide-react";
 
 import type { MatchData } from "@/data/matches";
 import { copyToClipboard } from "@/lib/download";
@@ -43,7 +48,7 @@ export function InsightCharts({
   dataAngles?: DataAngle[];
 }) {
   if (match.verifiedStats === false || !hasVerifiedStatistics(match.stats)) {
-    return <p className="py-6 text-sm text-slate-600">技术统计尚不完整，暂不生成对比图表。可先查看已确认比分和比赛事件。</p>;
+    return <div className="flex min-h-44 items-center justify-center gap-4 bg-slate-50 px-5 py-8 text-slate-500"><BarChart3 aria-hidden="true" className="h-9 w-9 shrink-0 text-slate-300" /><p className="max-w-md text-sm leading-7">技术统计尚不完整，暂不生成对比图表。可先查看已确认比分和比赛事件。</p></div>;
   }
   const possessionData = [
     { team: match.teamA, value: match.stats.teamA.possession },
@@ -55,59 +60,42 @@ export function InsightCharts({
   ];
   const teamRadar = buildTeamRadarData(match);
   const chartCopy = buildChartCopy(match);
+  const colors = theme.sportType === "football" ? ["#0d9488", "#0284c7"] : [theme.chartA, theme.chartB];
 
   return (
-    <div className="grid gap-5 xl:grid-cols-2">
+    <div className="min-w-0">
+      <div className="mb-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
+        {[match.teamA, match.teamB].map((team, index) => <span key={team} className="inline-flex items-center gap-2"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colors[index] }} />{team}</span>)}
+      </div>
+      <div className="grid min-w-0 gap-4 lg:grid-cols-3">
       <ChartCard
-        title="控球率对比：谁真正掌握比赛时间？"
+        title="控球率对比"
         operation={chartCopy.possession.operation}
         quote={chartCopy.possession.quote}
         theme={theme}
       >
-        <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={possessionData} barCategoryGap="44%" margin={{ top: 10, right: 8, left: -12, bottom: 0 }}>
-            <defs>
-              <linearGradient id="possessionGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#34d399" />
-                <stop offset="100%" stopColor="#059669" />
-              </linearGradient>
-            </defs>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#E2E8F0" opacity={0.4} />
-            <XAxis
-              dataKey="team"
-              axisLine={{ stroke: "#CBD5E1", strokeWidth: 1 }}
-              tickLine={false}
-              tick={{ fill: "#94A3B8", fontSize: 12, fontFamily: "inherit" }}
-            />
-            <YAxis
-              axisLine={false}
-              tickLine={false}
-              tick={{ fill: "#94A3B8", fontSize: 12, fontFamily: "inherit" }}
-            />
-            <Tooltip />
-            <Bar dataKey="value" fill="url(#possessionGradient)" radius={[6, 6, 0, 0]} maxBarSize={56} />
-          </BarChart>
+        <div className="grid grid-cols-2 gap-3 text-center">
+          {possessionData.map((item, index) => <div key={item.team}><p className="text-2xl font-semibold tabular-nums" style={{ color: colors[index] }}>{item.value}%</p><p className="mt-1 text-xs leading-5 text-slate-500">{item.team}</p></div>)}
+        </div>
+        <ResponsiveContainer width="100%" height={194}>
+          <PieChart>
+            <Pie data={possessionData} dataKey="value" nameKey="team" cx="50%" cy="50%" innerRadius={54} outerRadius={76} paddingAngle={2} stroke="none" isAnimationActive={false}>
+              {possessionData.map((item, index) => <Cell key={item.team} fill={colors[index]} />)}
+              <Label value="控球率" position="center" fill="#64748b" fontSize={13} />
+            </Pie>
+            <Tooltip formatter={(value: number) => `${value}%`} />
+          </PieChart>
         </ResponsiveContainer>
       </ChartCard>
 
       <ChartCard
-        title="射门 / 射正：比赛机会密度怎么讲"
+        title="射门与射正"
         operation={chartCopy.shots.operation}
         quote={chartCopy.shots.quote}
         theme={theme}
       >
         <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={shotData} barGap={10} barCategoryGap="36%" margin={{ top: 10, right: 8, left: -12, bottom: 0 }}>
-            <defs>
-              <linearGradient id="teamAGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#34d399" />
-                <stop offset="100%" stopColor="#059669" />
-              </linearGradient>
-              <linearGradient id="teamBGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#fbbf24" />
-                <stop offset="100%" stopColor="#f59e0b" />
-              </linearGradient>
-            </defs>
+          <BarChart data={shotData} barGap={8} barCategoryGap="30%" margin={{ top: 24, right: 8, left: -18, bottom: 0 }}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#E2E8F0" opacity={0.4} />
             <XAxis
               dataKey="name"
@@ -121,32 +109,31 @@ export function InsightCharts({
               tick={{ fill: "#94A3B8", fontSize: 12, fontFamily: "inherit" }}
             />
             <Tooltip />
-            <Legend iconType="circle" wrapperStyle={{ color: "#64748B", fontSize: 12, paddingTop: 8 }} />
-            <Bar dataKey={match.teamA} fill="url(#teamAGradient)" radius={[6, 6, 0, 0]} maxBarSize={38} />
-            <Bar dataKey={match.teamB} fill="url(#teamBGradient)" radius={[6, 6, 0, 0]} maxBarSize={38} />
+            <Bar dataKey={match.teamA} fill={colors[0]} radius={[4, 4, 0, 0]} maxBarSize={32} isAnimationActive={false}><LabelList dataKey={match.teamA} position="top" fill="#0f766e" fontSize={12} /></Bar>
+            <Bar dataKey={match.teamB} fill={colors[1]} radius={[4, 4, 0, 0]} maxBarSize={32} isAnimationActive={false}><LabelList dataKey={match.teamB} position="top" fill="#0369a1" fontSize={12} /></Bar>
           </BarChart>
         </ResponsiveContainer>
       </ChartCard>
 
       <ChartCard
-        title="球队表现雷达：两队强弱项一眼对比"
+        title="球队表现雷达"
         operation={chartCopy.radar.operation}
         quote={chartCopy.radar.quote}
         theme={theme}
       >
-        <ResponsiveContainer width="100%" height={270}>
-          <RadarChart data={teamRadar}>
+        <ResponsiveContainer width="100%" height={250}>
+          <RadarChart data={teamRadar} outerRadius="65%">
             <PolarGrid stroke="rgba(148,163,184,.3)" />
             <PolarAngleAxis dataKey="metric" tick={{ fill: "#475569", fontSize: 12 }} />
             <PolarRadiusAxis tick={false} axisLine={false} domain={[0, 100]} />
-            <Radar name={match.teamA} dataKey={match.teamA} stroke={theme.chartA} fill={theme.chartA} fillOpacity={0.22} />
-            <Radar name={match.teamB} dataKey={match.teamB} stroke={theme.chartB} fill={theme.chartB} fillOpacity={0.18} />
-            <Legend />
+            <Radar name={match.teamA} dataKey={match.teamA} stroke={colors[0]} fill={colors[0]} fillOpacity={0.12} isAnimationActive={false} />
+            <Radar name={match.teamB} dataKey={match.teamB} stroke={colors[1]} fill={colors[1]} fillOpacity={0.10} isAnimationActive={false} />
             <Tooltip />
           </RadarChart>
         </ResponsiveContainer>
       </ChartCard>
 
+      </div>
       {dataAngles.length > 0 ? <DataAnglePanel dataAngles={dataAngles} theme={theme} /> : null}
     </div>
   );
@@ -154,13 +141,11 @@ export function InsightCharts({
 
 function DataAnglePanel({ dataAngles, theme }: { dataAngles: DataAngle[]; theme: SportTheme }) {
   return (
-    <div className="card-lift card-lift-light rounded-[28px] border bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
+    <div className="mt-6 border-t border-slate-200 pt-6">
       <div>
-        <div className="text-xs font-black tracking-[0.18em] text-slate-400">DATA TO ANGLE</div>
-        <h3 className="mt-2 text-lg font-semibold leading-snug" style={{ color: theme.strongText }}>核心数据如何转成内容角度</h3>
-        <p className="mt-2 text-sm leading-6 text-slate-500">数据不是为了摆出来，而是帮助运营判断这场比赛应该怎么讲。</p>
+        <h3 className="text-base font-semibold leading-7 text-slate-950">数据解读与内容角度</h3>
       </div>
-      <div className="mt-5 grid gap-4 md:grid-cols-2">
+      <div className="mt-4 grid gap-x-6 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
         {dataAngles.map((item) => (
           <DataAngleCard key={item.label} {...item} theme={theme} />
         ))}
@@ -171,12 +156,12 @@ function DataAnglePanel({ dataAngles, theme }: { dataAngles: DataAngle[]; theme:
 
 function DataAngleCard({ label, value, compare, explain, angle, theme }: DataAngle & { theme: SportTheme }) {
   return (
-    <div className="card-lift card-lift-light rounded-[28px] border bg-white p-5 shadow-sm" style={{ borderColor: theme.border }}>
+    <div className="min-w-0 border-l-2 border-slate-200 pl-4">
       <div className="text-sm font-semibold text-slate-500">{label}</div>
-      <div className="mt-3 text-4xl font-black tracking-tight" style={{ color: theme.strongText }}>{value}</div>
+      <div className="mt-2 text-xl font-semibold tabular-nums text-slate-950 [overflow-wrap:anywhere]">{value}</div>
       <div className="mt-1 text-sm font-semibold" style={{ color: theme.primary }}>{compare}</div>
       <p className="mt-4 text-sm leading-relaxed text-slate-700"><HighlightedText text={explain} /></p>
-      <div className="mt-4 rounded-2xl p-3 text-sm font-medium leading-relaxed" style={{ backgroundColor: theme.background, color: theme.secondary }}>
+      <div className="mt-3 text-sm font-medium leading-7 text-teal-700">
         内容转化：<HighlightedText text={angle} />
       </div>
     </div>
@@ -205,22 +190,27 @@ function ChartCard({
   }
 
   return (
-    <div className="card-lift card-lift-light group rounded-[28px] border bg-white p-5 shadow-[0_18px_48px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
+    <div className="card-lift-light min-w-0 rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-4">
-        <h3 className="text-lg font-semibold leading-snug" style={{ color: theme.strongText }}>{title}</h3>
+        <h3 className="text-sm font-semibold leading-6 text-slate-800">{title}</h3>
         <button
           onClick={handleCopy}
-          className="rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:-translate-y-0.5"
-          style={{ borderColor: theme.border, color: theme.primary, backgroundColor: "#fff" }}
+          type="button"
+          title={copied ? "已复制" : "复制金句"}
+          aria-label={copied ? "已复制" : "复制金句"}
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-teal-50 hover:text-teal-700 focus-visible:outline-teal-600"
         >
-          {copied ? "已复制" : "复制金句"}
+          {copied ? <Check className="h-4 w-4" /> : <Clipboard className="h-4 w-4" />}
         </button>
       </div>
       <div className="mt-5">{children}</div>
-      <div className="mt-5 space-y-3.5 rounded-2xl border p-4 text-sm leading-relaxed text-slate-700" style={{ borderColor: theme.border, backgroundColor: theme.background }}>
-        <div><span className="font-semibold" style={{ color: theme.secondary }}>运营解释：</span><HighlightedText text={operation} /></div>
-        <div><span className="font-semibold" style={{ color: theme.accent }}>可复制内容金句：</span><HighlightedText text={quote} /></div>
-      </div>
+      <details className="group mt-4 border-t border-slate-100 pt-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-xs font-medium text-slate-500 focus-visible:outline-teal-600 [&::-webkit-details-marker]:hidden">解读与金句<ChevronDown aria-hidden="true" className="h-3.5 w-3.5 shrink-0 transition-transform group-open:rotate-180" /></summary>
+        <div className="mt-3 space-y-3 text-sm leading-7 text-slate-700">
+          <div><span className="font-semibold text-slate-800">运营解释：</span><HighlightedText text={operation} /></div>
+          <div><span className="font-semibold text-teal-700">可复制内容金句：</span><HighlightedText text={quote} /></div>
+        </div>
+      </details>
     </div>
   );
 }
