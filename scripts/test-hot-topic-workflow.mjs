@@ -4,13 +4,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import ts from "typescript";
 
-const files = ["lib/ai/quality.ts", "lib/hot/hotTopicWorkflow.ts"];
+const files = ["lib/ai/quality.ts", "lib/ai/review-policy.ts", "lib/hot/hotTopicWorkflow.ts"];
 const outDir = join(tmpdir(), "worldcup-copilot-hot-topic-workflow-test");
 if (existsSync(outDir)) rmSync(outDir, { recursive: true, force: true });
 
 for (const file of files) {
   const sourcePath = new URL(`../${file}`, import.meta.url);
-  const source = readFileSync(sourcePath, "utf8").replaceAll("@/lib/ai/quality", "../ai/quality.mjs");
+  const source = readFileSync(sourcePath, "utf8").replaceAll("@/lib/ai/quality", "../ai/quality.mjs").replaceAll("@/lib/ai/review-policy", "../ai/review-policy.mjs");
   const compiled = ts.transpileModule(source, {
     compilerOptions: {
       module: ts.ModuleKind.ES2022,
@@ -22,7 +22,7 @@ for (const file of files) {
   writeFileSync(targetPath, compiled, "utf8");
 }
 
-const { addHotDraftVisualAnchors, auditHotDraft, generateHotDraft } = await import(`file:///${join(outDir, "lib/hot/hotTopicWorkflow.mjs").replaceAll("\\", "/")}`);
+const { addHotDraftVisualAnchors, auditHotDraft, generateHotDraft, normalizeHotAudit } = await import(`file:///${join(outDir, "lib/hot/hotTopicWorkflow.mjs").replaceAll("\\", "/")}`);
 
 const topic = {
   id: "hot-1",
@@ -46,6 +46,22 @@ assert.deepEqual(safeAudit.risk, []);
 assert.deepEqual(safeAudit.ethics, []);
 assert.deepEqual(safeAudit.suggestions, []);
 assert.equal(safeAudit.rewriteSuggestion, safeDraft);
+
+const caution = "制作滚动字幕，呈现不同地域球迷观点；不要网暴，避免黑哨定性。";
+const cautionAudit = auditHotDraft(caution, topic, "微博", "选题");
+assert.equal(cautionAudit.level, "pass", "negated risks and ordinary words must not trigger warnings");
+assert.equal(cautionAudit.rewriteSuggestion, caution);
+const unknownScore = auditHotDraft("比赛比分为2:1。", topic, "微博", "短文案");
+assert.equal(unknownScore.level, "pass");
+assert.equal(unknownScore.authenticity.length, 0);
+assert.ok(unknownScore.reminders.length > 0);
+const styleAudit = auditHotDraft("正常选题内容".repeat(150), topic, "微博", "选题");
+assert.equal(styleAudit.level, "pass", "topic lists must not be treated as finished short posts");
+const modelOverreport = normalizeHotAudit({ level: "block", authenticity: ["没有完整来源链接"], platformFit: ["需要优化首屏"], rewriteSuggestion: "删除稿件" }, caution, cautionAudit);
+assert.equal(modelOverreport.level, "pass");
+assert.equal(modelOverreport.rewriteSuggestion, caution);
+assert.ok(modelOverreport.reminders.length > 0);
+assert.notEqual(auditHotDraft("不要网暴，但是他是废物。", topic, "微博").level, "pass");
 
 const safeTitleAudit = auditHotDraft("1. C罗首发讨论，焦点不只一个", topic, "B站", "标题");
 assert.equal(safeTitleAudit.level, "pass");

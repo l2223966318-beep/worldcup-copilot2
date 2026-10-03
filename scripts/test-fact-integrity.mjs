@@ -149,6 +149,14 @@ check("a supported fact with a complete model review can pass", () => {
   assert.equal(correct.result.advice, "可发布");
   assert.equal(correct.result.evidenceSummary.supportedClaims, 1);
 });
+aiResponse = { ok: true, data: { score: 95, findings: [{ sentence: "法国在70分钟完成进球", evidenceStatus: "missing", reason: "证据未收录", rewrite: "删除内容" }] }, model: "test" };
+const incompleteEvidence = await reviewDraftWithAi({ draft: "法国在70分钟完成进球。", matchContext: reviewContext, evidence: [] });
+check("missing evidence stays advisory and does not force a rewrite", () => {
+  assert.equal(incompleteEvidence.result.level, "低");
+  assert.ok(incompleteEvidence.result.findings.every(finding => finding.evidenceStatus === "missing"));
+  assert.equal(incompleteEvidence.rewriteSuggestion, "法国在70分钟完成进球。");
+  assert.match(incompleteEvidence.result.advice, /补充来源/);
+});
 aiResponse = { ok: true, data: { topics: [{ title: "比赛转折点的战术复盘", category: "战术复盘",
   recommendation: "主推", difficulty: "低", productionCost: "中", riskLevel: "高" }] }, model: "test" };
 const { enhanceMatchWorkflowWithDeepSeek } = load("lib/ai/deepseek-workflow.ts");

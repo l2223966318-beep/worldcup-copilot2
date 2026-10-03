@@ -41,7 +41,7 @@ vm.runInNewContext(readFileSync(new URL("../cloudfunctions/api-proxy/sportradar.
 });
 const sportsService = createSportsService({ client: clientModule.exports, env });
 const context = vm.createContext({
-  require: name => ["./evidence", "./ai-guard", "./hot-ai-cache", "./hot-analysis"].includes(name) ? localRequire(`../cloudfunctions/api-proxy/${name}.js`) : name === "./sports-service" ? { createSportsService: () => sportsService } : name === "./hot-sources" ? { createSources: () => createSources({ env, fetchImpl: fakeFetch }) } : { createServer: fn => { handler = fn; return { listen() {} }; } },
+  require: name => ["./evidence", "./ai-guard", "./hot-ai-cache", "./hot-analysis", "./risk", "./hot-workflow", "./review-policy"].includes(name) ? localRequire(`../cloudfunctions/api-proxy/${name}.js`) : name === "./sports-service" ? { createSportsService: () => sportsService } : name === "./hot-sources" ? { createSources: () => createSources({ env, fetchImpl: fakeFetch }) } : { createServer: fn => { handler = fn; return { listen() {} }; } },
   process: { env }, fetch: fakeFetch, URL, AbortController, Buffer, setTimeout, clearTimeout, console,
 });
 vm.runInContext(readFileSync(new URL("../cloudfunctions/api-proxy/index.js", import.meta.url), "utf8"), context);

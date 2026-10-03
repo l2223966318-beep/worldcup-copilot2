@@ -1,6 +1,7 @@
 import { generateDeepSeekJson, getDeepSeekFallbackMessage } from "@/lib/ai/deepseek";
 import { cleanText, ensurePublishable } from "@/lib/ai/quality";
 import { reviewRisk } from "@/lib/ai/risk";
+import { isConcreteAiRisk } from "@/lib/ai/review-policy";
 import {
   auditDraftEvidence,
   buildEvidencePack,
@@ -59,6 +60,10 @@ export async function reviewDraftWithAi(input: {
             "逐句检查事实断言，只使用证据包中的 E 编号作为事实依据。",
             "有证据支持的事实通过，不要列入 findings；缺少依据或表达超出证据范围时，必须引用原稿具体句子。",
             "纯观点、情绪、创意表达不要求来源，也不要误报。",
+            "证据包不完整不等于原稿事实错误。仅缺少记录时标记 missing，作为补充来源提醒，不能据此判中高风险。",
+            "只有与已提供的数据明确矛盾才标记 overreach；统计口径或四舍五入的小差异仅作提醒。",
+            "选题提纲、拟制作方案、素材建议不是已经发生的事件，不按完整发布稿要求提供画面、引用或采访。",
+            "不要网暴、避免黑哨定性等反面提醒不得当作攻击；长度、风格、素材授权未附说明不是事实错误。",
             "同时识别伤病、判罚、冲突、内部消息、引战词和绝对化表达。",
             "改写不能新增事实。没有具体问题时 findings、riskPoints 和 checklist 均返回空数组。"
           ].join("\n")
@@ -125,12 +130,13 @@ export async function reviewDraftWithAi(input: {
   const resultSnapshot: ReviewResultSnapshot = {
     level,
     score,
-    advice: level === "高" ? "建议暂缓" : level === "中" ? "修改后发布" : "可发布",
+    advice: level === "高" ? "建议暂缓" : level === "中" ? "修改后发布" : findings.length ? "可预览，建议补充来源" : "可发布",
     findings,
     evidence,
     evidenceSummary: evidenceAudit.summary
   };
-  const aiRewriteSuggestion = ensurePublishable(result.data.rewriteSuggestion || "");
+  const actionableFindings = findings.filter(finding => finding.evidenceStatus !== "missing");
+  const aiRewriteSuggestion = actionableFindings.length ? ensurePublishable(result.data.rewriteSuggestion || "") : input.draft;
   const rewriteSuggestion = findings.length && /无需修改|无修改必要|可直接发布/.test(aiRewriteSuggestion)
     ? buildFallbackRewrite(input.draft, resultSnapshot)
     : aiRewriteSuggestion || buildFallbackRewrite(input.draft, resultSnapshot);
@@ -142,7 +148,7 @@ export async function reviewDraftWithAi(input: {
       ? buildRiskPoints(resultSnapshot)
       : [buildSuccessMessage(evidenceAudit.summary)],
     rewriteSuggestion,
-    checklist: normalizeList(result.data.checklist, buildChecklist(resultSnapshot)),
+    checklist: actionableFindings.length ? normalizeList(result.data.checklist, buildChecklist(resultSnapshot)) : buildChecklist(resultSnapshot),
     result: resultSnapshot
   };
 }
@@ -171,19 +177,24 @@ function normalizeAiFindings(findings: AiReviewDraft["findings"], draft: string,
   return (findings ?? [])
     .filter((finding) => typeof finding.sentence === "string" && draft.includes(finding.sentence.trim()))
     .filter((finding) => {
-      if (finding.evidenceStatus === "risk") return true;
+      if (finding.evidenceStatus === "risk" && isConcreteAiRisk(finding.sentence ?? "", finding.reason ?? "")) return true;
       const audit = auditDraftEvidence(finding.sentence ?? "", evidence);
       return audit.summary.unsupportedClaims > 0;
     })
     .slice(0, 5)
-    .map((finding) => ({
-      type: cleanText(finding.type || "事实边界"),
-      sentence: cleanText(finding.sentence || ""),
-      reason: cleanText(finding.reason || "该表达超出当前可核验信息。"),
-      rewrite: ensurePublishable(finding.rewrite || "删除该句，或补充可核验来源后再发布。"),
-      evidenceStatus: finding.evidenceStatus ?? "risk",
-      evidenceIds: (finding.evidenceIds ?? []).filter((id) => evidenceIds.has(id))
-    }));
+    .map((finding) => {
+      const sentence = cleanText(finding.sentence || "");
+      const status = finding.evidenceStatus === "risk" && isConcreteAiRisk(sentence, finding.reason ?? "")
+        ? "risk" : auditDraftEvidence(sentence, evidence).findings[0]?.evidenceStatus ?? "missing";
+      return {
+        type: status === "missing" ? "建议补充来源" : cleanText(finding.type || "事实边界"),
+        sentence,
+        reason: status === "missing" ? "当前资料未覆盖这条陈述，不等于事实错误；补充对应来源即可。" : cleanText(finding.reason || "该表达需要校正。"),
+        rewrite: status === "missing" ? sentence : ensurePublishable(finding.rewrite || "请按对应来源校正表达。"),
+        evidenceStatus: status,
+        evidenceIds: (finding.evidenceIds ?? []).filter((id) => evidenceIds.has(id))
+      };
+    });
 }
 
 function buildFallbackResult(
@@ -200,7 +211,7 @@ function buildFallbackResult(
     evidenceIds: []
   }));
   const findings = mergeFindings(evidenceAudit.findings, ruleFindings);
-  const score = Math.max(ruleReview.score, calculateEvidenceRiskScore(evidenceAudit.summary.unsupportedClaims));
+  const score = finalizeReviewRiskScore(Math.max(ruleReview.score, calculateEvidenceRiskScore(evidenceAudit.summary.unsupportedClaims)), findings.map(finding => finding.evidenceStatus ?? "risk"));
 
   return {
     level: "待人工确认",
@@ -218,7 +229,7 @@ function mergeFindings(
 ) {
   const seen = new Set<string>();
   return [...primary, ...secondary].filter((finding) => {
-    const key = cleanText(finding.sentence).toLowerCase();
+    const key = `${cleanText(finding.sentence).toLowerCase()}-${finding.evidenceStatus}`;
     if (!finding.sentence || seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -249,7 +260,7 @@ function buildSuccessMessage(summary: NonNullable<ReviewResultSnapshot["evidence
 function buildChecklist(result: ReviewResultSnapshot) {
   return result.findings.slice(0, 4).map((finding) =>
     finding.evidenceStatus === "missing"
-      ? `为“${finding.sentence}”补充来源，或删除该事实断言`
+      ? `可为“${finding.sentence}”补充来源，不视为事实错误`
       : `按建议修改“${finding.sentence}”`
   );
 }
@@ -257,6 +268,7 @@ function buildChecklist(result: ReviewResultSnapshot) {
 function buildFallbackRewrite(draft: string, result: ReviewResultSnapshot) {
   if (!result.findings.length) return draft;
   return result.findings.reduce((text, finding) => {
+    if (finding.evidenceStatus === "missing") return text;
     if (!finding.sentence || !text.includes(finding.sentence)) return text;
     return text.replace(finding.sentence, finding.rewrite);
   }, draft);

@@ -132,6 +132,14 @@ assert.equal(calculateEvidenceRiskScore(1), 18);
 assert.ok(calculateEvidenceRiskScore(8) < 70);
 assert.equal(finalizeReviewRiskScore(84, ["missing", "missing", "overreach"]), 56);
 assert.equal(finalizeReviewRiskScore(84, ["missing", "risk"]), 84);
+assert.ok(finalizeReviewRiskScore(95, ["missing", "missing"]) < 36);
+const differentProvider = auditDraftEvidence("阿根廷控球率53.5%。", evidence);
+assert.equal(differentProvider.findings[0].evidenceStatus, "missing", "rounding difference must be a reminder");
+const contradiction = auditDraftEvidence("法国射门18次。", evidence);
+assert.equal(contradiction.findings[0].evidenceStatus, "overreach");
+assert.equal(contradiction.findings[0].type, "与现有数据不一致");
+assert.ok(contradiction.findings[0].evidenceIds.length > 0);
+assert.equal(auditDraftEvidence("阿根廷以9-0战胜法国。", evidence).findings[0].evidenceStatus, "overreach");
 
 const multilingualEvents = auditDraftEvidence(
   "85分钟巴西获得角球。90+6分钟Martinelli完成进球。",

@@ -6,9 +6,9 @@ import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 
-for (const [source, output] of [["lib/time/beijingTime.ts", "beijing-time.js"], ["lib/sports/sportradarClient.ts", "sportradar.js"], ["lib/ai/quality.ts", "quality.js"], ["lib/services/evidenceService.ts", "evidence.js"], ["lib/ai/requestGuard.ts", "ai-guard.js"], ["lib/services/hotTopicAiCache.ts", "hot-ai-cache.js"], ["lib/hot/normalizeHotAnalysis.ts", "hot-analysis.js"]]) {
+for (const [source, output] of [["lib/time/beijingTime.ts", "beijing-time.js"], ["lib/sports/sportradarClient.ts", "sportradar.js"], ["lib/ai/quality.ts", "quality.js"], ["lib/services/evidenceService.ts", "evidence.js"], ["lib/ai/requestGuard.ts", "ai-guard.js"], ["lib/services/hotTopicAiCache.ts", "hot-ai-cache.js"], ["lib/hot/normalizeHotAnalysis.ts", "hot-analysis.js"], ["lib/ai/review-policy.ts", "review-policy.js"], ["lib/ai/risk.ts", "risk.js"], ["lib/hot/hotTopicWorkflow.ts", "hot-workflow.js"]]) {
   const code = readFileSync(new URL(`../${source}`, import.meta.url), "utf8")
-    .replaceAll("@/lib/sports/normalizers", "./sports-payload").replaceAll("@/lib/time/beijingTime", "./beijing-time").replaceAll("@/lib/ai/quality", "./quality");
+    .replaceAll("@/lib/sports/normalizers", "./sports-payload").replaceAll("@/lib/time/beijingTime", "./beijing-time").replaceAll("@/lib/ai/review-policy", "./review-policy").replaceAll("@/lib/ai/quality", "./quality");
   const compiled = ts.transpileModule(code, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   assert.ok(readFileSync(new URL(`../cloudfunctions/api-proxy/${output}`, import.meta.url), "utf8").endsWith(compiled), "generated runtime must match current TS source");
 }

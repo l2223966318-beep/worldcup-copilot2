@@ -5,7 +5,10 @@ const TIMEOUT_MS = Number(process.env.UPSTREAM_TIMEOUT_MS || 7000);
 const WORLDCUP26 = "https://worldcup26.ir";
 const STATS_FIXTURES = "https://www.thestatsapi.com/world-cup/data/fixtures.json";
 const { createSportsService } = require("./sports-service");
-const { auditDraftEvidence, calculateEvidenceRiskScore, hasCompleteReview } = require("./evidence");
+const { auditDraftEvidence, calculateEvidenceRiskScore, hasCompleteReview, finalizeReviewRiskScore } = require("./evidence");
+const { reviewRisk } = require("./risk");
+const { auditHotDraft, normalizeHotAudit } = require("./hot-workflow");
+const { isConcreteAiRisk } = require("./review-policy");
 const { createAiRequestGuard, buildAiRequestKey } = require("./ai-guard");
 const { buildHotTopicAiFingerprint } = require("./hot-ai-cache");
 const { normalizeHotAnalysis } = require("./hot-analysis");
@@ -758,31 +761,6 @@ function fallbackHotDraft(topic, config) {
   return `⚽ ${title}\n\n这条热点已经出现公开讨论。先确认来源和具体事实，再根据${platform}的内容节奏做信息拆解。\n\n💬 你更关注事件本身，还是它对比赛内容传播的影响？`;
 }
 
-function fallbackAudit(draft, config) {
-  const riskWords = /(黑哨|黑幕|假球|实锤|全网都在骂|确认伤退|去骂|爆破|废物|垃圾)/;
-  const hit = String(draft || "").match(riskWords)?.[0];
-  if (hit) {
-    return {
-      level: "revise",
-      authenticity: [`“${hit}”属于高风险或确定性表述，当前材料不足以支撑。`],
-      risk: [`“${hit}”可能造成造谣、引战或攻击性传播风险。`],
-      ethics: [],
-      platformFit: [],
-      suggestions: [`删除或改写“${hit}”，回到可核验事实。`],
-      rewriteSuggestion: String(draft || "").replaceAll(hit, "相关讨论")
-    };
-  }
-  return {
-    level: "pass",
-    authenticity: [],
-    risk: [],
-    ethics: [],
-    platformFit: [],
-    suggestions: [],
-    rewriteSuggestion: String(draft || "")
-  };
-}
-
 async function handleAiHotTopic(req, res) {
   const body = await readJsonBody(req);
   const topic = body?.topic;
@@ -851,14 +829,19 @@ async function handleAiHotWorkflow(req, res) {
 
   if (action === "audit") {
     if (!String(draft || "").trim()) return json(res, 400, { sourceStatus: "error", message: "draft is required for audit." });
-    const fallback = fallbackAudit(draft, config);
+    const fallback = auditHotDraft(draft, topic, config.platform, config.contentType);
     const result = await callDeepSeekJson([
       {
         role: "system",
         content: [
           "你是体育内容审稿编辑，只输出严格 JSON，不要 Markdown。",
           "只指出原稿中真实存在的问题，不要泛泛制造风险。",
-          "输出字段：level、authenticity、risk、ethics、platformFit、suggestions、rewriteSuggestion。",
+          "选题、标题和创意提纲不是完整成品，不要求附画面、采访和完整引用。",
+          "证据不足、素材未附、画面或版权授权未说明只写入 reminders，不等于事实错误，不影响通过。",
+          "措辞风格、篇幅、互动设计和平台优化只作可选提醒，不判 revise 或 block。",
+          "不要网暴、避免黑哨定性等反面提醒不是违规；只有明确数据矛盾或具体有害表达才需要修改。",
+          "问题必须用引号逐字引用原稿，最多给两条不重复的可选提醒；不要求来源中没有的材料。",
+          "输出字段：level、authenticity、risk、ethics、platformFit、suggestions、reminders、rewriteSuggestion。",
           "level 只能是 pass、revise、block。",
           "重点检查：未核验事实、比分、伤病、判罚、官方结论、造谣、引战、人身攻击、版权和平台不适配。",
           "没有问题时数组返回空数组，rewriteSuggestion 原样返回稿件。"
@@ -870,16 +853,7 @@ async function handleAiHotWorkflow(req, res) {
     if (!result.ok) {
       return json(res, 200, { sourceStatus: "fallback", audit: fallback, message: `AI 暂不可用，已使用本地审稿：${result.message}` });
     }
-    const d = result.data || {};
-    const audit = {
-      level: ["pass", "revise", "block"].includes(d.level) ? d.level : fallback.level,
-      authenticity: Array.isArray(d.authenticity) ? d.authenticity.slice(0, 5) : fallback.authenticity,
-      risk: Array.isArray(d.risk) ? d.risk.slice(0, 5) : fallback.risk,
-      ethics: Array.isArray(d.ethics) ? d.ethics.slice(0, 5) : fallback.ethics,
-      platformFit: Array.isArray(d.platformFit) ? d.platformFit.slice(0, 5) : fallback.platformFit,
-      suggestions: Array.isArray(d.suggestions) ? d.suggestions.slice(0, 5) : fallback.suggestions,
-      rewriteSuggestion: typeof d.rewriteSuggestion === "string" ? d.rewriteSuggestion : fallback.rewriteSuggestion
-    };
+    const audit = normalizeHotAudit(result.data, draft, fallback);
     return json(res, 200, { sourceStatus: "live", audit, model: result.model });
   }
 
@@ -1241,18 +1215,17 @@ async function handleAiPlatformDraft(req, res) {
 function localReviewDraft(draft, evidence = []) {
   const text = String(draft || "");
   const evidenceAudit = auditDraftEvidence(text, evidence);
-  const risky = /(黑哨|黑幕|假球|保送|确认伤退|确认报销|确认缺席|全网都在骂|去骂|爆破|废物|垃圾)/;
-  const hit = text.match(risky)?.[0];
-  const riskFindings = hit ? [{
-    type: "高风险表达",
-    sentence: hit,
-    reason: "当前材料不足以支撑该定性，且可能引发造谣、攻击或引战风险。",
-    rewrite: "相关讨论",
+  const ruleReview = reviewRisk(text);
+  const riskFindings = ruleReview.findings.map(finding => ({
+    type: finding.type,
+    sentence: finding.sentence,
+    reason: finding.reason,
+    rewrite: finding.rewrite,
     evidenceStatus: "risk",
     evidenceIds: []
-  }] : [];
+  }));
   const findings = [...evidenceAudit.findings, ...riskFindings];
-  const score = Math.max(hit ? 58 : 8, calculateEvidenceRiskScore(evidenceAudit.summary.unsupportedClaims));
+  const score = finalizeReviewRiskScore(Math.max(ruleReview.score, calculateEvidenceRiskScore(evidenceAudit.summary.unsupportedClaims)), findings.map(f => f.evidenceStatus));
   return {
     level: "待人工确认",
     score,
@@ -1285,6 +1258,10 @@ async function handleAiReviewDraft(req, res) {
         "你是体育内容发布审稿编辑，只输出严格 JSON，不要 Markdown。",
         "逐句检查事实断言，只使用 evidence 中存在的 E 编号作为事实依据。",
         "纯观点、情绪和创意表达不要求来源，不要误报。",
+        "证据包不完整不等于事实错误。缺少记录只标 missing 并提示补来源，不得因此判中高风险。",
+        "只有与已提供的数据明确矛盾才标 overreach；统计口径和四舍五入的小差异只作提醒。",
+        "选题、拟制作方案、素材建议不是已发生的事件，不要求完整稿件的引用、画面和采访。",
+        "不要网暴、避免黑哨定性等反面提醒不是攻击；篇幅、风格与未附授权说明不属于事实错误。",
         "重点检查伤病、判罚、冲突、内部消息、引战词和绝对化表达。",
         "sentence 必须逐字来自原稿；改写不能新增事实。",
         "score 是风险分，不是质量分：越高风险越大；低风险 0-35，中风险 36-69，高风险 70-100。没有具体问题时 score 应在 0-10。",
@@ -1334,15 +1311,18 @@ async function handleAiReviewDraft(req, res) {
     ? d.findings.map((item) => {
         const sentence = matchAiText(item?.sentence);
         if (!sentence || !draft.includes(sentence)) return null;
-        const status = ["missing", "overreach", "risk"].includes(item?.evidenceStatus) ? item.evidenceStatus : "risk";
+        const audit = auditDraftEvidence(sentence, evidence);
+        const concreteRisk = item?.evidenceStatus === "risk" && isConcreteAiRisk(sentence, matchAiText(item?.reason));
+        if (!concreteRisk && !audit.summary.unsupportedClaims) return null;
+        const status = concreteRisk ? "risk" : audit.findings[0]?.evidenceStatus || "missing";
         const evidenceIds = Array.isArray(item?.evidenceIds)
           ? item.evidenceIds.map((id) => matchAiText(id)).filter((id) => allowedEvidence.has(id))
           : [];
         return {
-          type: matchAiText(item?.type, "事实边界"),
+          type: status === "missing" ? "建议补充来源" : matchAiText(item?.type, "事实边界"),
           sentence,
-          reason: matchAiText(item?.reason, "该表达需要补充来源或降低确定性。"),
-          rewrite: matchAiText(item?.rewrite, "删除该句，或补充可靠来源后再发布。"),
+          reason: status === "missing" ? "当前资料未覆盖这条陈述，不等于事实错误；补充对应来源即可。" : matchAiText(item?.reason, "该表达需要校正或降低确定性。"),
+          rewrite: status === "missing" ? sentence : matchAiText(item?.rewrite, "请按对应来源校正表达。"),
           evidenceStatus: status,
           evidenceIds
         };
@@ -1350,34 +1330,27 @@ async function handleAiReviewDraft(req, res) {
     : [];
 
   for (const finding of fallbackResult.findings) {
-    if (!findings.some(item => item.sentence === finding.sentence)) findings.push(finding);
+    if (!findings.some(item => item.sentence === finding.sentence && item.evidenceStatus === finding.evidenceStatus)) findings.push(finding);
   }
   let score = findings.length ? matchAiScore(d.score, 45) : fallbackResult.score;
   if (findings.some((f) => f.evidenceStatus === "risk")) score = Math.max(score, 50);
-  if (findings.length) score = Math.max(score, 36);
+  score = finalizeReviewRiskScore(score, findings.map(f => f.evidenceStatus));
   const level = score >= 70 ? "高" : score >= 36 ? "中" : "低";
   const resultSnapshot = {
     level,
     score,
     findings,
-    advice: level === "高" ? "建议暂缓" : level === "中" ? "修改后发布" : "可发布",
+    advice: level === "高" ? "建议暂缓" : level === "中" ? "修改后发布" : findings.length ? "可预览，建议补充来源" : "可发布",
     evidence,
     evidenceSummary: fallbackResult.evidenceSummary
   };
 
-  const riskPoints = matchAiList(
-    d.riskPoints,
-    findings.map((f) => `${f.type}：${f.sentence}${f.reason ? `。${f.reason}` : ""}`),
-    6
-  );
-  const checklist = matchAiList(
-    d.checklist,
-    findings.map((f) => `按建议修改“${f.sentence}”`),
-    6
-  );
-  const rewriteSuggestion = matchAiText(
+  const riskPoints = findings.map((f) => `${f.type}：${f.sentence}${f.reason ? `。${f.reason}` : ""}`);
+  const checklist = findings.map((f) => f.evidenceStatus === "missing" ? `可为“${f.sentence}”补充来源` : `按建议修改“${f.sentence}”`);
+  const actionableFindings = findings.filter(f => f.evidenceStatus !== "missing");
+  const rewriteSuggestion = !actionableFindings.length ? draft : matchAiText(
     d.rewriteSuggestion,
-    findings.reduce((text, f) => text.includes(f.sentence) ? text.replace(f.sentence, f.rewrite) : text, draft)
+    actionableFindings.reduce((text, f) => text.includes(f.sentence) ? text.replace(f.sentence, f.rewrite) : text, draft)
   );
 
   return json(res, 200, {
