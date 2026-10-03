@@ -186,6 +186,8 @@ export default function MatchAnalysisPage() {
   const reviewResult = useMemo(() => reviewSourceText ? reviewRisk(reviewSourceText) : null, [reviewSourceText]);
   const localReviewFlow = useMemo(() => reviewSourceText && reviewResult ? buildDraftReviewFlow(reviewSourceText, match, reviewResult) : null, [match, reviewResult, reviewSourceText]);
   const reviewFlow = reviewedDraft === reviewSourceText && reviewedDraft ? aiReviewFlow ?? localReviewFlow : null;
+  const reviewIssues = reviewFlow?.result.findings.filter(finding => finding.evidenceStatus !== "missing") ?? [];
+  const reviewReminders = reviewFlow?.result.findings.filter(finding => finding.evidenceStatus === "missing") ?? [];
   const markdown = useMemo(() => buildMarkdown(match.name, selectedTopic, content, reviewFlow?.result.advice ?? "待审核"), [content, match.name, reviewFlow?.result.advice, selectedTopic]);
 
   useEffect(() => {
@@ -652,21 +654,22 @@ export default function MatchAnalysisPage() {
             {!reviewFlow ? <AuditPlaceholder loading={reviewLoading} /> : null}
             {reviewFlow ? <div>
               <ReviewVerdict
-                title={reviewFlow.result.level === "待人工确认" ? "待人工确认" : `${reviewFlow.result.level}风险`}
+                title={reviewFlow.result.level === "待人工确认" ? "待人工确认" : !reviewIssues.length ? "内容可用" : `${reviewFlow.result.level}风险`}
                 summary={reviewFlow.result.advice}
-                tone={reviewFlow.result.level === "高" ? "danger" : reviewFlow.result.level === "低" && reviewFlow.result.advice === "可发布" ? "pass" : "warning"}
+                tone={reviewFlow.result.level === "高" ? "danger" : reviewFlow.result.level === "低" && !reviewIssues.length ? "pass" : "warning"}
                 metrics={[
-                  { label: "审核分数", value: reviewFlow.result.score },
-                  { label: "问题", value: reviewFlow.result.findings.length },
+                  { label: "风险分", value: reviewFlow.result.score },
+                  { label: "需要修改", value: reviewIssues.length },
+                  { label: "补充提醒", value: reviewReminders.length },
                   ...(reviewFlow.result.evidenceSummary ? [
                     { label: "有依据", value: reviewFlow.result.evidenceSummary.supportedClaims },
-                    { label: "缺少依据", value: reviewFlow.result.evidenceSummary.unsupportedClaims }
+                    { label: "待补来源", value: reviewFlow.result.evidenceSummary.unsupportedClaims }
                   ] : [])
                 ]}
               />
-              <ReviewSection title="审核发现" items={reviewFlow.result.findings.length ? undefined : reviewFlow.riskPoints} defaultOpen tone="warning">
-                {reviewFlow.result.findings.length ? <ol className="space-y-5">
-                  {reviewFlow.result.findings.map((finding, index) => (
+              {reviewIssues.length ? <ReviewSection title="需要修改" defaultOpen tone="warning">
+                <ol className="space-y-5">
+                  {reviewIssues.map((finding, index) => (
                     <li key={index} className="border-l-2 border-amber-200 pl-4 text-sm leading-7">
                       <div className="font-semibold text-slate-800">{index + 1}. {finding.type}</div>
                       {finding.sentence ? <blockquote className="mt-2 whitespace-pre-wrap text-slate-600">{finding.sentence}</blockquote> : null}
@@ -677,9 +680,10 @@ export default function MatchAnalysisPage() {
                       </div> : null}
                     </li>
                   ))}
-                </ol> : null}
-              </ReviewSection>
-              {reviewFlow.result.findings.length && reviewFlow.riskPoints.length ? (
+                </ol>
+              </ReviewSection> : null}
+              {reviewReminders.length ? <ReviewSection title="补充提醒" items={reviewReminders.map(finding => `${finding.sentence}：${finding.reason ?? "可补充对应来源，不视为事实错误。"}`)} /> : null}
+              {reviewIssues.length && reviewFlow.riskPoints.length ? (
                 <ReviewSection title="风险说明" items={reviewFlow.riskPoints} />
               ) : null}
               {reviewFlow.result.evidence?.length ? (
@@ -697,10 +701,10 @@ export default function MatchAnalysisPage() {
                   </div>
                 </ReviewSection>
               ) : null}
-              <ReviewSection title="改写建议" defaultOpen>
+              {reviewIssues.length ? <ReviewSection title="改写建议" defaultOpen>
                 <GeneratedDocument text={reviewFlow.rewriteSuggestion} />
-              </ReviewSection>
-              <ReviewSection title="发布前检查" items={reviewFlow.checklist} />
+              </ReviewSection> : null}
+              {reviewFlow.checklist.length ? <ReviewSection title="发布建议" items={reviewFlow.checklist} /> : null}
             </div> : null}
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { cleanList, qualityControl } from "@/lib/ai/quality";
+import { findAssertedRiskPhrase, isCautionaryRiskText, isConcreteAiRisk } from "@/lib/ai/review-policy";
 import type { HotSearchPayload, HotTopic, HotValueLevel } from "@/lib/hot/types";
 
 export const HOT_RADAR_CACHE_KEY = "worldcup.hot-topic-radar.cache.v4";
@@ -35,6 +36,7 @@ export type HotAuditResult = {
   ethics: string[];
   platformFit: string[];
   suggestions: string[];
+  reminders?: string[];
   rewriteSuggestion: string;
 };
 
@@ -305,55 +307,90 @@ export function auditHotDraft(
     risk: [] as string[],
     ethics: [] as string[],
     platformFit: [] as string[],
-    suggestions: [] as string[]
+    suggestions: [] as string[],
+    reminders: [] as string[]
   };
 
-  if (/(实锤|官方证实|已经证明|必然|肯定|确认伤退|确认报销|确认缺席)/.test(text)) {
-    const phrase = text.match(/实锤|官方证实|已经证明|必然|肯定|确认伤退|确认报销|确认缺席/)?.[0];
+  const sourceText = `${topic.title} ${topic.summary ?? ""}`;
+  const certainty = findAssertedRiskPhrase(text, /实锤|官方证实|已经证明|确认伤退|确认报销|确认缺席/);
+  if (certainty && !sourceText.includes(certainty)) {
+    const phrase = certainty;
     findings.authenticity.push(`“${phrase}”属于确定性表述，但当前热点材料没有提供对应证明。`);
     findings.suggestions.push(`将“${phrase}”改成与现有来源强度一致的描述。`);
   }
   const score = text.match(/\d{1,2}[:比-]\d{1,2}/)?.[0];
-  if (score && !/(来源[:：]|数据源|据\S{0,8}(报道|统计|显示))/.test(text)) {
-    findings.authenticity.push(`比分“${score}”在稿件中没有对应来源说明。`);
-    findings.suggestions.push(`为比分“${score}”补充明确来源，或删除该比分。`);
+  const sourceScore = sourceText.match(/\d{1,2}[:比-]\d{1,2}/)?.[0];
+  if (score && sourceScore && score.replace(/[:比]/g, "-") !== sourceScore.replace(/[:比]/g, "-") && !/如果|假如|一度|半场|当时/.test(text)) {
+    findings.authenticity.push(`比分“${score}”与当前来源中的“${sourceScore}”不一致。`);
+    findings.suggestions.push("按当前来源校正比分，或明确说明不同比赛阶段。");
+  } else if (score && !sourceScore && !/(来源[:：]|数据源|据\S{0,8}(报道|统计|显示))/.test(text)) {
+    findings.reminders.push(`可为比分“${score}”补充来源；当前素材未覆盖，不代表比分错误。`);
   }
-  if (/黑哨|黑幕|假球|保送|废了|骂翻|全网都在骂|确认伤退/.test(text)) {
-    const phrase = text.match(/黑哨|黑幕|假球|保送|废了|骂翻|全网都在骂|确认伤退/)?.[0];
+  const allegation = findAssertedRiskPhrase(text, /黑哨|黑幕|假球|保送|骂翻|全网都在骂|确认伤退/);
+  if (allegation && (!allegation.startsWith("确认") || !sourceText.includes(allegation))) {
+    const phrase = allegation;
     findings.risk.push(`“${phrase}”带有造谣、引战或攻击性风险，不建议直接发布。`);
     findings.suggestions.push(`删除“${phrase}”的定性，改写为对具体比赛现象的描述。`);
   }
-  if (/偷|蠢|垃圾|废物|滚|地域|人种/.test(text)) {
-    const phrase = text.match(/偷|蠢|垃圾|废物|滚|地域|人种/)?.[0];
+  const insult = findAssertedRiskPhrase(text, /垃圾|废物|蠢货|滚出|地域歧视|人种歧视/);
+  if (insult) {
+    const phrase = insult;
     findings.risk.push(`“${phrase}”存在人身攻击、地域歧视或侮辱性表达风险。`);
     findings.suggestions.push(`删除“${phrase}”，把评价落回可观察的比赛表现。`);
   }
-  if (/网暴|冲了|去骂|爆破/.test(text)) {
-    const phrase = text.match(/网暴|冲了|去骂|爆破/)?.[0];
+  const harassment = findAssertedRiskPhrase(text, /网暴|去骂|爆破/);
+  if (harassment) {
+    const phrase = harassment;
     findings.ethics.push(`“${phrase}”存在诱导网暴或过度煽动风险，需要删除。`);
     findings.suggestions.push(`删除“${phrase}”及相关号召，不引导用户攻击具体对象。`);
   }
-  if (platform === "小红书" && text.length > 900) {
-    findings.platformFit.push(`当前稿件 ${text.length} 字，小红书图文篇幅偏长。`);
-    findings.suggestions.push("压缩重复解释，并拆成每页一个信息点。");
+  if (contentType !== "选题" && platform === "小红书" && text.length > 900) {
+    findings.reminders.push("篇幅偏长，可拆成每页一个信息点；不影响内容审核结论。");
   }
-  if (platform === "微博" && text.length > 500) {
-    findings.platformFit.push(`当前稿件 ${text.length} 字，微博首屏信息密度不足。`);
-    findings.suggestions.push("把核心观点和热点事实前置到前 100 字。");
+  if (contentType !== "选题" && platform === "微博" && text.length > 500) {
+    findings.reminders.push("可把核心观点前置，提升微博首屏可读性；这属于版式建议。");
   }
-  if (platform === "B站" && contentType === "视频脚本" && !/结构|开头|弹幕|评论/.test(text)) {
-    findings.platformFit.push("稿件没有视频结构、开场或互动设计，不适合作为完整 B站脚本。");
-    findings.suggestions.push("补充开场钩子、内容段落和结尾互动。");
+  if (platform === "B站" && contentType === "视频脚本" && !/结构|开头|开场|前三秒|弹幕|评论|互动/.test(text)) {
+    findings.reminders.push("可补充开场钩子和结尾互动；这是制作建议，不属于事实错误。");
   }
 
   const severe = findings.risk.some((item) => /不建议|攻击|歧视|网暴/.test(item)) || findings.ethics.length > 0;
-  const needsRevision = severe || findings.authenticity.length > 0 || findings.platformFit.length > 0;
-  const rewriteSuggestion = rewriteSafer(text);
+  const needsRevision = severe || findings.authenticity.length > 0;
+  const rewriteSuggestion = needsRevision ? rewriteSafer(text) : text;
 
   return {
     level: severe ? "block" : needsRevision ? "revise" : "pass",
     ...findings,
     rewriteSuggestion
+  };
+}
+
+export function normalizeHotAudit(value: unknown, draft: string, fallback: HotAuditResult): HotAuditResult {
+  const input = value && typeof value === "object" ? value as Partial<HotAuditResult> : {};
+  const list = (items: unknown) => Array.isArray(items)
+    ? [...new Set(items.filter((item): item is string => typeof item === "string" && Boolean(item.trim())).map(item => item.trim()))]
+    : [];
+  const grounded = (item: string) => [...item.matchAll(/[“「"]([^”」"]+)[”」"]/g)]
+    .some(match => draft.includes(match[1]) && isConcreteAiRisk(match[1], item));
+  const actionable = (item: string) => grounded(item) && !isCautionaryRiskText(draft)
+    && !/版权|授权|标题党|篇幅|首屏|平台适配|信息密度|画面来源/.test(item);
+  const risk = list([...fallback.risk, ...list(input.risk).filter(actionable)]);
+  const ethics = list([...fallback.ethics, ...list(input.ethics).filter(actionable)]);
+  const hasIssues = fallback.authenticity.length + risk.length + ethics.length > 0;
+  return {
+    level: risk.length || ethics.length ? "block" : hasIssues ? "revise" : "pass",
+    authenticity: fallback.authenticity,
+    risk,
+    ethics,
+    platformFit: [],
+    suggestions: hasIssues ? list([...fallback.suggestions, ...list(input.suggestions)]) : [],
+    reminders: list([
+      ...(fallback.reminders ?? []), ...list(input.reminders), ...list(input.authenticity),
+      ...list(input.platformFit), ...list(input.risk).filter(item => !actionable(item)),
+      ...list(input.ethics).filter(item => !actionable(item))
+    ]).filter(item => !fallback.authenticity.includes(item)),
+    rewriteSuggestion: hasIssues && typeof input.rewriteSuggestion === "string" && input.rewriteSuggestion.trim()
+      ? input.rewriteSuggestion : fallback.rewriteSuggestion
   };
 }
 

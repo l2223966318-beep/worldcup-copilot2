@@ -1,4 +1,5 @@
 import { cleanText } from "@/lib/ai/quality";
+import { findAssertedRiskPhrase } from "@/lib/ai/review-policy";
 
 export type RiskLevel = "低" | "中" | "高";
 
@@ -54,18 +55,10 @@ const riskRules = [
   {
     type: "事实与观点混淆",
     level: "高" as const,
-    pattern: /(某队靠黑幕夺冠|靠黑幕夺冠|黑幕夺冠|必然|一定|毫无疑问|铁定|实锤)/,
+    pattern: /(某队靠黑幕夺冠|靠黑幕夺冠|黑幕夺冠|实锤)/,
     reason: "绝对化判断容易把观点包装成事实，正式发布前需要可靠来源支撑。",
     rewrite: "从目前公开信息看，相关争议仍需要更多数据、规则依据和权威来源支持。",
     publishAdvice: "建议暂缓定性发布；可改成讨论题或资料汇总。"
-  },
-  {
-    type: "数据无来源",
-    level: "低" as const,
-    pattern: /(数据表明|数据显示|据统计|控球率|射正率)/,
-    reason: "数据表达应说明来源和统计口径，否则容易被质疑准确性。",
-    rewrite: "如使用数据，请注明来源；当前演示可标注为示例数据或公开统计口径。",
-    publishAdvice: "可修改后发布；补充数据来源和口径说明。"
   }
 ];
 
@@ -75,7 +68,7 @@ export function reviewRisk(text: string): RiskReviewResult {
   const sentences = splitSentences(text);
   const findings = sentences.flatMap((sentence) =>
     riskRules
-      .filter((rule) => rule.pattern.test(sentence))
+      .filter((rule) => findAssertedRiskPhrase(sentence, rule.pattern))
       .map((rule) => ({
         type: rule.type,
         level: rule.level,
