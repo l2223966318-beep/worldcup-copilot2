@@ -6,6 +6,7 @@ import { formatGeneratedDraft } from "@/lib/ai/generated-draft";
 import {
   addHotDraftVisualAnchors,
   auditHotDraft,
+  normalizeHotAudit,
   generateHotDraft,
   type HotAuditResult,
   type HotGenerationConfig
@@ -148,14 +149,17 @@ async function handleAudit(topic: HotTopic, config: HotGenerationConfig, draft: 
         role: "system",
         content: [
           "你是体育内容审稿编辑，只输出严格 JSON，不要 Markdown。",
-          "任务：审稿一段准备发布的体育热点内容。",
+          "任务：按所选生成类型审稿；选题、标题、创意提纲不是完整发布稿。",
           "只指出原稿中真实存在的具体问题，必须引用问题词或问题句，不能输出泛泛风险。",
           "热点 title、summary、source 和 platform 已作为当前审稿依据；不要因为稿件来自热点源就默认判定“数据未知”或“来源需核实”。",
           "没有具体问题时对应数组返回空数组，level 返回 pass，rewriteSuggestion 原样返回稿件。",
-          "输出字段：level、authenticity、risk、ethics、platformFit、suggestions、rewriteSuggestion。",
+          "证据不足、素材未附、画面或版权授权未说明只写入 reminders，不等于事实错误，不影响通过。",
+          "措辞风格、篇幅、互动设计和平台优化只作可选提醒，不判 revise 或 block。",
+          "不要网暴、避免引战等反面提醒不能当作违规。只有明确矛盾或具体有害表达才需要修改。",
+          "输出字段：level、authenticity、risk、ethics、platformFit、suggestions、reminders、rewriteSuggestion。",
           "level 只能是 pass / revise / block。",
-          "authenticity：指出未核验事实、比分、球员、伤病、裁判、官方结论等具体句子。",
-          "risk：指出造谣、引战、人身攻击、地域歧视、标题党、版权、平台不适配等具体句子。",
+          "authenticity：只列出与已有来源明确矛盾的陈述；缺少材料而无法确认的事实放入 reminders。",
+          "risk：只列出造谣、引战、人身攻击或歧视的具体句子，必须用引号逐字引用原稿。",
           "ethics：指出过度煽动、断章取义、诱导网暴等问题。",
           "platformFit：判断是否适合所选平台。",
           "suggestions：只针对已发现的问题给出可执行建议；没有问题时返回空数组。",
@@ -173,7 +177,7 @@ async function handleAudit(topic: HotTopic, config: HotGenerationConfig, draft: 
     ],
     { timeoutMs: HOT_WORKFLOW_AUDIT_TIMEOUT_MS, apiKey, quality: "fast", maxTokens: 1_500,
       cacheTtlMs: HOT_WORKFLOW_AI_CACHE_TTL_MS,
-      cacheKey: JSON.stringify({ kind: "hot-audit-v2", topic: buildHotTopicAiFingerprint(topic), config, draft }) }
+      cacheKey: JSON.stringify({ kind: "hot-audit-balanced-v3", topic: buildHotTopicAiFingerprint(topic), config, draft }) }
   );
 
   if (!result.ok) {
@@ -184,7 +188,7 @@ async function handleAudit(topic: HotTopic, config: HotGenerationConfig, draft: 
     });
   }
 
-  const audit = normalizeAudit(result.data, fallbackAudit);
+  const audit = qualityControl(normalizeHotAudit(result.data, draft, fallbackAudit));
   const payload = {
     sourceStatus: "live",
     audit,
@@ -264,26 +268,4 @@ function normalizeGeneratedDraft(value: string | undefined, fallback: string, co
   const reasons = draft.match(/^说明：/gm) ?? [];
   if (topicNumbers.length !== 5 || approaches.length !== 5 || reasons.length !== 5) return fallback;
   return draft;
-}
-
-function normalizeAudit(input: AuditPayload, fallback: HotAuditResult): HotAuditResult {
-  const level = input.level === "pass" || input.level === "revise" || input.level === "block" ? input.level : fallback.level;
-  return qualityControl({
-    level,
-    authenticity: normalizeAuditList(input.authenticity, fallback.authenticity),
-    risk: normalizeAuditList(input.risk, fallback.risk),
-    ethics: normalizeAuditList(input.ethics, fallback.ethics),
-    platformFit: normalizeAuditList(input.platformFit, fallback.platformFit),
-    suggestions: normalizeAuditList(input.suggestions, fallback.suggestions),
-    rewriteSuggestion: normalizeDraft(input.rewriteSuggestion, fallback.rewriteSuggestion)
-  });
-}
-
-function normalizeAuditList(value: string[] | undefined, fallback: string[]) {
-  if (!Array.isArray(value)) return fallback;
-  return value
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .slice(0, 5);
 }

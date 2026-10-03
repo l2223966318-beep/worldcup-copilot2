@@ -23,7 +23,7 @@ function createRuntime({ fail = false, empty = false } = {}) {
       ] }) };
     };
   const context = vm.createContext({
-    require: name => ["./evidence", "./ai-guard", "./hot-ai-cache", "./hot-analysis"].includes(name) ? localRequire(`../cloudfunctions/api-proxy/${name}.js`) : name === "./sports-service" ? { createSportsService: () => createSportsService({ env: {} }) } : name === "./hot-sources" ? { createSources: () => createSources({ env: {}, fetchImpl: fakeFetch }) } : ({ createServer: callback => { handler = callback; return { listen() {} }; } }),
+    require: name => ["./evidence", "./ai-guard", "./hot-ai-cache", "./hot-analysis", "./risk", "./hot-workflow", "./review-policy"].includes(name) ? localRequire(`../cloudfunctions/api-proxy/${name}.js`) : name === "./sports-service" ? { createSportsService: () => createSportsService({ env: {} }) } : name === "./hot-sources" ? { createSources: () => createSources({ env: {}, fetchImpl: fakeFetch }) } : ({ createServer: callback => { handler = callback; return { listen() {} }; } }),
     process: { env: {} }, console, URL, AbortController, setTimeout, clearTimeout, Buffer,
     fetch: fakeFetch,
   });
@@ -93,7 +93,7 @@ const audited = await runtime.request("/api/ai/hot-topic-workflow", {
   action: "audit", topic, config: {}, draft: "这是黑哨"
 });
 assert.equal(audited.sourceStatus, "fallback");
-assert.equal(audited.audit.level, "revise");
+assert.notEqual(audited.audit.level, "pass");
 assert.ok(audited.audit.risk.length > 0);
 const reviewed = await runtime.request("/api/ai/review-draft", {
   draft: "这是黑哨", matchContext: {}, evidence: []
@@ -118,6 +118,15 @@ const riskReview = await runtime.request("/api/ai/review-draft", {
   draft: "这是黑哨", matchContext: {}, evidence: []
 });
 assert.equal(riskReview.result.level, "高", "a concrete high-risk finding must retain its warning");
+runtime.run('callDeepSeekJson = async () => ({ ok: true, model: "test-model", data: { score: 95, findings: [{ sentence: "法国在70分钟完成进球", reason: "证据未提供", evidenceStatus: "missing" }] } })');
+const missingReview = await runtime.request("/api/ai/review-draft", { draft: "法国在70分钟完成进球。", matchContext: {}, evidence: [] });
+assert.equal(missingReview.result.level, "低", "missing source is a reminder, not an error");
+assert.equal(missingReview.result.findings[0].type, "建议补充来源");
+assert.equal(missingReview.rewriteSuggestion, "法国在70分钟完成进球。", "reminders must not delete claims");
+runtime.run('callDeepSeekJson = async () => ({ ok: true, model: "test-model", data: { level: "block", authenticity: ["缺少比赛录像"], platformFit: ["需补充完整视频结构"] } })');
+const cleanHotAudit = await runtime.request("/api/ai/hot-topic-workflow", { action: "audit", topic, config: { platform: "微博", contentType: "选题" }, draft: "不要网暴，采用滚动字幕呈现不同地域观点。" });
+assert.equal(cleanHotAudit.audit.level, "pass");
+assert.ok(cleanHotAudit.audit.reminders.length > 0);
 const fallback = await failed.run('loadFixtures()');
 assert.equal(fallback.sourceStatus, "fallback");
 assert.equal(fallback.data[0].id, "argentina-france-2022-final");

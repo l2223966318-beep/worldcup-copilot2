@@ -13,6 +13,7 @@ import type { HotTopic } from "@/lib/hot/types";
 import { getAiRequestHeaders } from "@/lib/ai/client-access";
 import {
   auditHotDraft,
+  normalizeHotAudit,
   buildHotAnalysis,
   buildTopicIntro,
   generateHotDraft,
@@ -240,7 +241,7 @@ export default function HotTopicDetailPage() {
         audit?: HotAuditResult;
         message?: string;
       };
-      setAudit(payload.audit || auditHotDraft(draft, topic, config.platform, config.contentType));
+      setAudit(normalizeHotAudit(payload.audit, draft, auditHotDraft(draft, topic, config.platform, config.contentType)));
       setAuditStatus(payload.sourceStatus === "live" ? "live" : payload.sourceStatus === "fallback" ? "fallback" : "error");
       setAuditMessage(payload.message || "");
     } catch (error) {
@@ -430,14 +431,16 @@ export default function HotTopicDetailPage() {
           {audit ? (
             <div className="mt-5">
               <ReviewVerdict
-                title={audit.level === "pass" ? "可发布" : audit.level === "revise" ? "建议修改" : "不建议发布"}
+                title={audit.level === "pass" ? "内容可用" : audit.level === "revise" ? "建议修改" : "需要修改"}
                 tone={audit.level === "pass" ? "pass" : audit.level === "revise" ? "warning" : "danger"}
                 metrics={[
-                  { label: "审核问题", value: audit.authenticity.length + audit.risk.length + audit.ethics.length + audit.platformFit.length },
-                  { label: "修改建议", value: audit.suggestions.length }
+                  { label: "需要修改", value: audit.authenticity.length + audit.risk.length + audit.ethics.length },
+                  { label: "修改建议", value: audit.suggestions.length },
+                  { label: "补充提醒", value: audit.reminders?.length ?? 0 }
                 ]}
               />
-              <ReviewSection title="修改建议" items={audit.suggestions} defaultOpen emptyLabel="暂无修改建议" />
+              {audit.suggestions.length ? <ReviewSection title="修改建议" items={audit.suggestions} defaultOpen /> : null}
+              {audit.reminders?.length ? <ReviewSection title="补充提醒" items={audit.reminders} /> : null}
               <ReviewSection title="真实性审核" items={audit.authenticity} defaultOpen={audit.authenticity.length > 0} tone="warning" />
               <ReviewSection title="表达风险" items={audit.risk} defaultOpen={audit.risk.length > 0} tone="warning" />
               <ReviewSection title="传播伦理" items={audit.ethics} defaultOpen={audit.ethics.length > 0} />
