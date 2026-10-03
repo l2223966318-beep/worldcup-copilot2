@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { evaluateAudit, temporaryAdvisory, exceptionExpiresAt } from "./dependency-audit-policy.mjs";
+import { auditArguments, evaluateAudit, temporaryAdvisory, exceptionExpiresAt } from "./dependency-audit-policy.mjs";
 
 function audit(productionOnly) {
-  const args = ["audit", "--json", ...(productionOnly ? ["--omit=dev"] : [])];
+  const args = auditArguments(productionOnly);
   const windows = process.platform === "win32";
   const result = spawnSync(windows ? "cmd.exe" : "npm", windows ? ["/d", "/s", "/c", `npm ${args.join(" ")}`] : args, {
     encoding: "utf8", windowsHide: true, timeout: 120_000, maxBuffer: 10 * 1024 * 1024
