@@ -31,7 +31,8 @@
     "test:ai-protection": "node scripts/test-ai-protection.mjs",
     "test:frontend-http": "node scripts/test-frontend-http.mjs",
     "test:pitch": "node scripts/test-pitch-page.mjs",
-    "test:demo": "node scripts/test-demo-session.mjs",
+    "test:product-entrypoints": "node scripts/test-product-entrypoints.mjs",
+    "test:dependency-audit": "node scripts/test-dependency-audit.mjs",
     "check:cloudbase": "node scripts/check-cloudbase.mjs",
     "test:cloudbase": "node scripts/test-cloudbase-check.mjs",
     "test:cloudbase-hot": "node scripts/test-cloudbase-hot.mjs",
@@ -56,8 +57,7 @@
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "recharts": "^2.15.0",
-    "tailwind-merge": "^2.5.5",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwind-merge": "^2.5.5"
   },
   "devDependencies": {
     "@types/node": "^20.17.9",
@@ -68,6 +68,7 @@
     "eslint-config-next": "15.5.27",
     "postcss": "^8.5.28",
     "tailwindcss": "^3.4.15",
+    "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.6.3"
   },
   "overrides": {

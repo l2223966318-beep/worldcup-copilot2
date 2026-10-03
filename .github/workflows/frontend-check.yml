@@ -8,6 +8,7 @@ on:
       - 'lib/**'
       - 'types/**'
       - 'scripts/test-*.mjs'
+      - 'scripts/*audit*.mjs'
       - 'scripts/release-cloudbase-static.mjs'
       - 'scripts/cloudbase-hosting/**'
       - 'scripts/run-next.mjs'
@@ -39,7 +40,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts
-      - run: npm audit --audit-level=low
+      - run: node scripts/audit-dependencies.mjs
       - run: npm run lint
       - run: npm run build
       - run: npm run test:frontend-http
@@ -59,7 +60,8 @@ jobs:
           npm run test:fact-integrity
           npm run test:ai-protection
           npm run test:query-recovery
-          npm run test:demo
+          npm run test:product-entrypoints
+          npm run test:dependency-audit
           npm run test:sportradar-today
           npm run test:match-search
           npm run test:match-detail

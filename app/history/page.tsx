@@ -2,15 +2,12 @@
 
 import Link from "next/link";
 import { ArrowRight, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-import { getCurrentProject, getTodayMatches } from "@/lib/project-api";
 import { formatBeijingDateTime } from "@/lib/time/beijingTime";
 import { type HistoryRecord, readHistoryRecords } from "@/lib/services/workflowStore";
 
 export default function HistoryPage() {
-  const project = getCurrentProject();
-  const generated = getTodayMatches(project.id).filter((item) => item.status === "已生成" || item.generatedPlatforms.length);
   const [records, setRecords] = useState<HistoryRecord[]>([]);
 
   useEffect(() => {
@@ -18,19 +15,6 @@ export default function HistoryPage() {
   }, []);
 
   const hasRecords = records.length > 0;
-  const staticExamples = useMemo(
-    () =>
-      generated.map((item) => ({
-        matchId: item.match.id,
-        title: item.match.name,
-        score: item.match.score,
-        stage: item.match.stage,
-        savedAt: new Date().toISOString(),
-        platforms: item.generatedPlatforms.length ? item.generatedPlatforms : ["示例报告"],
-        route: `/matches/${item.match.id}`
-      })),
-    [generated]
-  );
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6">
@@ -52,8 +36,8 @@ export default function HistoryPage() {
             </p>
           </div>
           {!hasRecords ? (
-            <Link href="/matches/argentina-france-2022-final" className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5">
-              进入经典样例完整演示
+            <Link href="/" className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5">
+              进入赛事工作台
             </Link>
           ) : null}
         </div>
@@ -65,8 +49,7 @@ export default function HistoryPage() {
             <div>已生成平台</div>
             <div>操作</div>
           </div>
-          {hasRecords
-            ? records.map((item) => (
+          {records.map((item) => (
             <div key={item.id} className="grid grid-cols-[1.4fr_0.7fr_0.8fr_1fr_0.6fr] gap-4 border-t border-slate-200 px-4 py-4 text-sm">
               <div>
                 <div className="font-semibold text-slate-950">{item.title}</div>
@@ -80,22 +63,8 @@ export default function HistoryPage() {
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>
-          ))
-            : staticExamples.map((item) => (
-            <div key={`${item.matchId}-example`} className="grid grid-cols-[1.4fr_0.7fr_0.8fr_1fr_0.6fr] gap-4 border-t border-slate-200 px-4 py-4 text-sm">
-              <div>
-                <div className="font-semibold text-slate-950">{item.title}</div>
-                <div className="mt-1 text-xs text-slate-500">{item.stage}</div>
-              </div>
-              <div className="font-semibold text-slate-900">{item.score}</div>
-              <div className="text-slate-500">示例入口</div>
-              <div className="text-slate-600">{item.platforms.join(" / ")}</div>
-              <Link href={item.route} className="inline-flex items-center gap-1 font-semibold text-blue-700">
-                查看样例
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Link>
-            </div>
           ))}
+          {!hasRecords ? <div className="border-t border-slate-200 px-4 py-8 text-center text-sm text-slate-500">暂无保存记录</div> : null}
         </div>
       </section>
     </div>
