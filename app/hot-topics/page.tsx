@@ -334,17 +334,17 @@ export default function HotTopicDetailPage() {
       </section>
 
       {analysis ? (
-        <section aria-label="热点分析与生产判断" className="grid divide-y divide-slate-200 border-y border-slate-200 bg-white lg:grid-cols-2 lg:divide-x lg:divide-y-0">
-          <div className="min-w-0 px-5 py-6 sm:px-6">
-            <h2 className="border-l-2 border-emerald-500 pl-3 text-lg font-semibold text-slate-950">热点分析</h2>
+        <section aria-label="热点分析与生产判断" className="grid border-y border-slate-200 bg-white lg:grid-cols-2">
+          <div className="min-w-0 border-t-2 border-emerald-500 bg-emerald-50/40 px-5 py-6 sm:px-7 sm:py-7">
+            <h2 className="flex items-center gap-3 text-lg font-semibold text-slate-950"><Sparkles aria-hidden="true" className="h-9 w-9 shrink-0 rounded-lg bg-emerald-100 p-2 text-emerald-700" />热点分析</h2>
             <InsightRows items={analysis.overview} />
             <AnalysisDetails title="价值说明与内容切入">
               <DetailBlock title="价值说明" items={analysis.whyCare} compact />
               <DetailBlock title="内容切入" items={analysis.angles} compact />
             </AnalysisDetails>
           </div>
-          <div className="min-w-0 px-5 py-6 sm:px-6">
-            <h2 className="border-l-2 border-sky-500 pl-3 text-lg font-semibold text-slate-950">生产判断</h2>
+          <div className="min-w-0 border-t-2 border-sky-500 bg-sky-50/40 px-5 py-6 sm:px-7 sm:py-7 lg:border-l lg:border-l-slate-200">
+            <h2 className="flex items-center gap-3 text-lg font-semibold text-slate-950"><ShieldCheck aria-hidden="true" className="h-9 w-9 shrink-0 rounded-lg bg-sky-100 p-2 text-sky-700" />生产判断</h2>
             <InsightRows items={analysis.production} />
             <AnalysisDetails title="核验边界与风险提醒">
               <DetailBlock title="核验边界" items={analysis.factsToVerify} compact />
@@ -560,13 +560,13 @@ function DetailBlock({ title, items, compact }: { title: string; items: string[]
 
 function InsightRows({ items }: { items: HotAnalysisResult["overview"] }) {
   return (
-    <dl className="mt-5 divide-y divide-slate-100">
+    <dl className="mt-6 divide-y divide-slate-200/70">
       {items.map((item) => (
-        <div key={`${item.label}-${item.value}`} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 py-4 first:pt-0 last:pb-0 sm:gap-x-4">
+        <div key={`${item.label}-${item.value}`} className="grid gap-y-1.5 py-5 first:pt-0 last:pb-0 sm:grid-cols-[4.5rem_minmax(0,1fr)] sm:gap-x-4">
           <dt className="break-words text-sm font-medium leading-6 text-slate-500">{item.label}</dt>
           <dd className="min-w-0 space-y-1.5 [overflow-wrap:anywhere]">
             <p className="text-base font-semibold leading-6 text-slate-950">{item.value}</p>
-            {item.note ? <p className="text-sm leading-6 text-slate-600">{item.note}</p> : null}
+            {item.note ? <p className="text-sm leading-7 text-slate-600">{item.note}</p> : null}
           </dd>
         </div>
       ))}
@@ -576,12 +576,12 @@ function InsightRows({ items }: { items: HotAnalysisResult["overview"] }) {
 
 function AnalysisDetails({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <details className="group mt-5 border-t border-slate-200">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-4 text-sm font-semibold text-slate-700 transition hover:text-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 [&::-webkit-details-marker]:hidden">
+    <details className="group mt-6 border-t border-slate-200/80 pt-4">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg bg-white/80 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-white hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2 [&::-webkit-details-marker]:hidden">
         {title}
         <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
       </summary>
-      <div className="pb-1 [&>div:first-child]:mt-0">{children}</div>
+      <div className="px-1 pb-1 pt-5 [&>div:first-child]:mt-0">{children}</div>
     </details>
   );
 }
