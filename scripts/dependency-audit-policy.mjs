@@ -1,6 +1,11 @@
 export const temporaryAdvisory = "https://github.com/advisories/GHSA-vfj7-8cjw-p6xm";
 export const exceptionExpiresAt = "2026-10-10T00:00:00Z";
 
+export function auditArguments(productionOnly) {
+  return ["audit", "--json", "--offline=false", "--audit=true", "--include=optional", "--include=peer",
+    ...(productionOnly ? ["--omit=dev"] : ["--include=dev"])];
+}
+
 export function evaluateAudit(report, lock, now = Date.now()) {
   const issues = report?.vulnerabilities;
   if (report?.error || report?.auditReportVersion !== 2 || !issues || typeof issues !== "object" || Array.isArray(issues)) {

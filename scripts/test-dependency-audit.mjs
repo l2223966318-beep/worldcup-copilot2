@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { evaluateAudit } from "./dependency-audit-policy.mjs";
+import { auditArguments, evaluateAudit } from "./dependency-audit-policy.mjs";
+
+for (const productionOnly of [true, false]) {
+  const args = auditArguments(productionOnly);
+  assert.ok(args.includes("--offline=false"), "audit must not inherit a skip-network configuration");
+  assert.ok(args.includes("--include=optional") && args.includes("--include=peer"), "optional and peer dependencies must not be silently omitted");
+  assert.equal(args.includes("--include=dev"), !productionOnly, "full audit must explicitly include development dependencies");
+  assert.equal(args.includes("--omit=dev"), productionOnly, "runtime audit must explicitly exclude only dev dependencies");
+}
 
 const now = Date.parse("2026-10-03T00:00:00Z");
 const advisory = { name: "braces", dependency: "braces", severity: "high", range: "<=3.0.3",
