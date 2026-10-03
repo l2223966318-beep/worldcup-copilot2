@@ -64,7 +64,7 @@ for (const dependency of ["react", "react/jsx-runtime", "lucide-react"]) {
   componentCode = componentCode.replaceAll(`from "${dependency}"`, `from "${pathToFileURL(require.resolve(dependency)).href}"`);
 }
 componentCode = componentCode.replaceAll('from "@/lib/ai/generated-draft"', `from "data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}"`);
-const { GeneratedDocument, GeneratedDraftEditor, GeneratedText, ReviewVerdict, ReviewSection } = await import(`data:text/javascript;base64,${Buffer.from(componentCode).toString("base64")}`);
+const { GeneratedDocument, GeneratedDraftEditor, GeneratedText, MatchReviewResult, ReviewVerdict, ReviewSection } = await import(`data:text/javascript;base64,${Buffer.from(componentCode).toString("base64")}`);
 const documentHtml = renderToStaticMarkup(createElement(GeneratedDocument, { text: JSON.stringify(angles) }));
 assert.match(documentHtml, /draft-number/);
 assert.match(documentHtml, /draft-field/);
@@ -107,4 +107,28 @@ assert.match(workspaceCss, /\.draft-emphasis,[\s\S]*?font-weight: 700/);
 assert.match(workspaceCss, /\.draft-data\s*\{[\s\S]*?background: #e0f2fe/);
 assert.match(workspaceCss, /\.review-original\s*\{[\s\S]*?overflow-wrap: anywhere/);
 assert.match(workspaceCss, /@media \(max-width: 639px\)\s*\{\s*\.detail-workspace \.draft-field\s*\{\s*grid-template-columns: minmax\(0, 1fr\)/);
+const reminders = Array.from({ length: 15 }, (_, i) => ({
+  type: "建议补充来源", sentence: `待补来源原句${i + 1}`, rewrite: "", evidenceStatus: "missing"
+}));
+const issue = { type: "与现有数据不一致", sentence: "法国射门18次", reason: "提供的数据为10次", rewrite: "法国射门10次", evidenceStatus: "overreach" };
+const compactReview = renderToStaticMarkup(createElement(MatchReviewResult, {
+  result: { level: "中", score: 36, advice: "修改后发布", findings: [issue, ...reminders, { ...issue }] },
+  rewriteSuggestion: "修订稿"
+}));
+assert.match(compactReview, /需调整 1 项/);
+assert.doesNotMatch(compactReview, /风险说明|待补来源<|风险分<|有依据</);
+assert.equal((compactReview.match(/<summary /g) ?? []).length, 2, "only actionable issues and one collapsed evidence panel");
+assert.match(compactReview.replace(/<[^>]*>/g, ""), /提供的数据为10次/);
+assert.match(compactReview, /待补来源原句15/);
+const advisoryReview = renderToStaticMarkup(createElement(MatchReviewResult, {
+  result: { level: "低", score: 20, advice: "可预览，建议补充来源", findings: reminders }
+}));
+assert.match(advisoryReview, /未发现明确问题/);
+assert.doesNotMatch(advisoryReview.split("<details")[0], /15|风险|待补来源原句/);
+assert.doesNotMatch(advisoryReview, /<details open/);
+const pendingReview = renderToStaticMarkup(createElement(MatchReviewResult, {
+  result: { level: "待人工确认", score: 0, advice: "审核未完成", findings: [] }
+}));
+assert.match(pendingReview, /待人工确认/);
+assert.doesNotMatch(pendingReview, /未发现明确问题|可发布/);
 console.log("generated draft formatting ok");

@@ -20,7 +20,10 @@ assert.match(source, /headers: getAiRequestHeaders\(\)/);
 assert.match(source, /<GeneratedDocument text=\{generatedText\}/);
 assert.match(source, /<GeneratedDraftEditor/);
 assert.match(source, /normalizePlatformDraft\(payload\.draft\)/);
-assert.match(source, /<ReviewVerdict/);
+assert.match(source, /<MatchReviewResult result=\{reviewFlow\.result\}/);
+assert.match(source, /const flag = getTeamFlagPath\(name\)/);
+assert.match(source, /const imageSource = flag \|\| logo/);
+assert.match(source, /src=\{imageSource\} alt=\{flag/);
 
 const readableTextSource = readFileSync(new URL("../components/ui/readable-text.tsx", import.meta.url), "utf8");
 assert.match(readableTextSource, /emphasizeTitles\?: boolean/);
