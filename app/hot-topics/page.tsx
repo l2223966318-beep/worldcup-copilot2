@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, CheckCircle2, ChevronDown, Clipboard, ExternalLink, FileText, RefreshCcw, Save, ShieldCheck, SlidersHorizontal, Sparkles } from "lucide-react";
 
 import { AuditPlaceholder, WorkspaceHeading, WorkspaceStatus, type WorkspaceStep } from "@/components/layout/detail-workspace";
@@ -23,6 +23,8 @@ import {
 } from "@/lib/hot/hotTopicWorkflow";
 import { readHotTopicAiCache, writeHotTopicAiCache } from "@/lib/services/hotTopicAiCache";
 import { normalizeHotAnalysis } from "@/lib/hot/normalizeHotAnalysis";
+import { formatGeneratedDraft } from "@/lib/ai/generated-draft";
+import { GeneratedDocument, GeneratedDraftEditor, ReviewSection, ReviewVerdict } from "@/components/ui/generated-content";
 import { formatBeijingDateTime } from "@/lib/time/beijingTime";
 
 const defaultConfig: HotGenerationConfig = {
@@ -200,7 +202,7 @@ export default function HotTopicDetailPage() {
         draft?: string;
         message?: string;
       };
-      setDraft(payload.draft || generateHotDraft(topic, config));
+      setDraft(formatGeneratedDraft(payload.draft) || generateHotDraft(topic, config));
       setContentStatus(payload.sourceStatus === "live" ? "live" : payload.sourceStatus === "fallback" ? "fallback" : "error");
       setContentMessage(payload.message || "");
     } catch (error) {
@@ -216,6 +218,7 @@ export default function HotTopicDetailPage() {
     setDeepseekKey(currentDeepseekKey);
     setAuditStatus("loading");
     setAuditMessage("");
+    setAudit(null);
     try {
       const response = await fetch("/api/ai/hot-topic-workflow", {
         method: "POST",
@@ -404,41 +407,52 @@ export default function HotTopicDetailPage() {
             </div>
             <ActionButton onClick={reviewDraft} icon={<ShieldCheck className="h-4 w-4" />} disabled={!draft || auditStatus === "loading"} primary>{auditStatus === "loading" ? "审核中..." : "一键审核"}</ActionButton>
           </div>
-          <FormattedDraftEditor
+          <GeneratedDraftEditor
+            label="生成结果编辑区"
             value={draft}
+            loading={contentStatus === "loading"}
             onChange={(value) => {
               setDraft(value);
+              setSaved(false);
               setAudit(null);
               setAuditStatus("idle");
               setAuditMessage("");
             }}
-            placeholder="暂无稿件"
           />
           {contentMessage && contentStatus !== "error" ? <p className="mt-3 text-xs leading-5 text-slate-500">{contentMessage}</p> : null}
         </Panel>
 
         <Panel title="审核结果" icon={<ShieldCheck className="h-5 w-5" />}>
           {audit ? (
-            <div className="mt-5 space-y-5">
-              <div className={`inline-flex rounded-full px-4 py-2 text-sm font-black ${audit.level === "pass" ? "bg-emerald-50 text-emerald-700" : audit.level === "revise" ? "bg-amber-50 text-amber-700" : "bg-rose-50 text-rose-700"}`}>
-                {audit.level === "pass" ? "可发布" : audit.level === "revise" ? "建议修改" : "不建议发布"}
-              </div>
-              <DetailBlock title="真实性审核" items={audit.authenticity} />
-              <DetailBlock title="风险审核" items={audit.risk} />
-              <DetailBlock title="传播伦理审核" items={audit.ethics} />
-              <DetailBlock title="平台适配审核" items={audit.platformFit} />
-              <DetailBlock title="修改建议" items={audit.suggestions} />
+            <div className="mt-5">
+              <ReviewVerdict
+                title={audit.level === "pass" ? "可发布" : audit.level === "revise" ? "建议修改" : "不建议发布"}
+                tone={audit.level === "pass" ? "pass" : audit.level === "revise" ? "warning" : "danger"}
+                metrics={[
+                  { label: "审核问题", value: audit.authenticity.length + audit.risk.length + audit.ethics.length + audit.platformFit.length },
+                  { label: "修改建议", value: audit.suggestions.length }
+                ]}
+              />
+              <ReviewSection title="修改建议" items={audit.suggestions} defaultOpen emptyLabel="暂无修改建议" />
+              <ReviewSection title="真实性审核" items={audit.authenticity} defaultOpen={audit.authenticity.length > 0} tone="warning" />
+              <ReviewSection title="表达风险" items={audit.risk} defaultOpen={audit.risk.length > 0} tone="warning" />
+              <ReviewSection title="传播伦理" items={audit.ethics} defaultOpen={audit.ethics.length > 0} />
+              <ReviewSection title="平台适配" items={audit.platformFit} defaultOpen={audit.platformFit.length > 0} />
               {audit.level !== "pass" ? (
-                <div className="border-l-2 border-teal-500 bg-teal-50/50 p-4">
-                  <div className="text-xs font-black tracking-[0.14em] text-emerald-700">可应用改写</div>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-700">{audit.rewriteSuggestion}</p>
+                <div className="mt-5 border-t border-slate-200 pt-5">
+                  <div className="text-sm font-semibold text-teal-700">建议改写</div>
+                  <GeneratedDocument text={audit.rewriteSuggestion} className="mt-4" />
                   <button
                     type="button"
                     onClick={() => {
-                      setDraft(audit.rewriteSuggestion);
+                      setDraft(formatGeneratedDraft(audit.rewriteSuggestion));
+                      setSaved(false);
                       setAudit(null);
+                      setAuditStatus("idle");
+                      setAuditMessage("");
                     }}
-                    className="mt-3 inline-flex h-10 items-center gap-2 rounded-full bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:-translate-y-0.5"
+                    disabled={!audit.rewriteSuggestion.trim()}
+                    className="workspace-button mt-4 bg-teal-700 text-white hover:bg-teal-800"
                   >
                     <CheckCircle2 className="h-4 w-4" />
                     应用建议
@@ -474,69 +488,6 @@ function EmptyCard({ children }: { children: ReactNode }) {
       {children}
     </div>
   );
-}
-
-function FormattedDraftEditor({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
-  const editorRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor || document.activeElement === editor) return;
-    renderDraftLines(editor, value);
-  }, [value]);
-
-  return (
-    <div
-      ref={editorRef}
-      contentEditable
-      suppressContentEditableWarning
-      role="textbox"
-      aria-label="生成结果编辑区"
-      aria-multiline="true"
-      data-placeholder={placeholder}
-      onPaste={(event) => {
-        event.preventDefault();
-        document.execCommand("insertText", false, event.clipboardData.getData("text/plain"));
-      }}
-      onBlur={(event) => onChange(readDraftText(event.currentTarget))}
-      onInput={(event) => onChange(readDraftText(event.currentTarget))}
-      className="min-h-[360px] max-h-[620px] w-full overflow-y-auto whitespace-pre-wrap border-b border-slate-200 bg-white px-3 py-5 text-sm leading-8 text-slate-700 outline-none empty:before:pointer-events-none empty:before:text-slate-400 empty:before:content-[attr(data-placeholder)] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
-    />
-  );
-}
-
-function renderDraftLines(editor: HTMLDivElement, value: string) {
-  if (!value) {
-    editor.replaceChildren();
-    return;
-  }
-  const fragment = document.createDocumentFragment();
-  value.split("\n").forEach((line) => {
-    const row = document.createElement("div");
-    row.className = isDraftTitleLine(line)
-      ? "font-bold text-slate-950"
-      : "font-normal text-slate-700";
-    if (line) row.textContent = line;
-    else row.append(document.createElement("br"));
-    fragment.append(row);
-  });
-  editor.replaceChildren(fragment);
-}
-
-function readDraftText(editor: HTMLDivElement) {
-  return editor.innerText
-    .replace(/\u00a0/g, " ")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-function isDraftTitleLine(line: string) {
-  const text = line.trim().replace(/^#{1,6}\s*/, "");
-  if (!text) return false;
-  if (/^(?:【[^】]+】|\[[^\]]+\])$/.test(text)) return true;
-  if (/^(?:\d+[.、]\s*)?(?:角度标题|标题|主标题|封面标题|视频标题|选题|话题|小标题)\s*[：:]/.test(text)) return true;
-  if (/^(?:B站|微博|小红书|抖音|公众号)\s*[：:]/.test(text)) return true;
-  return /^\d+[.、]\s*.{2,80}$/.test(text) && !/^(?:\d+[.、]\s*)?(?:怎么做|说明|风险|依据|素材)[：:]/.test(text);
 }
 
 function Panel({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
