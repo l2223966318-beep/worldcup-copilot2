@@ -187,13 +187,21 @@ export function finalizeReviewRiskScore(
 }
 
 function findConflictingEvidence(sentence: string, evidence: EvidenceItem[]) {
+  sentence = stripEvidenceReferences(sentence, evidence);
   if (/如果|假如|可能|大约|约\s*\d|左右|接近|超过|不到|半场|一度|当时|此前|点球大战/.test(sentence)) return [];
   const claims = parseStatFacts(sentence);
   const stats = evidence.filter(item => item.type === "match_stat" && claims.some(claim => {
     if (!claim.subject) return false;
-    const facts = parseStatFacts(item.text).filter(fact => fact.subject === claim.subject && fact.metric === claim.metric && fact.unit === claim.unit);
+    const facts = parseStatFacts(item.text).filter(fact => fact.metric === claim.metric && fact.unit === claim.unit);
+    if (claim.pairedValue !== undefined) {
+      const subjectIndex = facts.findIndex(fact => fact.subject === claim.subject);
+      if (facts.length !== 2 || subjectIndex < 0) return false;
+      return Math.abs(facts[subjectIndex].value - claim.value) > 1
+        || Math.abs(facts[1 - subjectIndex].value - claim.pairedValue) > 1;
+    }
+    const sameSubject = facts.filter(fact => fact.subject === claim.subject);
     // Small provider/rounding differences are reminders, not factual errors.
-    return facts.length === 1 && Math.abs(facts[0].value - claim.value) > 1;
+    return sameSubject.length === 1 && Math.abs(sameSubject[0].value - claim.value) > 1;
   }));
   if (stats.length) return stats;
   const result = sentence.match(/^(.+?)(?:以)?\s*(\d+)\s*[-比:]\s*(\d+)\s*(?:战胜|击败|不敌|负于)\s*(.+)$/);
@@ -215,6 +223,7 @@ export function evidenceLabel(item: EvidenceItem) {
 }
 
 function findSupportingEvidence(sentence: string, evidence: EvidenceItem[]) {
+  sentence = stripEvidenceReferences(sentence, evidence);
   const statClaims = parseStatFacts(sentence);
   if (statClaims.length) {
     // A recognized statistic must not hide another unchecked number or score in the same clause.
@@ -224,9 +233,9 @@ function findSupportingEvidence(sentence: string, evidence: EvidenceItem[]) {
       const facts = parseStatFacts(item.text);
       if (claim.pairedValue !== undefined) {
         const pair = facts.filter(fact => fact.metric === claim.metric);
-        return pair.length === 2 && pair[0].value === claim.value && pair[1].value === claim.pairedValue
-          && pair.every(fact => fact.unit === claim.unit)
-          && (!claim.subject || pair[0].subject === claim.subject);
+        const first = claim.subject ? pair.findIndex(fact => fact.subject === claim.subject) : 0;
+        return pair.length === 2 && first >= 0 && pair[first].value === claim.value && pair[1 - first].value === claim.pairedValue
+          && pair.every(fact => fact.unit === claim.unit);
       }
       return facts.some(fact => fact.metric === claim.metric && fact.value === claim.value
         && fact.unit === claim.unit && (!claim.subject || fact.subject === claim.subject));
@@ -294,11 +303,24 @@ function parseStatFacts(text: string) {
     const metric = normalizeMetric(match[1]);
     const unit = match[3] || (metric === "控球率" ? "%" : metric.endsWith("牌") ? "张" : "次");
     const end = match.index! + match[0].length;
-    const pair = text.slice(end).match(/^\s*(?:比|对)\s*(\d+(?:\.\d+)?)/);
-    facts.push({ subject, metric, value: Number(match[2]), unit, ...(pair ? { pairedValue: Number(pair[1]) } : {}) });
-    previousEnd = end;
+    const pair = text.slice(end).match(/^\s*(?:比|对)\s*(\d+(?:\.\d+)?)(?:\s*(?:%|次|张))?/);
+    // An unqualified pair describes both teams, not the previous single-team clause.
+    facts.push({ subject: pair && !prefix ? "" : subject, metric, value: Number(match[2]), unit, ...(pair ? { pairedValue: Number(pair[1]) } : {}) });
+    previousEnd = end + (pair?.[0].length ?? 0);
   }
   return facts;
+}
+
+function stripEvidenceReferences(sentence: string, evidence: EvidenceItem[]) {
+  const ids = new Set(evidence.map(item => item.id.toUpperCase()));
+  let cited = false;
+  const text = sentence.replace(/^(?:说明|依据|来源|数据|参考|证据)[：:]\s*/, "")
+    .replace(/(?:\[|【|\()?\b(E\d+)\b(?:\]|】|\))?/gi, (reference, id: string) => {
+      if (!ids.has(id.toUpperCase())) return reference;
+      cited = true;
+      return "";
+    });
+  return cited ? text.replace(/^\s*(?:(?:根据|依据|来自|引用|见)\s*)?(?:(?:证据|来源)\s*)?(?:标注|显示|记录|指出|提到|表明)?[：:]?\s*/, "") : text;
 }
 
 function normalizeStatOrder(text: string) {

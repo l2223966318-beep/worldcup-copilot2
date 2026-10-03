@@ -24,7 +24,7 @@ import {
 import { AuditPlaceholder, WorkspaceHeading } from "@/components/layout/detail-workspace";
 import "@/app/detail-workspace.css";
 import { HighlightedText } from "@/components/ui/readable-text";
-import { GeneratedDocument, GeneratedDraftEditor, GeneratedText, ReviewSection, ReviewVerdict } from "@/components/ui/generated-content";
+import { GeneratedDocument, GeneratedDraftEditor, MatchReviewResult } from "@/components/ui/generated-content";
 import { formatGeneratedDraft, normalizePlatformDraft } from "@/lib/ai/generated-draft";
 import { InsightCharts } from "@/components/worldcup/insight-charts";
 import type { MatchData } from "@/data/matches";
@@ -39,9 +39,9 @@ import type { HotItem, HotSearchPayload } from "@/lib/hot/types";
 import { analyzeMatch, getMatchDetail } from "@/lib/project-api";
 import { createRuleBasedAnalysis } from "@/lib/services/analysisService";
 import { contentTypeOptions, createPlatformDraft, topicModeOptions, type ContentTypeKey, type TopicModeKey } from "@/lib/services/contentService";
-import { buildEvidencePack, evidenceLabel } from "@/lib/services/evidenceService";
+import { buildEvidencePack } from "@/lib/services/evidenceService";
 import { buildContentReportFilename, createContentPackage, createPackageMarkdown, createPendingReviewResult } from "@/lib/services/exportService";
-import { localizeMatchStatus, localizeRoundName, localizeTeamName, localizeVenueText } from "@/lib/services/footballNames";
+import { getTeamFlagPath, localizeMatchStatus, localizeRoundName, localizeTeamName, localizeVenueText } from "@/lib/services/footballNames";
 import { readMatchAiWorkflowCache, writeMatchAiWorkflowCache } from "@/lib/services/matchAiCache";
 import {
   buildDraftReviewFlow,
@@ -182,8 +182,6 @@ export default function MatchAnalysisPage() {
   const reviewResult = useMemo(() => reviewSourceText ? reviewRisk(reviewSourceText) : null, [reviewSourceText]);
   const localReviewFlow = useMemo(() => reviewSourceText && reviewResult ? buildDraftReviewFlow(reviewSourceText, match, reviewResult) : null, [match, reviewResult, reviewSourceText]);
   const reviewFlow = reviewedDraft === reviewSourceText && reviewedDraft ? aiReviewFlow ?? localReviewFlow : null;
-  const reviewIssues = reviewFlow?.result.findings.filter(finding => finding.evidenceStatus !== "missing") ?? [];
-  const reviewReminders = reviewFlow?.result.findings.filter(finding => finding.evidenceStatus === "missing") ?? [];
   const markdown = useMemo(() => buildMarkdown(match.name, selectedTopic, content, reviewFlow?.result.advice ?? "待审核"), [content, match.name, reviewFlow?.result.advice, selectedTopic]);
 
   useEffect(() => {
@@ -647,60 +645,7 @@ export default function MatchAnalysisPage() {
           </div>
           <div className="min-w-0 space-y-5 border-t border-slate-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
             {!reviewFlow ? <AuditPlaceholder loading={reviewLoading} /> : null}
-            {reviewFlow ? <div>
-              <ReviewVerdict
-                title={reviewFlow.result.level === "待人工确认" ? "待人工确认" : !reviewIssues.length ? "内容可用" : `${reviewFlow.result.level}风险`}
-                summary={reviewFlow.result.advice}
-                tone={reviewFlow.result.level === "高" ? "danger" : reviewFlow.result.level === "低" && !reviewIssues.length ? "pass" : "warning"}
-                metrics={[
-                  { label: "风险分", value: reviewFlow.result.score },
-                  { label: "需要修改", value: reviewIssues.length },
-                  { label: "补充提醒", value: reviewReminders.length },
-                  ...(reviewFlow.result.evidenceSummary ? [
-                    { label: "有依据", value: reviewFlow.result.evidenceSummary.supportedClaims },
-                    { label: "待补来源", value: reviewFlow.result.evidenceSummary.unsupportedClaims }
-                  ] : [])
-                ]}
-              />
-              {reviewIssues.length ? <ReviewSection title="需要修改" defaultOpen tone="warning">
-                <ol className="space-y-5">
-                  {reviewIssues.map((finding, index) => (
-                    <li key={index} className="border-l-2 border-amber-200 pl-4 text-sm leading-7">
-                      <div className="font-bold text-slate-800">{index + 1}. {finding.type}</div>
-                      {finding.sentence ? <blockquote className="review-original"><GeneratedText text={finding.sentence} tone="warning" /></blockquote> : null}
-                      {finding.reason ? <p className="mt-2 text-slate-500"><GeneratedText text={finding.reason} leadingLabel /></p> : null}
-                      {finding.rewrite ? <div className="mt-3">
-                        <span className="text-xs font-medium text-teal-700">建议表达</span>
-                        <GeneratedDocument text={finding.rewrite} className="mt-1" />
-                      </div> : null}
-                    </li>
-                  ))}
-                </ol>
-              </ReviewSection> : null}
-              {reviewReminders.length ? <ReviewSection title="补充提醒" items={reviewReminders.map(finding => `${finding.sentence}：${finding.reason ?? "可补充对应来源，不视为事实错误。"}`)} /> : null}
-              {reviewIssues.length && reviewFlow.riskPoints.length ? (
-                <ReviewSection title="风险说明" items={reviewFlow.riskPoints} />
-              ) : null}
-              {reviewFlow.result.evidence?.length ? (
-                <ReviewSection title="证据与来源">
-                  <div className="mt-2 space-y-2">
-                    {reviewFlow.result.evidence.map((item) => (
-                      item.sourceUrl ? (
-                        <a key={item.id} href={item.sourceUrl} target="_blank" rel="noreferrer" className="block text-sm leading-6 text-slate-600 hover:text-emerald-700">
-                          {evidenceLabel(item)}
-                        </a>
-                      ) : (
-                        <div key={item.id} className="text-sm leading-6 text-slate-600">{evidenceLabel(item)}</div>
-                      )
-                    ))}
-                  </div>
-                </ReviewSection>
-              ) : null}
-              {reviewIssues.length ? <ReviewSection title="改写建议" defaultOpen>
-                <GeneratedDocument text={reviewFlow.rewriteSuggestion} />
-              </ReviewSection> : null}
-              {reviewFlow.checklist.length ? <ReviewSection title="发布建议" items={reviewFlow.checklist} /> : null}
-            </div> : null}
+            {reviewFlow ? <MatchReviewResult result={reviewFlow.result} rewriteSuggestion={reviewFlow.rewriteSuggestion} /> : null}
           </div>
         </div>
       </section>
@@ -906,12 +851,14 @@ function AiBrainStatus({
 }
 
 function TeamIdentity({ name, logo, side }: { name: string; logo?: string; side: "home" | "away" }) {
+  const flag = getTeamFlagPath(name);
+  const imageSource = flag || logo;
   const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [logo]);
+  useEffect(() => setFailed(false), [imageSource]);
   return (
     <div className="flex min-w-0 flex-col items-center gap-3 text-center">
-      <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg ${side === "home" ? "bg-teal-50 text-teal-600" : "bg-sky-50 text-sky-600"}`}>
-        {logo && !failed ? <Image src={logo} alt="" width={44} height={44} unoptimized onError={() => setFailed(true)} className="h-11 w-11 object-contain" /> : <Shield aria-hidden="true" className="h-8 w-8" strokeWidth={1.5} />}
+      <div className={`flex h-14 w-20 shrink-0 items-center justify-center rounded-lg ${flag ? "bg-white" : side === "home" ? "bg-teal-50 text-teal-600" : "bg-sky-50 text-sky-600"}`}>
+        {imageSource && !failed ? <Image src={imageSource} alt={flag ? `${name}国旗` : `${name}队标`} width={72} height={48} unoptimized onError={() => setFailed(true)} className={flag ? "h-12 w-[72px] object-contain drop-shadow-sm" : "h-11 w-11 object-contain"} /> : <Shield aria-hidden="true" className="h-8 w-8 text-slate-400" strokeWidth={1.5} />}
       </div>
       <p className="max-w-full text-lg font-semibold leading-7 text-slate-950 [overflow-wrap:anywhere] sm:text-2xl">{name}</p>
     </div>
