@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { generateDeepSeekJson, getDeepSeekFallbackMessage } from "@/lib/ai/deepseek";
 import { qualityControl } from "@/lib/ai/quality";
+import { formatGeneratedDraft } from "@/lib/ai/generated-draft";
 import {
   addHotDraftVisualAnchors,
   auditHotDraft,
@@ -250,8 +251,7 @@ function lengthInstruction(config: HotGenerationConfig) {
 }
 
 function normalizeDraft(value: string | undefined, fallback: string) {
-  if (typeof value !== "string") return fallback;
-  const next = qualityControl(value.trim());
+  const next = qualityControl(formatGeneratedDraft(value));
   return next || fallback;
 }
 
