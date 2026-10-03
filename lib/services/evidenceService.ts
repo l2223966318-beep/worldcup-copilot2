@@ -131,14 +131,19 @@ export function auditDraftEvidence(draft: string, evidence: EvidenceItem[]) {
     });
 
   const unsupported = claims.filter((claim) => !claim.supported);
-  const findings: ReviewResultSnapshot["findings"] = unsupported.map((claim) => ({
-    type: "缺少事实依据",
-    sentence: claim.sentence,
-    reason: "该句包含具体比分、时间点、事件或统计判断，但当前赛事证据中没有可直接支持的记录。",
-    rewrite: "删除该句，或补充可核验的数据、事件记录或公开来源后再发布。",
-    evidenceStatus: "missing",
-    evidenceIds: []
-  }));
+  const findings: ReviewResultSnapshot["findings"] = unsupported.map((claim) => {
+    const conflicts = findConflictingEvidence(claim.sentence, evidence);
+    return {
+      type: conflicts.length ? "与现有数据不一致" : "建议补充来源",
+      sentence: claim.sentence,
+      reason: conflicts.length
+        ? `当前陈述与已提供的数据不一致：${conflicts.map(item => item.text).join("；")}`
+        : "当前资料未覆盖这条陈述，不等于事实错误；补充对应来源即可。",
+      rewrite: conflicts.length ? "请按对应来源校正数值，并注明统计口径。" : claim.sentence,
+      evidenceStatus: conflicts.length ? "overreach" : "missing",
+      evidenceIds: conflicts.map(item => item.id)
+    };
+  });
 
   return {
     claims,
@@ -153,7 +158,7 @@ export function auditDraftEvidence(draft: string, evidence: EvidenceItem[]) {
 
 export function calculateEvidenceRiskScore(unsupportedClaims: number) {
   if (unsupportedClaims <= 0) return 0;
-  return Math.min(56, 18 + (unsupportedClaims - 1) * 6);
+  return Math.min(20, 18 + (unsupportedClaims - 1) * 2);
 }
 
 export function hasCompleteReview(value: unknown, draft: string) {
@@ -177,7 +182,32 @@ export function finalizeReviewRiskScore(
   const score = Math.max(0, Math.min(100, Math.round(rawScore)));
   if (!evidenceStatuses.length) return Math.min(score, 20);
   if (evidenceStatuses.includes("risk")) return score;
-  return Math.min(score, 56);
+  if (evidenceStatuses.includes("overreach")) return Math.max(36, Math.min(score, 56));
+  return Math.min(score, 20);
+}
+
+function findConflictingEvidence(sentence: string, evidence: EvidenceItem[]) {
+  if (/如果|假如|可能|大约|约\s*\d|左右|接近|超过|不到|半场|一度|当时|此前|点球大战/.test(sentence)) return [];
+  const claims = parseStatFacts(sentence);
+  const stats = evidence.filter(item => item.type === "match_stat" && claims.some(claim => {
+    if (!claim.subject) return false;
+    const facts = parseStatFacts(item.text).filter(fact => fact.subject === claim.subject && fact.metric === claim.metric && fact.unit === claim.unit);
+    // Small provider/rounding differences are reminders, not factual errors.
+    return facts.length === 1 && Math.abs(facts[0].value - claim.value) > 1;
+  }));
+  if (stats.length) return stats;
+  const result = sentence.match(/^(.+?)(?:以)?\s*(\d+)\s*[-比:]\s*(\d+)\s*(?:战胜|击败|不敌|负于)\s*(.+)$/);
+  if (!result) return [];
+  return evidence.filter(item => {
+    const board = item.text.match(/^(.+?)\s+vs\s+(.+?)[，,]\s*比分\s*(\d+)\s*[-比:]\s*(\d+)/i);
+    if (!board) return false;
+    const homeFirst = normalize(result[1]) === normalize(board[1]) && normalize(result[4]) === normalize(board[2]);
+    const awayFirst = normalize(result[1]) === normalize(board[2]) && normalize(result[4]) === normalize(board[1]);
+    if (!homeFirst && !awayFirst) return false;
+    const expected = homeFirst ? [board[3], board[4]] : [board[4], board[3]];
+    return expected[0] !== result[2] || expected[1] !== result[3]
+      || (/战胜|击败/.test(sentence) ? Number(expected[0]) <= Number(expected[1]) : Number(expected[0]) >= Number(expected[1]));
+  });
 }
 
 export function evidenceLabel(item: EvidenceItem) {
