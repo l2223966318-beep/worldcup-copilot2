@@ -292,7 +292,7 @@ export default function PitchPage() {
             <p className="pitch-eyebrow">BACKGROUND → LIVE PRODUCT</p>
             <h2>背景介绍到这里，<br /><span>接下来直接操作。</span></h2>
             <p>从一场比赛开始，现场走完热点筛选、选题生成、平台内容、风险审校与 Word 导出。</p>
-            <Link href="/demo" className="pitch-enter-tool">
+            <Link href="/" className="pitch-enter-tool">
               <span>开始实机演示</span>
               <ArrowRight aria-hidden="true" />
             </Link>

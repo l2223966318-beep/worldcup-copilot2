@@ -49,7 +49,7 @@ async function main() {
     await desktop.getByRole("button", { name: "进入实机演示" }).click();
     await desktop.waitForTimeout(520);
     assert.equal((await desktop.locator(".pitch-footer span").innerText()).trim(), "03 / 03");
-    assert.equal(await desktop.getByRole("link", { name: /进入 WorldCup Copilot/ }).getAttribute("href"), "/");
+    assert.equal(await desktop.getByRole("link", { name: /开始实机演示/ }).getAttribute("href"), "/");
     await desktop.screenshot({ path: path.join(outputDir, "pitch-1366-handoff.png") });
 
     await desktop.keyboard.press("2");

@@ -73,7 +73,7 @@ assert.doesNotMatch(page, /四川赛区决赛/, "pitch page must not retain the 
 assert.match(page, /ArrowDown.*ArrowRight.*PageDown/s, "pitch page must support forward keyboard navigation");
 assert.match(page, /ArrowUp.*ArrowLeft.*PageUp/s, "pitch page must support backward keyboard navigation");
 assert.match(page, /document\.documentElement\.requestFullscreen\(\)/, "pitch page must provide a real fullscreen action");
-assert.match(page, /href="\/demo"[\s\S]*开始实机演示/, "final chapter must link directly to the saved demonstration case");
+assert.match(page, /href="\/"[\s\S]*开始实机演示/, "final chapter must link directly to the real product workbench");
 assert.match(page, /src="\/videos\/worldcup-hero\.mp4"/, "pitch cover must reuse the product background video");
 assert.match(page, /onEnded=\{finishCoverVideo\}/, "pitch cover must reveal its title after the video ends");
 assert.equal((page.match(/onError=\{finishCoverVideo\}/g) ?? []).length, 2,
