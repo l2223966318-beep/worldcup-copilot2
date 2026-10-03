@@ -380,7 +380,7 @@ export default function HotTopicDetailPage() {
           type="button"
           onClick={generateDraft}
           disabled={contentStatus === "loading"}
-          className="workspace-button mt-5 bg-teal-600 text-white hover:bg-teal-700"
+          className="workspace-button mt-5 bg-teal-700 text-white hover:bg-teal-800"
         >
           <Sparkles className="h-4 w-4" />
           {contentStatus === "loading" ? "生成中..." : "生成内容"}
@@ -556,7 +556,7 @@ function DetailBlock({ title, items, compact }: { title: string; items: string[]
   if (!items.length) return null;
   return (
     <div className="mt-5">
-      <div className="text-xs font-black tracking-[0.14em] text-slate-400">{title}</div>
+      <div className="text-xs font-semibold text-slate-500">{title}</div>
       <ul className={`mt-2 text-sm text-slate-600 ${compact ? "space-y-1.5 leading-6" : "space-y-2 leading-6"}`}>
         {items.map((item) => <li key={item}>· {item}</li>)}
       </ul>
@@ -624,7 +624,7 @@ function ActionButton({ children, icon, primary, compact, disabled, onClick }: {
       disabled={disabled}
       title={typeof children === "string" ? children : undefined}
       aria-label={compact && typeof children === "string" ? children : undefined}
-      className={`${compact ? "workspace-icon-button disabled:opacity-40" : "workspace-button"} ${primary ? "bg-teal-600 text-white hover:bg-teal-700" : compact ? "" : "border border-slate-200 bg-white text-slate-700"}`}
+      className={`${compact ? "workspace-icon-button disabled:opacity-40" : "workspace-button"} ${primary ? "bg-teal-700 text-white hover:bg-teal-800" : compact ? "" : "border border-slate-200 bg-white text-slate-700"}`}
     >
       {icon}
       {compact ? <span className="sr-only">{children}</span> : children}
@@ -635,7 +635,7 @@ function ActionButton({ children, icon, primary, compact, disabled, onClick }: {
 function MetaItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <div className="text-xs font-semibold text-slate-400">{label}</div>
+      <div className="text-xs font-medium text-slate-500">{label}</div>
       <div className="mt-1 font-semibold text-slate-950 [overflow-wrap:anywhere]">{value}</div>
     </div>
   );

@@ -117,7 +117,10 @@ export default function MatchAnalysisPage() {
   const sourceMatch = payload?.data;
   const fallbackMatch = getMatchDetail(fixtureId);
   const match = useMemo(() => (sourceMatch ? worldCupMatchToMatchData(sourceMatch) : fallbackMatch), [fallbackMatch, sourceMatch]);
-  const theme = getSportTheme(getMatchSportType(match.id));
+  const baseTheme = getSportTheme(getMatchSportType(match.id));
+  const theme = baseTheme.sportType === "football"
+    ? { ...baseTheme, primary: "#0f766e", secondary: "#0f766e", accent: "#0369a1" }
+    : baseTheme;
   const analysis = useMemo(() => analyzeMatch(match), [match]);
   const matchSignals = useMemo(() => extractMatchSignals(match), [match]);
   const baselineTopics = useMemo(() => generateTopics(match).slice(0, 6), [match]);
