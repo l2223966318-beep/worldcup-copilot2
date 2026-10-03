@@ -8,6 +8,9 @@ const { inspectResponse, checkDeployment } = await import(moduleUrl);
 assert.equal(inspectResponse("/api/health", 200, { ok: true, version: "direct-v5-match-ai" }).state, "healthy");
 assert.equal(inspectResponse("/api/hot/health", 404, { message: "Unknown API route." }).state, "missing-route");
 assert.equal(inspectResponse("/api/hot", 200, { sourceStatus: "fallback", data: [] }).state, "fallback");
+const liveFixtures = inspectResponse("/api/worldcup/fixtures", 200, { sourceStatus: "live", data: [{ source: { provider: "sportradar" } }] });
+assert.equal(liveFixtures.state, "live");
+assert.deepEqual(liveFixtures.providers, { sportradar: 1 });
 assert.equal(inspectResponse("/api/hot", 200, { sourceStatus: "error", data: [] }).state, "upstream-error");
 assert.equal(inspectResponse("/api/hot", 200, "<html>sign in</html>").state, "invalid-response");
 assert.equal(inspectResponse("/api/hot", 200, { data: [] }).state, "unknown-contract");
@@ -36,5 +39,27 @@ assert.equal(inspectResponse("/api/ai/health", 200, { ok: true, configured: fals
 assert.equal(inspectResponse("/api/ai/health", 200, { ok: true, configured: true, accessMode: "public" }).accessMode, "public");
 assert.equal(inspectResponse("/api/ai/health", 200, { ok: true, configured: true }).accessMode, "unknown");
 assert.equal(inspectResponse("/api/hot/health", 200, { unexpected: true }).state, "unknown-contract");
+const dataPaths = [];
+await checkDeployment("https://example.com/", {
+  includeData: true,
+  fetchImpl: async (url) => {
+    const parsed = new URL(url);
+    dataPaths.push(parsed.pathname + parsed.search);
+    if (parsed.pathname === "/api/health") return Response.json({ ok: true, version: "test-v1" });
+    if (parsed.pathname === "/api/hot/health") return Response.json({ ok: true, providers: [] });
+    if (parsed.pathname === "/api/worldcup/health") return Response.json({ ok: true, configured: true, seasonConfigured: true });
+    if (parsed.pathname === "/api/ai/health") return Response.json({ ok: true, configured: true, accessMode: "public" });
+    return Response.json({ sourceStatus: "live", data: [] });
+  },
+});
+assert.deepEqual(dataPaths, [
+  "/api/health",
+  "/api/hot/health",
+  "/api/worldcup/health",
+  "/api/ai/health",
+  "/api/worldcup/fixtures",
+  "/api/hot",
+  "/api/hot/search?q=Argentina%20France%20World%20Cup",
+]);
 await assert.rejects(() => checkDeployment("https://user:password@example.com"), /origin/);
 console.log("CloudBase check: version, missing routes, fallback, attribution and safe failures passed.");
