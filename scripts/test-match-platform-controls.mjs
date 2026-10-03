@@ -12,12 +12,15 @@ assert.match(source, /onTopicModeChange=\{\(mode\) => \{[\s\S]*?setManualDraft\(
 assert.match(source, /const \[reviewedDraft, setReviewedDraft\] = useState\(""\)/);
 assert.match(source, /const reviewFlow = reviewedDraft === reviewSourceText && reviewedDraft/);
 assert.match(source, /setReviewedDraft\(draftSnapshot\)/);
-assert.match(source, /onChange=\{\(event\) => \{[\s\S]*?setReviewedDraft\(""\)/);
+assert.match(source, /onChange=\{\(value\) => \{[\s\S]*?setReviewedDraft\(""\)/);
 assert.doesNotMatch(source, /AI_WORKFLOW_MAX_ATTEMPTS|AI_WORKFLOW_RETRY_DELAY_MS/,
   "automatic AI failures must not trigger another paid model request");
 assert.match(source, /payload\.sourceStatus === "live"/);
 assert.match(source, /headers: getAiRequestHeaders\(\)/);
-assert.match(source, /<ReadableTextBlock text=\{generatedText\} emphasizeTitles/);
+assert.match(source, /<GeneratedDocument text=\{generatedText\}/);
+assert.match(source, /<GeneratedDraftEditor/);
+assert.match(source, /normalizePlatformDraft\(payload\.draft\)/);
+assert.match(source, /<ReviewVerdict/);
 
 const readableTextSource = readFileSync(new URL("../components/ui/readable-text.tsx", import.meta.url), "utf8");
 assert.match(readableTextSource, /emphasizeTitles\?: boolean/);

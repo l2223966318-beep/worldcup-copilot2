@@ -8,7 +8,6 @@ import {
   ArrowLeft,
   BarChart3,
   CalendarDays,
-  Check,
   ChevronDown,
   Clipboard,
   Download,
@@ -23,7 +22,9 @@ import {
 
 import { AuditPlaceholder, WorkspaceHeading } from "@/components/layout/detail-workspace";
 import "@/app/detail-workspace.css";
-import { HighlightedText, ReadableTextBlock } from "@/components/ui/readable-text";
+import { HighlightedText } from "@/components/ui/readable-text";
+import { GeneratedDocument, GeneratedDraftEditor, ReviewSection, ReviewVerdict } from "@/components/ui/generated-content";
+import { formatGeneratedDraft, normalizePlatformDraft } from "@/lib/ai/generated-draft";
 import { InsightCharts } from "@/components/worldcup/insight-charts";
 import type { MatchData } from "@/data/matches";
 import { generatePlatformContent, type PlatformContent } from "@/lib/ai/content";
@@ -347,7 +348,7 @@ export default function MatchAnalysisPage() {
         })
       });
       const payload = (await response.json()) as { sourceStatus: "live" | "fallback" | "error"; draft?: PlatformDraft; message?: string };
-      if (payload.sourceStatus === "live" && payload.draft) draft = payload.draft;
+      if (payload.sourceStatus === "live" && payload.draft) draft = normalizePlatformDraft(payload.draft);
     } catch {
       draft = fallbackDraft;
     }
@@ -407,7 +408,7 @@ export default function MatchAnalysisPage() {
           draft: draftSnapshot,
           result: payload.result,
           riskPoints: payload.riskPoints?.length ? payload.riskPoints : localReviewFlow?.riskPoints ?? [],
-          rewriteSuggestion: payload.rewriteSuggestion || localReviewFlow?.rewriteSuggestion || draftSnapshot,
+          rewriteSuggestion: formatGeneratedDraft(payload.rewriteSuggestion) || localReviewFlow?.rewriteSuggestion || draftSnapshot,
           checklist: payload.checklist?.length ? payload.checklist : localReviewFlow?.checklist ?? []
         };
         setAiReviewFlow(nextReviewFlow);
@@ -612,16 +613,14 @@ export default function MatchAnalysisPage() {
                 {reviewLoading ? "审核中..." : "AI审核"}
               </ActionButton>
             </div>
-            <textarea
+            <GeneratedDraftEditor
               value={draftForReview}
-              onChange={(event) => {
-                setDraftForReview(event.target.value);
+              onChange={(value) => {
+                setDraftForReview(value);
                 setReviewedDraft("");
                 setAiReviewFlow(null);
               }}
-              aria-label="待审稿件"
-              placeholder="暂无待审稿件"
-              className="mt-4 min-h-80 w-full resize-y rounded-lg border border-slate-200 bg-white p-4 text-sm leading-8 text-slate-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+              label="待审稿件"
             />
             <div className="mt-4 flex flex-wrap gap-2">
               <ActionButton onClick={() => {
@@ -652,38 +651,41 @@ export default function MatchAnalysisPage() {
           <div className="min-w-0 space-y-5 border-t border-slate-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
             {!reviewFlow ? <AuditPlaceholder loading={reviewLoading} /> : null}
             {reviewFlow ? <div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-full px-3 py-1 text-xs font-black text-white" style={{ backgroundColor: reviewFlow.result.level === "高" ? "#e11d48" : reviewFlow.result.level === "中" ? "#d97706" : theme.primary }}>
-                  {reviewFlow.result.level}风险
-                </span>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">分数 {reviewFlow.result.score}</span>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{reviewFlow.result.advice}</span>
-                {reviewFlow.result.evidenceSummary ? (
-                  <>
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                      已支持 {reviewFlow.result.evidenceSummary.supportedClaims}
-                    </span>
-                    {reviewFlow.result.evidenceSummary.unsupportedClaims > 0 ? (
-                      <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
-                        缺少依据 {reviewFlow.result.evidenceSummary.unsupportedClaims}
-                      </span>
-                    ) : null}
-                  </>
-                ) : null}
-              </div>
-              <h3 className="mt-4 text-xl font-semibold text-slate-950">审核结果</h3>
-              <div className="mt-4 space-y-3">
-                {reviewFlow.riskPoints.map((item) => (
-                  <div key={item} className="border-l-2 border-amber-200 bg-amber-50/40 p-4">
-                    <ReadableTextBlock text={item} />
-                  </div>
-                ))}
-              </div>
+              <ReviewVerdict
+                title={reviewFlow.result.level === "待人工确认" ? "待人工确认" : `${reviewFlow.result.level}风险`}
+                summary={reviewFlow.result.advice}
+                tone={reviewFlow.result.level === "高" ? "danger" : reviewFlow.result.level === "低" && reviewFlow.result.advice === "可发布" ? "pass" : "warning"}
+                metrics={[
+                  { label: "审核分数", value: reviewFlow.result.score },
+                  { label: "问题", value: reviewFlow.result.findings.length },
+                  ...(reviewFlow.result.evidenceSummary ? [
+                    { label: "有依据", value: reviewFlow.result.evidenceSummary.supportedClaims },
+                    { label: "缺少依据", value: reviewFlow.result.evidenceSummary.unsupportedClaims }
+                  ] : [])
+                ]}
+              />
+              <ReviewSection title="审核发现" items={reviewFlow.result.findings.length ? undefined : reviewFlow.riskPoints} defaultOpen tone="warning">
+                {reviewFlow.result.findings.length ? <ol className="space-y-5">
+                  {reviewFlow.result.findings.map((finding, index) => (
+                    <li key={index} className="border-l-2 border-amber-200 pl-4 text-sm leading-7">
+                      <div className="font-semibold text-slate-800">{index + 1}. {finding.type}</div>
+                      {finding.sentence ? <blockquote className="mt-2 whitespace-pre-wrap text-slate-600">{finding.sentence}</blockquote> : null}
+                      {finding.reason ? <p className="mt-2 text-slate-500">{finding.reason}</p> : null}
+                      {finding.rewrite ? <div className="mt-3">
+                        <span className="text-xs font-medium text-teal-700">建议表达</span>
+                        <GeneratedDocument text={finding.rewrite} className="mt-1" />
+                      </div> : null}
+                    </li>
+                  ))}
+                </ol> : null}
+              </ReviewSection>
+              {reviewFlow.result.findings.length && reviewFlow.riskPoints.length ? (
+                <ReviewSection title="风险说明" items={reviewFlow.riskPoints} />
+              ) : null}
               {reviewFlow.result.evidence?.length ? (
-                <div className="mt-4 border-t border-slate-100 pt-4">
-                  <div className="text-xs font-semibold text-slate-400">证据与来源</div>
+                <ReviewSection title="证据与来源">
                   <div className="mt-2 space-y-2">
-                    {reviewFlow.result.evidence.slice(0, 6).map((item) => (
+                    {reviewFlow.result.evidence.map((item) => (
                       item.sourceUrl ? (
                         <a key={item.id} href={item.sourceUrl} target="_blank" rel="noreferrer" className="block text-sm leading-6 text-slate-600 hover:text-emerald-700">
                           {evidenceLabel(item)}
@@ -693,23 +695,12 @@ export default function MatchAnalysisPage() {
                       )
                     ))}
                   </div>
-                </div>
+                </ReviewSection>
               ) : null}
-            </div> : null}
-            {reviewFlow ? <div className="border-t border-slate-200 pt-5">
-              <h3 className="text-xl font-semibold text-slate-950">改写建议</h3>
-              <ReadableTextBlock text={reviewFlow.rewriteSuggestion} className="mt-3 border-l-2 border-teal-500 bg-teal-50/50 p-4" />
-            </div> : null}
-            {reviewFlow ? <div className="border-t border-slate-200 pt-5">
-              <h3 className="text-xl font-semibold text-slate-950">发布前检查</h3>
-              <div className="mt-3 space-y-2">
-                {reviewFlow.checklist.map((item) => (
-                  <div key={item} className="flex gap-2 text-sm leading-6 text-slate-600">
-                    <Check className="mt-1 h-4 w-4 shrink-0 text-emerald-600" />
-                    <span className="leading-relaxed text-slate-700"><HighlightedText text={item} /></span>
-                  </div>
-                ))}
-              </div>
+              <ReviewSection title="改写建议" defaultOpen>
+                <GeneratedDocument text={reviewFlow.rewriteSuggestion} />
+              </ReviewSection>
+              <ReviewSection title="发布前检查" items={reviewFlow.checklist} />
             </div> : null}
           </div>
         </div>
@@ -1159,7 +1150,7 @@ function PlatformPreview({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="text-sm font-semibold text-teal-700">{platformMeta[platform].title}</div>
-          {draft ? <h3 className="mt-2 text-2xl font-semibold text-slate-950">{draft.title}</h3> : null}
+          {draft ? <h3 className="mt-2 text-lg font-semibold leading-7 text-slate-950 [overflow-wrap:anywhere]">{draft.title}</h3> : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <ActionButton onClick={onRegenerate} theme={theme} variant="secondary" disabled={draftLoading || !selectedHotspotId}>
@@ -1219,7 +1210,7 @@ function PlatformPreview({
         </label>
       </div>
       {draft ? (
-        <ReadableTextBlock text={generatedText} emphasizeTitles className="mt-5 border-l-2 border-teal-500 bg-slate-50/60 p-5" />
+        <GeneratedDocument text={generatedText} className="mt-6 border-t border-slate-200 pt-6" />
       ) : <div className="mt-5 flex min-h-32 items-center justify-center bg-slate-50 text-sm text-slate-400">待生成稿件</div>}
     </div>
   );
