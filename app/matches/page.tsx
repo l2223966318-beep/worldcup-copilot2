@@ -23,7 +23,7 @@ import {
 import { AuditPlaceholder, WorkspaceHeading } from "@/components/layout/detail-workspace";
 import "@/app/detail-workspace.css";
 import { HighlightedText } from "@/components/ui/readable-text";
-import { GeneratedDocument, GeneratedDraftEditor, ReviewSection, ReviewVerdict } from "@/components/ui/generated-content";
+import { GeneratedDocument, GeneratedDraftEditor, GeneratedText, ReviewSection, ReviewVerdict } from "@/components/ui/generated-content";
 import { formatGeneratedDraft, normalizePlatformDraft } from "@/lib/ai/generated-draft";
 import { InsightCharts } from "@/components/worldcup/insight-charts";
 import type { MatchData } from "@/data/matches";
@@ -671,9 +671,9 @@ export default function MatchAnalysisPage() {
                 <ol className="space-y-5">
                   {reviewIssues.map((finding, index) => (
                     <li key={index} className="border-l-2 border-amber-200 pl-4 text-sm leading-7">
-                      <div className="font-semibold text-slate-800">{index + 1}. {finding.type}</div>
-                      {finding.sentence ? <blockquote className="mt-2 whitespace-pre-wrap text-slate-600">{finding.sentence}</blockquote> : null}
-                      {finding.reason ? <p className="mt-2 text-slate-500">{finding.reason}</p> : null}
+                      <div className="font-bold text-slate-800">{index + 1}. {finding.type}</div>
+                      {finding.sentence ? <blockquote className="review-original"><GeneratedText text={finding.sentence} tone="warning" /></blockquote> : null}
+                      {finding.reason ? <p className="mt-2 text-slate-500"><GeneratedText text={finding.reason} leadingLabel /></p> : null}
                       {finding.rewrite ? <div className="mt-3">
                         <span className="text-xs font-medium text-teal-700">建议表达</span>
                         <GeneratedDocument text={finding.rewrite} className="mt-1" />

@@ -4,21 +4,52 @@ import { useState, type ReactNode } from "react";
 import { CheckCircle2, ChevronDown, Eye, FileText, Pencil, ShieldAlert } from "lucide-react";
 import { splitDraftBlocks } from "@/lib/ai/generated-draft";
 
+const inlineEmphasis = /\*\*([^*\n]+)\*\*|__([^_\n]+)__|`([^`\n]+)`|【([^】\n]{1,16})】|「([^」\n]{2,24})」|“([^”\n]{2,24})”|(?<![\w])\d{1,2}\s*[-:：]\s*\d{1,2}(?![\d:：])|\d+(?:\.\d+)?\s*(?:[%％]|万|亿|分钟|秒|次|球|条|场|人)/g;
+const titleFields = new Set(["角度标题", "标题", "主标题", "封面标题", "视频标题"]);
+const keyFields = new Set(["核心结论", "结论", "重点", "关键信息", "内容定位", "建议表达"]);
+const cautionFields = new Set(["风险提醒", "风险提示", "风险边界"]);
+
+export function GeneratedText({ text, leadingLabel = false, tone = "neutral" }: {
+  text: string; leadingLabel?: boolean; tone?: "neutral" | "warning";
+}) {
+  const nodes: ReactNode[] = [];
+  const label = leadingLabel ? text.match(/^([\p{Script=Han}][\p{Script=Han}A-Za-z /（）()]{0,13})([：:])\s*(?=\S)/u) : null;
+  const content = label ? text.slice(label[0].length) : text;
+  if (label) nodes.push(<strong key="label" className="draft-inline-label">{label[1]}</strong>, label[0].slice(label[1].length));
+  let cursor = 0;
+  for (const match of content.matchAll(inlineEmphasis)) {
+    const index = match.index!;
+    if (index > cursor) nodes.push(content.slice(cursor, index));
+    if (match[1] || match[2]) {
+      nodes.push(<strong key={index} className="draft-emphasis">{match[1] ?? match[2]}</strong>);
+    } else if (match[3]) {
+      nodes.push(<code key={index} className="draft-inline-code">{match[3]}</code>);
+    } else if (match[4] || match[5] || match[6]) {
+      nodes.push(<strong key={index} className="draft-inline-label">{match[0]}</strong>);
+    } else {
+      nodes.push(<mark key={index} className="draft-data">{match[0]}</mark>);
+    }
+    cursor = index + match[0].length;
+  }
+  if (cursor < content.length) nodes.push(content.slice(cursor));
+  return <span className={`draft-inline-text ${tone === "warning" ? "draft-text-warning" : ""}`}>{nodes}</span>;
+}
+
 export function GeneratedDocument({ text, className = "" }: { text: string; className?: string }) {
   return (
     <article className={`generated-document ${className}`}>
       {splitDraftBlocks(text).map((block, index) => block.kind === "heading" ? (
         <h3 key={index} className="draft-heading">
           {block.number ? <span className="draft-number">{block.number.padStart(2, "0")}</span> : null}
-          <span>{block.text}</span>
+          <span><GeneratedText text={block.text} /></span>
         </h3>
       ) : block.kind === "field" ? (
-        <dl key={index} className="draft-field">
+        <dl key={index} className={`draft-field ${titleFields.has(block.label) ? "draft-field-title" : keyFields.has(block.label) ? "draft-field-key" : cautionFields.has(block.label) ? "draft-field-caution" : ""}`}>
           <dt>{block.label}</dt>
-          <dd>{block.text}</dd>
+          <dd><GeneratedText text={block.text} tone={cautionFields.has(block.label) ? "warning" : "neutral"} /></dd>
         </dl>
       ) : (
-        <p key={index} className="draft-paragraph">{block.text}</p>
+        <p key={index} className="draft-paragraph"><GeneratedText text={block.text} leadingLabel /></p>
       ))}
     </article>
   );
@@ -63,10 +94,10 @@ export function ReviewVerdict({ title, tone, summary, metrics = [] }: {
   const color = tone === "pass" ? "border-teal-500 bg-teal-50/60 text-teal-700" : tone === "danger" ? "border-rose-500 bg-rose-50/60 text-rose-700" : "border-amber-500 bg-amber-50/60 text-amber-700";
   return (
     <div className={`border-l-[3px] p-4 ${color}`}>
-      <div className="flex items-center gap-2.5"><Icon aria-hidden="true" className="h-5 w-5 shrink-0" /><h3 className="text-base font-semibold">{title}</h3></div>
-      {summary ? <p className="mt-2 text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]">{summary}</p> : null}
+      <div className="flex items-center gap-2.5"><Icon aria-hidden="true" className="h-5 w-5 shrink-0" /><h3 className="text-base font-bold">{title}</h3></div>
+      {summary ? <p className="mt-2 text-sm leading-6 text-slate-600 [overflow-wrap:anywhere]"><GeneratedText text={summary} leadingLabel tone={tone === "pass" ? "neutral" : "warning"} /></p> : null}
       {metrics.length ? <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-3 border-t border-current/10 pt-3">
-        {metrics.map((metric) => <div key={metric.label}><dt className="text-xs text-slate-500">{metric.label}</dt><dd className="mt-1 text-lg font-semibold tabular-nums">{metric.value}</dd></div>)}
+        {metrics.map((metric) => <div key={metric.label}><dt className="text-xs text-slate-500">{metric.label}</dt><dd className="mt-1 text-lg font-bold tabular-nums">{metric.value}</dd></div>)}
       </dl> : null}
     </div>
   );
@@ -88,7 +119,7 @@ export function ReviewSection({ title, items, children, defaultOpen = false, emp
         {items?.length ? <ol className="space-y-4">{items.map((item, index) => (
           <li key={index} className="flex items-start gap-3 text-sm leading-7 text-slate-600">
             <span className={`mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded text-[11px] font-medium tabular-nums ${tone === "warning" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{index + 1}</span>
-            <span className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{item}</span>
+            <span className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]"><GeneratedText text={item} leadingLabel tone={tone} /></span>
           </li>
         ))}</ol> : items ? <p className="text-sm text-slate-400">{emptyLabel}</p> : null}
         {children}
