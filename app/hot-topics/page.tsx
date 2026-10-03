@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Clipboard, ExternalLink, Save, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ChevronDown, Clipboard, ExternalLink, Save, ShieldCheck, Sparkles } from "lucide-react";
 
 import type { HotTopic } from "@/lib/hot/types";
 import { getAiRequestHeaders } from "@/lib/ai/client-access";
@@ -334,17 +334,23 @@ export default function HotTopicDetailPage() {
       </section>
 
       {analysis ? (
-        <section className="grid gap-5 lg:grid-cols-2">
-          <Panel title="热点分析">
-            <InsightGrid items={analysis.overview} accent="emerald" />
-            <DetailBlock title="价值说明" items={analysis.whyCare} compact />
-            <DetailBlock title="内容切入" items={analysis.angles} compact />
-          </Panel>
-          <Panel title="生产判断">
-            <InsightGrid items={analysis.production} accent="sky" />
-            <DetailBlock title="核验边界" items={analysis.factsToVerify} compact />
-            <DetailBlock title="风险提醒" items={analysis.risks} compact />
-          </Panel>
+        <section aria-label="热点分析与生产判断" className="grid divide-y divide-slate-200 border-y border-slate-200 bg-white lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+          <div className="min-w-0 px-5 py-6 sm:px-6">
+            <h2 className="border-l-2 border-emerald-500 pl-3 text-lg font-semibold text-slate-950">热点分析</h2>
+            <InsightRows items={analysis.overview} />
+            <AnalysisDetails title="价值说明与内容切入">
+              <DetailBlock title="价值说明" items={analysis.whyCare} compact />
+              <DetailBlock title="内容切入" items={analysis.angles} compact />
+            </AnalysisDetails>
+          </div>
+          <div className="min-w-0 px-5 py-6 sm:px-6">
+            <h2 className="border-l-2 border-sky-500 pl-3 text-lg font-semibold text-slate-950">生产判断</h2>
+            <InsightRows items={analysis.production} />
+            <AnalysisDetails title="核验边界与风险提醒">
+              <DetailBlock title="核验边界" items={analysis.factsToVerify} compact />
+              <DetailBlock title="风险提醒" items={analysis.risks} compact />
+            </AnalysisDetails>
+          </div>
         </section>
       ) : null}
 
@@ -552,21 +558,31 @@ function DetailBlock({ title, items, compact }: { title: string; items: string[]
   );
 }
 
-function InsightGrid({ items, accent }: { items: HotAnalysisResult["overview"]; accent: "emerald" | "sky" }) {
-  const styles =
-    accent === "emerald"
-      ? "border-emerald-100 bg-emerald-50/60 text-emerald-700"
-      : "border-sky-100 bg-sky-50/60 text-sky-700";
+function InsightRows({ items }: { items: HotAnalysisResult["overview"] }) {
   return (
-    <div className="mt-5 grid gap-3 sm:grid-cols-3">
+    <dl className="mt-5 divide-y divide-slate-100">
       {items.map((item) => (
-        <div key={`${item.label}-${item.value}`} className={`card-lift card-lift-light rounded-[22px] border p-4 ${styles}`}>
-          <div className="text-[11px] font-black tracking-[0.14em] text-slate-400">{item.label}</div>
-          <div className="mt-2 text-lg font-black text-slate-950">{item.value}</div>
-          <p className="mt-2 text-sm leading-6 text-slate-600">{item.note}</p>
+        <div key={`${item.label}-${item.value}`} className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 py-4 first:pt-0 last:pb-0 sm:gap-x-4">
+          <dt className="break-words text-sm font-medium leading-6 text-slate-500">{item.label}</dt>
+          <dd className="min-w-0 space-y-1.5 [overflow-wrap:anywhere]">
+            <p className="text-base font-semibold leading-6 text-slate-950">{item.value}</p>
+            {item.note ? <p className="text-sm leading-6 text-slate-600">{item.note}</p> : null}
+          </dd>
         </div>
       ))}
-    </div>
+    </dl>
+  );
+}
+
+function AnalysisDetails({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <details className="group mt-5 border-t border-slate-200">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-4 text-sm font-semibold text-slate-700 transition hover:text-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 [&::-webkit-details-marker]:hidden">
+        {title}
+        <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="pb-1 [&>div:first-child]:mt-0">{children}</div>
+    </details>
   );
 }
 
