@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { CheckCircle2, ChevronDown, Eye, FileText, Pencil, ShieldAlert } from "lucide-react";
 import { splitDraftBlocks } from "@/lib/ai/generated-draft";
+import type { ReviewResultSnapshot } from "@/types/workflow";
 
 const inlineEmphasis = /\*\*([^*\n]+)\*\*|__([^_\n]+)__|`([^`\n]+)`|【([^】\n]{1,16})】|「([^」\n]{2,24})」|“([^”\n]{2,24})”|(?<![\w])\d{1,2}\s*[-:：]\s*\d{1,2}(?![\d:：])|\d+(?:\.\d+)?\s*(?:[%％]|万|亿|分钟|秒|次|球|条|场|人)/g;
 const titleFields = new Set(["角度标题", "标题", "主标题", "封面标题", "视频标题"]);
@@ -99,6 +100,63 @@ export function ReviewVerdict({ title, tone, summary, metrics = [] }: {
       {metrics.length ? <dl className="mt-4 flex flex-wrap gap-x-6 gap-y-3 border-t border-current/10 pt-3">
         {metrics.map((metric) => <div key={metric.label}><dt className="text-xs text-slate-500">{metric.label}</dt><dd className="mt-1 text-lg font-bold tabular-nums">{metric.value}</dd></div>)}
       </dl> : null}
+    </div>
+  );
+}
+
+export function MatchReviewResult({ result, rewriteSuggestion }: {
+  result: ReviewResultSnapshot; rewriteSuggestion?: string;
+}) {
+  const findings = [...new Map(result.findings.map(finding => [
+    `${finding.evidenceStatus ?? "risk"}:${finding.sentence.trim().replace(/[。.!?]+$/, "")}`, finding
+  ])).values()];
+  const issues = findings.filter(finding => finding.evidenceStatus !== "missing");
+  const reminders = findings.filter(finding => finding.evidenceStatus === "missing");
+  const pending = result.level === "待人工确认" || result.level === "待审核";
+  const sources = [...new Map((result.evidence ?? []).map(item => [item.sourceUrl || item.source, item])).values()];
+  return (
+    <div>
+      <ReviewVerdict
+        title={pending ? "待人工确认" : issues.length ? `需调整 ${issues.length} 项` : "未发现明确问题"}
+        summary={pending ? "AI 审核未完成，以下为本地检查结果。" : issues.length ? "按下方建议调整后再发布。" : reminders.length ? "未发现明确错误，部分表述仍可补充来源。" : "当前稿件未发现需要修改的问题。"}
+        tone={pending ? "warning" : issues.length ? result.level === "高" ? "danger" : "warning" : "pass"}
+      />
+      {issues.length ? <ReviewSection title="需要调整" defaultOpen tone="warning">
+        <ol className="space-y-5">
+          {issues.map((finding, index) => <li key={index} className="text-sm leading-7">
+            <h4 className="font-bold text-slate-800">{index + 1}. {finding.type}</h4>
+            <blockquote className="review-original"><GeneratedText text={finding.sentence} tone="warning" /></blockquote>
+            {finding.rewrite ? <p className="mt-3 text-slate-600"><strong className="mr-2 font-semibold text-teal-700">建议</strong><GeneratedText text={finding.rewrite} /></p> : null}
+          </li>)}
+        </ol>
+      </ReviewSection> : null}
+      <ReviewSection title="审核依据与补充信息">
+        <div className="space-y-5 text-sm leading-7 text-slate-600">
+          {result.evidenceSummary ? <p className="text-xs text-slate-500">核对范围：{result.evidenceSummary.checkedClaims} 条含数据或具体事件的陈述；审核分值 {result.score}。</p> : null}
+          {issues.length ? <div>
+            <h4 className="mb-2 font-semibold text-slate-800">判断依据</h4>
+            <ol className="space-y-3">{issues.map((finding, index) => <li key={index}>
+              <strong className="mr-2 font-semibold">{index + 1}.</strong>
+              <GeneratedText text={finding.reason || finding.type} leadingLabel />
+              {finding.evidenceIds?.length ? <span className="ml-2 text-xs text-slate-500">依据 {finding.evidenceIds.join("、")}</span> : null}
+            </li>)}</ol>
+          </div> : null}
+          {reminders.length ? <div>
+            <h4 className="mb-1 font-semibold text-slate-800">来源补充</h4>
+            <p className="mb-3 text-xs text-slate-500">资料未覆盖不代表内容有误，以下记录未计入需要调整项。</p>
+            <ul className="space-y-2">{reminders.map((finding, index) => <li key={index} className="border-l-2 border-slate-200 pl-3"><GeneratedText text={finding.sentence} /></li>)}</ul>
+          </div> : null}
+          {sources.length ? <div>
+            <h4 className="mb-2 font-semibold text-slate-800">参考来源</h4>
+            <ul className="space-y-1">{sources.map((item, index) => <li key={index}>{item.sourceUrl ? <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="text-teal-700 underline underline-offset-4">{item.source}</a> : item.source}</li>)}</ul>
+          </div> : null}
+          {issues.length && rewriteSuggestion ? <div>
+            <h4 className="mb-3 font-semibold text-slate-800">建议稿</h4>
+            <GeneratedDocument text={rewriteSuggestion} />
+          </div> : null}
+          {!issues.length && !reminders.length && !sources.length ? <p>{pending ? "事实仍需人工确认。" : "未发现需要补充的具体事项。"}</p> : null}
+        </div>
+      </ReviewSection>
     </div>
   );
 }

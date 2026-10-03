@@ -128,6 +128,26 @@ const venueNames: Record<string, string> = {
   "kansas city, mo, usa": "堪萨斯城，美国"
 };
 
+const teamFlagCodes: Record<string, string> = {
+  "日本": "jp", "美国": "us", "加拿大": "ca", "墨西哥": "mx", "德国": "de", "法国": "fr",
+  "阿根廷": "ar", "巴西": "br", "英格兰": "gb-eng", "西班牙": "es", "葡萄牙": "pt",
+  "刚果（金）": "cd", "南非": "za", "波黑": "ba", "巴拿马": "pa", "乌兹别克斯坦": "uz",
+  "阿尔及利亚": "dz", "约旦": "jo", "伊拉克": "iq", "库拉索": "cw", "科特迪瓦": "ci",
+  "佛得角": "cv", "海地": "ht", "哥斯达黎加": "cr", "意大利": "it", "荷兰": "nl",
+  "比利时": "be", "乌拉圭": "uy", "巴拉圭": "py", "哥伦比亚": "co", "厄瓜多尔": "ec",
+  "澳大利亚": "au", "韩国": "kr", "伊朗": "ir", "沙特阿拉伯": "sa", "卡塔尔": "qa",
+  "摩洛哥": "ma", "突尼斯": "tn", "埃及": "eg", "塞内加尔": "sn", "尼日利亚": "ng",
+  "加纳": "gh", "克罗地亚": "hr", "塞尔维亚": "rs", "瑞士": "ch", "丹麦": "dk",
+  "挪威": "no", "捷克": "cz", "奥地利": "at", "波兰": "pl", "瑞典": "se",
+  "威尔士": "gb-wls", "苏格兰": "gb-sct", "乌克兰": "ua", "土耳其": "tr",
+  "智利": "cl", "秘鲁": "pe", "玻利维亚": "bo", "委内瑞拉": "ve", "新西兰": "nz", "中国": "cn"
+};
+
+export function getTeamFlagPath(name: string) {
+  const code = teamFlagCodes[localizeTeamName(name).trim().replace(/队$/, "")];
+  return code ? `/flags/${code}.png` : undefined;
+}
+
 export function localizeTeamName(name: string) {
   return teamNames[normalize(name)] ?? name;
 }

@@ -141,6 +141,21 @@ assert.equal(contradiction.findings[0].type, "与现有数据不一致");
 assert.ok(contradiction.findings[0].evidenceIds.length > 0);
 assert.equal(auditDraftEvidence("阿根廷以9-0战胜法国。", evidence).findings[0].evidenceStatus, "overreach");
 
+const disciplineEvidence = [{
+  id: "E62", type: "match_stat", source: "赛事统计", relevance: 82,
+  text: "英格兰角球1次、犯规11次、黄牌1张；阿根廷角球6次、犯规15次、黄牌3张"
+}];
+const citedDiscipline = "说明：E62标注英格兰犯规11次、阿根廷犯规15次、黄牌1对3";
+assert.equal(auditDraftEvidence(citedDiscipline, disciplineEvidence).findings.length, 0,
+  "evidence IDs are not factual numbers and a comparison must not inherit the last team's subject");
+assert.equal(auditDraftEvidence("依据【E62】显示英格兰犯规11次。", disciplineEvidence).findings.length, 0);
+assert.equal(auditDraftEvidence("阿根廷黄牌3对1。", disciplineEvidence).findings.length, 0,
+  "an explicitly named comparison may reverse the evidence's team order");
+assert.equal(auditDraftEvidence("英格兰黄牌4对3。", disciplineEvidence).findings[0].evidenceStatus, "overreach");
+assert.equal(auditDraftEvidence("英格兰犯规21次。", disciplineEvidence).findings[0].evidenceStatus, "overreach");
+assert.equal(auditDraftEvidence("说明：E999标注英格兰犯规11次。", disciplineEvidence).findings[0].evidenceStatus, "missing",
+  "unknown evidence references must not silently count as verified");
+
 const multilingualEvents = auditDraftEvidence(
   "85分钟巴西获得角球。90+6分钟Martinelli完成进球。",
   [
