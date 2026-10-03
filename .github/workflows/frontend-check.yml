@@ -72,5 +72,6 @@ jobs:
           npm run test:worldcup-route
           npm run test:pitch
           npm run test:cloudbase-static-release
+          npm run test:cloudbase
           npm run test:competition-readiness-contract
           npm run test:competition-readiness
