@@ -1,17 +1,29 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
+  BarChart3,
+  CalendarDays,
   Check,
+  ChevronDown,
   Clipboard,
   Download,
-  RefreshCcw
+  MapPin,
+  Radio,
+  RefreshCcw,
+  Send,
+  Shield,
+  ShieldCheck,
+  Sparkles
 } from "lucide-react";
 
+import { AuditPlaceholder, WorkspaceHeading } from "@/components/layout/detail-workspace";
+import "@/app/detail-workspace.css";
 import { HighlightedText, ReadableTextBlock } from "@/components/ui/readable-text";
 import { InsightCharts } from "@/components/worldcup/insight-charts";
 import type { MatchData } from "@/data/matches";
@@ -105,7 +117,10 @@ export default function MatchAnalysisPage() {
   const sourceMatch = payload?.data;
   const fallbackMatch = getMatchDetail(fixtureId);
   const match = useMemo(() => (sourceMatch ? worldCupMatchToMatchData(sourceMatch) : fallbackMatch), [fallbackMatch, sourceMatch]);
-  const theme = getSportTheme(getMatchSportType(match.id));
+  const baseTheme = getSportTheme(getMatchSportType(match.id));
+  const theme = baseTheme.sportType === "football"
+    ? { ...baseTheme, primary: "#0f766e", secondary: "#0f766e", accent: "#0369a1" }
+    : baseTheme;
   const analysis = useMemo(() => analyzeMatch(match), [match]);
   const matchSignals = useMemo(() => extractMatchSignals(match), [match]);
   const baselineTopics = useMemo(() => generateTopics(match).slice(0, 6), [match]);
@@ -425,7 +440,7 @@ export default function MatchAnalysisPage() {
   }
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-8 pb-20">
+    <div className="detail-workspace mx-auto flex max-w-7xl flex-col gap-6 pb-20">
       <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-slate-950">
         <ArrowLeft className="h-4 w-4" />
         返回今日赛事机会池
@@ -447,36 +462,38 @@ export default function MatchAnalysisPage() {
 
       <AiBrainStatus loading={aiLoading} enhancement={aiEnhancement} fromCache={aiCacheHit} theme={theme} />
 
-      <section>
+      <section className="workspace-section">
         <SectionTitle eyebrow="OPS CONCLUSION" title="运营结论" description="让运营人员 10 秒内知道这场比赛值不值得做、先做什么、要避开什么坑。" />
-        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <div className="mt-5 grid divide-y divide-slate-200 lg:grid-cols-3 lg:divide-x lg:divide-y-0">
           {workflow.conclusions.map((item) => (
             <ConclusionCard key={item.title} title={item.title} body={item.body} theme={theme} featured={item.featured} />
           ))}
         </div>
       </section>
 
-      <section className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
+      <section className="workspace-section">
         <SectionTitle eyebrow="CHART INSIGHTS" title="图表服务内容创作" description="每张图表都配运营解释和可复制金句，用来快速变成脚本、标题或长文段落。" />
         <div className="mt-6">
           <InsightCharts match={match} theme={theme} dataAngles={workflow.dataAngles} />
         </div>
       </section>
 
-      <section className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
+      <section className="workspace-section">
         <SectionTitle eyebrow="MATCH SIGNALS" title="赛事热点信号" description="场上事件与场外热议分开查看；场外内容仅保留能关联本场球队、球员或赛事的真实来源。" />
-        <div className="mt-5 inline-flex rounded-full bg-slate-100 p-1">
+        <div className="mt-5 flex w-fit max-w-full rounded-lg bg-slate-100 p-1" role="group" aria-label="热点类别">
           <button
             type="button"
             onClick={() => setActiveHotspotKind("onField")}
-            className={`h-9 rounded-full px-4 text-sm font-semibold transition ${activeHotspotKind === "onField" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}
+            aria-pressed={activeHotspotKind === "onField"}
+            className={`h-9 rounded-md px-3 text-sm font-medium transition focus-visible:outline-teal-600 ${activeHotspotKind === "onField" ? "bg-white text-teal-700 shadow-sm" : "text-slate-500"}`}
           >
             场上事件 {onFieldHotspots.length}
           </button>
           <button
             type="button"
             onClick={() => setActiveHotspotKind("offField")}
-            className={`h-9 rounded-full px-4 text-sm font-semibold transition ${activeHotspotKind === "offField" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}
+            aria-pressed={activeHotspotKind === "offField"}
+            className={`h-9 rounded-md px-3 text-sm font-medium transition focus-visible:outline-teal-600 ${activeHotspotKind === "offField" ? "bg-white text-teal-700 shadow-sm" : "text-slate-500"}`}
           >
             场外热议 {offFieldHotspots.length}
           </button>
@@ -493,17 +510,17 @@ export default function MatchAnalysisPage() {
             />
           ))}
           {!visibleHotspots.length ? (
-            <div className="rounded-[24px] border border-dashed border-slate-200 bg-slate-50 px-5 py-8 text-sm leading-6 text-slate-500 lg:col-span-2">
+            <div className="bg-slate-50 px-5 py-8 text-sm leading-6 text-slate-500 lg:col-span-2">
               当前未命中本场球队或关键球员的场外热议。
             </div>
           ) : null}
         </div>
       </section>
 
-      <section id="platform-output" className="scroll-mt-24 rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
+      <section id="platform-output" className="workspace-section scroll-mt-24">
         <SectionTitle eyebrow="PLATFORM OUTPUT" title="多平台分发工作台" />
         {workflowNotice ? <p className="mt-3 text-sm font-semibold text-emerald-700">{workflowNotice}</p> : null}
-        <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5" role="group" aria-label="发布平台">
           {(Object.keys(platformLabels) as PlatformKey[]).map((platform) => (
             <PlatformOutputCard
               key={platform}
@@ -577,15 +594,16 @@ export default function MatchAnalysisPage() {
         />
       </section>
 
-      <section className="rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
+      <section className="workspace-section">
         <SectionTitle eyebrow="RISK REVIEW" title="发布风险审稿" />
         <div className="mt-6 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
-          <div className="rounded-[28px] border bg-slate-50 p-5" style={{ borderColor: theme.border }}>
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold" style={{ color: theme.primary }}>待审稿件</div>
               </div>
-              <ActionButton onClick={handleAiReview} theme={theme} variant="secondary">
+              <ActionButton onClick={handleAiReview} theme={theme} variant="secondary" disabled={reviewLoading || !reviewSourceText}>
+                <ShieldCheck className="h-4 w-4" />
                 {reviewLoading ? "审核中..." : "AI审核"}
               </ActionButton>
             </div>
@@ -596,7 +614,9 @@ export default function MatchAnalysisPage() {
                 setReviewedDraft("");
                 setAiReviewFlow(null);
               }}
-              className="mt-4 min-h-64 w-full resize-y rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-7 text-slate-800 outline-none focus:border-emerald-300"
+              aria-label="待审稿件"
+              placeholder="暂无待审稿件"
+              className="mt-4 min-h-80 w-full resize-y rounded-lg border border-slate-200 bg-white p-4 text-sm leading-8 text-slate-800 outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
             />
             <div className="mt-4 flex flex-wrap gap-2">
               <ActionButton onClick={() => {
@@ -624,8 +644,9 @@ export default function MatchAnalysisPage() {
               </ActionButton>
             </div>
           </div>
-          <div className="space-y-4">
-            {reviewFlow ? <div className="card-lift card-lift-light rounded-[28px] border bg-white p-5" style={{ borderColor: theme.border }}>
+          <div className="min-w-0 space-y-5 border-t border-slate-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+            {!reviewFlow ? <AuditPlaceholder loading={reviewLoading} /> : null}
+            {reviewFlow ? <div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-full px-3 py-1 text-xs font-black text-white" style={{ backgroundColor: reviewFlow.result.level === "高" ? "#e11d48" : reviewFlow.result.level === "中" ? "#d97706" : theme.primary }}>
                   {reviewFlow.result.level}风险
@@ -648,7 +669,7 @@ export default function MatchAnalysisPage() {
               <h3 className="mt-4 text-xl font-semibold text-slate-950">审核结果</h3>
               <div className="mt-4 space-y-3">
                 {reviewFlow.riskPoints.map((item) => (
-                  <div key={item} className="rounded-2xl bg-slate-50 p-4">
+                  <div key={item} className="border-l-2 border-amber-200 bg-amber-50/40 p-4">
                     <ReadableTextBlock text={item} />
                   </div>
                 ))}
@@ -670,11 +691,11 @@ export default function MatchAnalysisPage() {
                 </div>
               ) : null}
             </div> : null}
-            {reviewFlow ? <div className="card-lift card-lift-light rounded-[28px] border bg-white p-5" style={{ borderColor: theme.border }}>
+            {reviewFlow ? <div className="border-t border-slate-200 pt-5">
               <h3 className="text-xl font-semibold text-slate-950">改写建议</h3>
-              <ReadableTextBlock text={reviewFlow.rewriteSuggestion} className="mt-3 rounded-2xl bg-emerald-50/60 p-4" />
+              <ReadableTextBlock text={reviewFlow.rewriteSuggestion} className="mt-3 border-l-2 border-teal-500 bg-teal-50/50 p-4" />
             </div> : null}
-            {reviewFlow ? <div className="card-lift card-lift-light rounded-[28px] border bg-white p-5" style={{ borderColor: theme.border }}>
+            {reviewFlow ? <div className="border-t border-slate-200 pt-5">
               <h3 className="text-xl font-semibold text-slate-950">发布前检查</h3>
               <div className="mt-3 space-y-2">
                 {reviewFlow.checklist.map((item) => (
@@ -689,9 +710,9 @@ export default function MatchAnalysisPage() {
         </div>
       </section>
 
-      <section className="flex flex-wrap items-center justify-between gap-4 rounded-[32px] border bg-white p-6 shadow-[0_20px_70px_rgba(15,23,42,0.06)]" style={{ borderColor: theme.border }}>
+      <section className="workspace-section flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-950">复制 / 导出</h2>
+          <h2 className="text-xl font-semibold text-slate-950">复制 / 导出</h2>
         </div>
         <div className="flex flex-wrap gap-3">
           <ActionButton onClick={() => handleCopy("all", selectedText)} theme={theme} variant="secondary">
@@ -773,29 +794,26 @@ function MatchHero({
   const actionBody = `先用“${primaryTopic.title}”建立内容主线，再用比分、控球、射门、射正和事件说明做证据层，最后按 B站深度、微博讨论、小红书解释卡分发。`;
 
   return (
-    <section className={`relative overflow-hidden rounded-[40px] border bg-gradient-to-br ${theme.gradient} p-7 shadow-[0_28px_90px_rgba(15,23,42,0.08)] lg:p-10`} style={{ borderColor: theme.border }}>
-      <FieldPattern theme={theme} />
-      <div className="relative z-10 grid gap-8 lg:grid-cols-[1fr_360px] lg:items-end">
-        <div>
-          <div className="flex flex-wrap gap-2">
-            {[round || "世界杯", dataTag, score === "vs" ? "待赛程分析" : "可拆解内容"].map((tag) => (
-              <span key={tag} className="rounded-full bg-white/80 px-3 py-1 text-xs font-semibold shadow-sm" style={{ color: theme.secondary }}>
-                {tag}
-              </span>
-            ))}
+    <section className="workspace-section">
+      <div className="grid gap-7 lg:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h1 className="text-lg font-semibold leading-7 text-slate-950">{matchName}</h1>
+            <span className="text-xs font-medium text-slate-500">{dataTag}</span>
           </div>
-          <p className="mt-8 text-sm font-semibold uppercase tracking-[0.2em]" style={{ color: theme.secondary }}>{matchName}</p>
-          <div className="mt-4 flex flex-wrap items-end gap-4">
-            <div className="text-5xl font-black tracking-tight text-slate-950 lg:text-7xl">{homeTeam}</div>
-            <div className="rounded-[28px] bg-white px-6 py-4 text-5xl font-black shadow-xl shadow-slate-900/10 lg:text-7xl" style={{ color: theme.primary }}>
-              {score}
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 py-8 sm:gap-6">
+            <TeamIdentity name={homeTeam} logo={sourceMatch?.homeTeam.logo} side="home" />
+            <div className="max-w-28 text-center sm:max-w-52">
+              <div className="text-4xl font-semibold tabular-nums leading-tight text-slate-950 [overflow-wrap:anywhere] sm:text-5xl">{score === "vs" ? "VS" : score}</div>
+              <span className="mt-2 inline-block text-xs font-medium text-slate-500">{statusText}</span>
             </div>
-            <div className="text-5xl font-black tracking-tight text-slate-950 lg:text-7xl">{awayTeam}</div>
+            <TeamIdentity name={awayTeam} logo={sourceMatch?.awayTeam.logo} side="away" />
           </div>
-          <p className="mt-5 text-base font-medium text-slate-600">
-            {round}｜{statusText}｜{formatSourceDate(kickoffTime)}
-            {venue ? `｜${venue}` : ""}
-          </p>
+          <div className="grid gap-4 border-y border-slate-100 bg-slate-50/70 px-4 py-4 sm:grid-cols-3">
+            <MatchMeta icon={<CalendarDays className="h-4 w-4" />} label="开赛时间" value={formatSourceDate(kickoffTime)} />
+            <MatchMeta icon={<MapPin className="h-4 w-4" />} label="场地" value={venue || "待确认"} />
+            <MatchMeta icon={<Radio className="h-4 w-4" />} label="赛程" value={round || "世界杯"} />
+          </div>
           <SourceStatusLine
             status={sourceStatus}
             provider={sourceMatch?.source.provider}
@@ -804,28 +822,28 @@ function MatchHero({
             error={error}
           />
           {hasBasicCoverageOnly ? (
-            <div className="mt-3 max-w-3xl rounded-2xl border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm leading-6 text-amber-800">
+            <div className="mt-3 border-l-2 border-amber-400 bg-amber-50/70 px-4 py-3 text-sm leading-6 text-amber-800">
               当前 Sportradar trial/basic 只返回赛程、比分和基础进球覆盖，暂未返回事件流与完整技术统计。AI 分析会按“需补充事件源”处理，不会自动推断进球过程、判罚或伤病。
             </div>
           ) : null}
-          <div className="mt-8 rounded-3xl border bg-white/82 p-5 shadow-sm backdrop-blur" style={{ borderColor: theme.border }}>
-            <div className="text-sm font-semibold" style={{ color: theme.secondary }}>推荐动作</div>
-            <p className="mt-2 text-2xl font-semibold leading-tight text-slate-950">{actionTitle}</p>
+          <div className="mt-5 border-l-2 border-teal-500 bg-teal-50/50 px-4 py-3">
+            <div className="text-xs font-medium text-teal-700">推荐动作</div>
+            <p className="mt-2 text-lg font-semibold leading-7 text-slate-950">{actionTitle}</p>
             <p className="mt-2 text-sm leading-6 text-slate-600">{actionBody}</p>
           </div>
         </div>
 
-        <div className="rounded-[32px] border bg-white/88 p-6 shadow-xl shadow-slate-900/10 backdrop-blur" style={{ borderColor: theme.border }}>
+        <div className="min-w-0 border-t border-slate-200 pt-6 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
           <div className="text-sm font-semibold text-slate-500">内容机会评分</div>
           <div className="mt-3 flex items-end gap-3">
-            <span className="text-7xl font-black" style={{ color: theme.primary }}>{taskPriority}</span>
-            <span className="mb-3 text-xl font-semibold text-slate-950">级内容机会</span>
+            <span className="text-5xl font-semibold text-teal-700">{taskPriority}</span>
+            <span className="mb-1 text-sm font-medium text-slate-600">级内容机会</span>
           </div>
           <div className="mt-5 space-y-4">
-            <ScoreBar label="热度" value={scores.heat} theme={theme} />
-            <ScoreBar label="情绪" value={scores.emotion} theme={theme} />
-            <ScoreBar label="叙事" value={scores.narrative} theme={theme} />
-            <ScoreBar label="长尾价值" value={scores.longTail} theme={theme} />
+            <ScoreBar label="热度" value={scores.heat} theme={theme} color="#0d9488" />
+            <ScoreBar label="情绪" value={scores.emotion} theme={theme} color="#0284c7" />
+            <ScoreBar label="叙事" value={scores.narrative} theme={theme} color="#64748b" />
+            <ScoreBar label="长尾价值" value={scores.longTail} theme={theme} color="#d97706" />
           </div>
         </div>
       </div>
@@ -847,7 +865,7 @@ function SourceStatusLine({
   error?: string;
 }) {
   return (
-    <div className="mt-4 inline-flex flex-wrap items-center gap-2 rounded-full bg-white/80 px-4 py-2 text-xs font-semibold text-slate-600 shadow-sm">
+    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs leading-5 text-slate-500">
       <span>数据来源：{loading ? "加载中" : sourceLabel(status, provider)}</span>
       {lastUpdated ? <span>最后更新：{formatSourceDate(lastUpdated)}</span> : null}
       {error ? <span className="text-amber-700">请求提示：{error}</span> : null}
@@ -882,53 +900,61 @@ function AiBrainStatus({
       : enhancement?.message ?? "未配置 DeepSeek key 或接口暂不可用，页面继续使用本地规则引擎。";
 
   return (
-    <section className="card-lift card-lift-light rounded-[24px] border bg-white px-5 py-4 shadow-[0_14px_40px_rgba(15,23,42,0.05)]" style={{ borderColor: theme.border }}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-black uppercase tracking-[0.16em]" style={{ color: theme.primary }}>AI BRAIN</div>
-          <div className="mt-1 text-lg font-semibold text-slate-950">{label}</div>
-          <p className="mt-1 text-sm leading-6 text-slate-500">{description}</p>
-        </div>
-        <span className="rounded-full px-3 py-1.5 text-xs font-semibold text-white" style={{ backgroundColor: isLive ? theme.primary : "#64748b" }}>
-          {isLive ? fromCache ? "AI 缓存" : "AI 增强" : "规则兜底"}
-        </span>
+    <details className="group border-l-2 bg-white px-5 py-3" style={{ borderColor: loading ? "#0284c7" : isLive ? theme.primary : "#d97706" }}>
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-slate-700 focus-visible:outline-teal-600 [&::-webkit-details-marker]:hidden">
+        <span className="flex items-center gap-2"><Sparkles aria-hidden="true" className="h-4 w-4 text-teal-600" />{label}</span>
+        <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+      </summary>
+      <p className="mt-3 text-sm leading-6 text-slate-500">{description}</p>
+    </details>
+  );
+}
+
+function TeamIdentity({ name, logo, side }: { name: string; logo?: string; side: "home" | "away" }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [logo]);
+  return (
+    <div className="flex min-w-0 flex-col items-center gap-3 text-center">
+      <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-lg ${side === "home" ? "bg-teal-50 text-teal-600" : "bg-sky-50 text-sky-600"}`}>
+        {logo && !failed ? <Image src={logo} alt="" width={44} height={44} unoptimized onError={() => setFailed(true)} className="h-11 w-11 object-contain" /> : <Shield aria-hidden="true" className="h-8 w-8" strokeWidth={1.5} />}
       </div>
-    </section>
-  );
-}
-
-function FieldPattern({ theme }: { theme: SportTheme }) {
-  return (
-    <div className="pointer-events-none absolute inset-0 opacity-70">
-      <div className="absolute inset-0" style={{ background: `radial-gradient(circle at 78% 18%, ${theme.heroGlow}, transparent 280px)` }} />
-      <div className="absolute left-[8%] top-[14%] h-[72%] w-[84%] rounded-[42px] border-2 border-white/60" />
-      <div className="absolute left-1/2 top-[14%] h-[72%] w-px bg-white/55" />
-      <div className="absolute left-[43%] top-[33%] h-44 w-44 rounded-full border-2 border-white/55" />
-      <div className="absolute -right-20 bottom-12 h-56 w-56 rounded-full border-[18px] border-white/25" />
-      <div className="absolute bottom-0 left-0 right-0 h-24 bg-[linear-gradient(135deg,rgba(255,255,255,.28)_25%,transparent_25%,transparent_50%,rgba(255,255,255,.28)_50%,rgba(255,255,255,.28)_75%,transparent_75%)] bg-[length:28px_28px] opacity-20" />
+      <p className="max-w-full text-lg font-semibold leading-7 text-slate-950 [overflow-wrap:anywhere] sm:text-2xl">{name}</p>
     </div>
   );
 }
 
-function SectionTitle({ eyebrow, title, description }: { eyebrow: string; title: string; description?: string }) {
+function MatchMeta({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <div>
-      <div className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{eyebrow}</div>
-      <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{title}</h2>
-      {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p> : null}
+    <div className="flex min-w-0 items-start gap-2.5">
+      <span className="mt-0.5 shrink-0 text-slate-400">{icon}</span>
+      <div className="min-w-0">
+        <p className="text-xs text-slate-500">{label}</p>
+        <p className="mt-1 text-sm font-medium leading-6 text-slate-700 [overflow-wrap:anywhere]">{value}</p>
+      </div>
     </div>
   );
 }
 
-function ScoreBar({ label, value, theme }: { label: string; value: number; theme: SportTheme }) {
+function SectionTitle({ eyebrow, title }: { eyebrow: string; title: string; description?: string }) {
+  const icons: Record<string, ReactNode> = {
+    "OPS CONCLUSION": <Sparkles className="h-5 w-5" />,
+    "CHART INSIGHTS": <BarChart3 className="h-5 w-5" />,
+    "MATCH SIGNALS": <Radio className="h-5 w-5" />,
+    "PLATFORM OUTPUT": <Send className="h-5 w-5" />,
+    "RISK REVIEW": <ShieldCheck className="h-5 w-5" />
+  };
+  return <WorkspaceHeading title={title} icon={icons[eyebrow]} />;
+}
+
+function ScoreBar({ label, value, theme, color = theme.primary }: { label: string; value: number; theme: SportTheme; color?: string }) {
   return (
     <div>
       <div className="flex items-center justify-between text-sm">
         <span className="font-semibold text-slate-700">{label}</span>
-        <span className="font-semibold" style={{ color: theme.primary }}>{value}</span>
+        <span className="font-semibold tabular-nums" style={{ color }}>{value}</span>
       </div>
       <div className="mt-2 h-2 rounded-full bg-slate-100">
-        <div className="h-2 rounded-full" style={{ width: `${value}%`, background: `linear-gradient(90deg, ${theme.primary}, ${theme.accent})` }} />
+        <div className="h-2 rounded-full" style={{ width: `${value}%`, backgroundColor: color }} />
       </div>
     </div>
   );
@@ -937,8 +963,7 @@ function ScoreBar({ label, value, theme }: { label: string; value: number; theme
 function ConclusionCard({ title, body, theme, featured = false }: { title: string; body: string; theme: SportTheme; featured?: boolean }) {
   return (
     <div
-      className="card-lift card-lift-light rounded-[28px] border bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.06)]"
-      style={{ borderColor: featured ? theme.primary : theme.border, boxShadow: featured ? `0 24px 70px ${theme.heroGlow}` : undefined }}
+      className={`min-w-0 px-4 py-5 ${featured ? "bg-teal-50/40" : ""}`}
     >
       <div className="text-sm font-semibold" style={{ color: theme.primary }}>{title}</div>
       <p className="mt-3 text-sm font-medium leading-relaxed text-slate-700"><HighlightedText text={body} /></p>
@@ -1009,9 +1034,9 @@ function MatchHotspotCard({
   onUse: () => void;
 }) {
   return (
-    <article className={`card-lift card-lift-light rounded-[28px] border bg-white p-5 shadow-sm ${hotspot.rank <= 3 ? "card-lift-gold" : ""}`} style={{ borderColor: hotspot.rank <= 3 ? theme.primary : theme.border }}>
+    <article className="card-lift card-lift-light min-w-0 rounded-lg border border-slate-200 bg-white p-5">
       <div className="flex items-start gap-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-base font-black text-white" style={{ backgroundColor: hotspot.rank <= 3 ? theme.primary : theme.secondary }}>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-teal-50 text-sm font-semibold text-teal-700">
           {hotspot.rank}
         </div>
         <div className="min-w-0 flex-1">
@@ -1022,9 +1047,10 @@ function MatchHotspotCard({
               热度 {hotspot.heat ?? hotspot.valueScore}
             </span>
           </div>
-          <h3 className="mt-4 text-xl font-semibold leading-tight text-slate-950">{hotspot.title}</h3>
+          <h3 className="mt-3 text-base font-semibold leading-7 text-slate-950">{hotspot.title}</h3>
           <div className="mt-4 flex flex-wrap gap-2">
             <ActionButton onClick={onUse} theme={theme}>
+              <Send className="h-4 w-4" />
               {hotspot.actionText}
             </ActionButton>
             <ActionButton onClick={onCopy} theme={theme} variant="secondary">
@@ -1032,7 +1058,7 @@ function MatchHotspotCard({
               {copied ? "已复制" : "复制热点"}
             </ActionButton>
             {hotspot.url ? (
-              <a href={hotspot.url} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5">
+              <a href={hotspot.url} target="_blank" rel="noreferrer" className="workspace-button border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
                 打开来源
               </a>
             ) : null}
@@ -1068,17 +1094,19 @@ function PlatformOutputCard({
   const tone = platformCardTone(platform, decision.fit, active);
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`card-lift card-lift-light rounded-[26px] border p-4 text-left ${decision.fit === "主推" ? "card-lift-gold" : ""} ${tone.card}`}
+      aria-pressed={active}
+      className={`min-w-0 rounded-lg border px-3 py-4 text-left transition focus-visible:outline-teal-600 ${active ? "border-teal-500 bg-teal-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="text-xl font-semibold text-slate-950">{meta.title}</div>
-        <span className={`rounded-full px-2.5 py-1 text-xs font-black ${tone.badge}`}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="text-sm font-semibold text-slate-950">{meta.title}</div>
+        <span className={`rounded-md px-2 py-1 text-xs font-medium ${tone.badge}`}>
           {decision.fit}
         </span>
       </div>
       <div className="mt-3 flex items-end gap-2">
-        <span className={`text-3xl font-black ${tone.score}`}>{decision.score}</span>
+        <span className={`text-2xl font-semibold tabular-nums ${active ? "text-teal-700" : "text-slate-700"}`}>{decision.score}</span>
         <span className="mb-1 text-xs font-semibold text-slate-400">适配分</span>
       </div>
     </button>
@@ -1122,14 +1150,14 @@ function PlatformPreview({
 }) {
   const generatedText = draft?.body ?? "";
   return (
-    <div className={`card-lift card-lift-light rounded-[28px] border bg-white p-5 ${className ?? ""}`} style={{ borderColor: theme.border }}>
+    <div className={`min-w-0 border-t border-slate-200 pt-5 ${className ?? ""}`}>
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <div className="text-sm font-semibold" style={{ color: theme.primary }}>{platformMeta[platform].title}</div>
+          <div className="text-sm font-semibold text-teal-700">{platformMeta[platform].title}</div>
           {draft ? <h3 className="mt-2 text-2xl font-semibold text-slate-950">{draft.title}</h3> : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          <ActionButton onClick={onRegenerate} theme={theme} variant="secondary">
+          <ActionButton onClick={onRegenerate} theme={theme} variant="secondary" disabled={draftLoading || !selectedHotspotId}>
             <RefreshCcw className="h-4 w-4" />
             {draftLoading ? "生成中..." : "生成"}
           </ActionButton>
@@ -1153,7 +1181,7 @@ function PlatformPreview({
           <select
             value={selectedHotspotId}
             onChange={(event) => onHotspotChange(event.target.value)}
-            className="mt-2 h-11 w-full rounded-2xl border border-emerald-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-400"
+            className="workspace-select mt-2"
           >
             {hotspots.length ? hotspots.map((hotspot) => (
               <option key={hotspot.id} value={hotspot.id}>{hotspot.title}</option>
@@ -1165,7 +1193,7 @@ function PlatformPreview({
           <select
             value={contentType}
             onChange={(event) => onContentTypeChange(event.target.value as ContentTypeKey)}
-            className="mt-2 h-11 w-full rounded-2xl border border-emerald-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-400"
+            className="workspace-select mt-2"
           >
             {contentTypeOptions.map((item) => (
               <option key={item.key} value={item.key}>{item.label}</option>
@@ -1177,7 +1205,7 @@ function PlatformPreview({
           <select
             value={topicMode}
             onChange={(event) => onTopicModeChange(event.target.value as TopicModeKey)}
-            className="mt-2 h-11 w-full rounded-2xl border border-emerald-200 bg-white px-3 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-400"
+            className="workspace-select mt-2"
           >
             {topicModeOptions.map((item) => (
               <option key={item.key} value={item.key}>{item.label}</option>
@@ -1186,8 +1214,8 @@ function PlatformPreview({
         </label>
       </div>
       {draft ? (
-        <ReadableTextBlock text={generatedText} emphasizeTitles className="mt-5 rounded-2xl bg-slate-50 p-5" />
-      ) : null}
+        <ReadableTextBlock text={generatedText} emphasizeTitles className="mt-5 border-l-2 border-teal-500 bg-slate-50/60 p-5" />
+      ) : <div className="mt-5 flex min-h-32 items-center justify-center bg-slate-50 text-sm text-slate-400">待生成稿件</div>}
     </div>
   );
 }
@@ -1318,16 +1346,18 @@ function platformCardTone(platform: PlatformKey, fit: PlatformFit, active: boole
   };
 }
 
-function ActionButton({ children, onClick, theme, variant = "primary" }: { children: ReactNode; onClick: () => void; theme: SportTheme; variant?: "primary" | "secondary" }) {
+function ActionButton({ children, onClick, theme, variant = "primary", disabled }: { children: ReactNode; onClick: () => void; theme: SportTheme; variant?: "primary" | "secondary"; disabled?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className="inline-flex h-11 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold transition hover:-translate-y-0.5"
+      type="button"
+      disabled={disabled}
+      className="workspace-button"
       style={{
         backgroundColor: variant === "primary" ? theme.primary : "#ffffff",
         color: variant === "primary" ? "#ffffff" : theme.strongText,
         border: `1px solid ${variant === "primary" ? theme.primary : theme.border}`,
-        boxShadow: variant === "primary" ? `0 14px 32px ${theme.heroGlow}` : "none"
+        boxShadow: "none"
       }}
     >
       {children}
