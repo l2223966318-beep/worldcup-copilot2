@@ -26,6 +26,7 @@ import { HighlightedText } from "@/components/ui/readable-text";
 import { GeneratedDocument, GeneratedDraftEditor, MatchReviewResult } from "@/components/ui/generated-content";
 import { formatGeneratedDraft, normalizePlatformDraft } from "@/lib/ai/generated-draft";
 import { InsightCharts } from "@/components/worldcup/insight-charts";
+import { ScoreReasonPopover } from "@/components/ui/score-reason-popover";
 import type { MatchData } from "@/data/matches";
 import { generatePlatformContent, type PlatformContent } from "@/lib/ai/content";
 import { getAiRequestHeaders } from "@/lib/ai/client-access";
@@ -41,6 +42,7 @@ import { contentTypeOptions, createPlatformDraft, topicModeOptions, type Content
 import { buildEvidencePack } from "@/lib/services/evidenceService";
 import { buildContentReportFilename, createContentPackage, createPackageMarkdown, createPendingReviewResult } from "@/lib/services/exportService";
 import { getTeamFlagPath, localizeMatchStatus, localizeRoundName, localizeTeamName, localizeVenueText } from "@/lib/services/footballNames";
+import { getFixtureOpportunityProfile, type MatchOpportunityProfile } from "@/lib/services/matchOpportunity";
 import { readMatchAiWorkflowCache, writeMatchAiWorkflowCache } from "@/lib/services/matchAiCache";
 import {
   buildDraftReviewFlow,
@@ -120,6 +122,12 @@ export default function MatchAnalysisPage() {
     }
   );
   const sourceMatch = payload?.data;
+  const { payload: fixturesPayload } = useWorldCupQuery<WorldCupMatch[]>("/api/worldcup/fixtures", 120_000, {
+    cacheKey: "worldcup.fixtures.season",
+    staleMs: 300_000,
+    revalidateOnMount: false
+  });
+  const opportunity = getFixtureOpportunityProfile(fixturesPayload?.data, fixtureId);
   const fallbackMatch = getMatchDetail(fixtureId);
   const match = useMemo(() => (sourceMatch ? worldCupMatchToMatchData(sourceMatch) : fallbackMatch), [fallbackMatch, sourceMatch]);
   const baseTheme = getSportTheme(getMatchSportType(match.id));
@@ -456,7 +464,7 @@ export default function MatchAnalysisPage() {
         matchName={match.name}
         match={match}
         primaryTopic={topics[0]}
-        taskPriority={workflow.priority}
+        opportunity={opportunity}
         scores={workflow.scores}
         theme={theme}
         sourceMatch={sourceMatch}
@@ -703,7 +711,7 @@ function MatchHero({
   matchName,
   match,
   primaryTopic,
-  taskPriority,
+  opportunity,
   scores,
   theme,
   sourceMatch,
@@ -715,7 +723,7 @@ function MatchHero({
   matchName: string;
   match: MatchData;
   primaryTopic: TopicIdea;
-  taskPriority: string;
+  opportunity?: MatchOpportunityProfile;
   scores: OpportunityScores;
   theme: SportTheme;
   sourceMatch?: WorldCupMatch;
@@ -780,11 +788,21 @@ function MatchHero({
 
         <div className="min-w-0 border-t border-slate-200 pt-6 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
           <div className="text-sm font-semibold text-slate-500">内容机会评分</div>
-          <div className="mt-3 flex items-end gap-3">
-            <span className="text-5xl font-semibold text-teal-700">{taskPriority}</span>
-            <span className="mb-1 text-sm font-medium text-slate-600">级内容机会</span>
-          </div>
-          <div className="mt-5 space-y-4">
+          {opportunity ? <>
+            <div className="mt-3 flex items-end gap-3">
+              <span className="text-5xl font-semibold text-teal-700">{opportunity.grade}</span>
+              <span className="mb-1 text-sm font-medium text-slate-600">级内容机会</span>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-semibold text-slate-500">
+              <span className="tabular-nums">评分 {opportunity.score}</span>
+              <ScoreReasonPopover summary={`${opportunity.grade} 级机会的判断依据`}>
+                <p>{opportunity.reason}</p>
+                <p className="mt-2">当前命中信号：{opportunity.signals.length ? opportunity.signals.join("、") : "暂无明显内容信号"}。</p>
+              </ScoreReasonPopover>
+            </div>
+          </> : <p role="status" className="mt-3 text-lg font-semibold text-slate-400">待评分</p>}
+          <h3 className="mt-6 text-xs font-semibold text-slate-500">选题维度</h3>
+          <div className="mt-3 space-y-4">
             <ScoreBar label="热度" value={scores.heat} theme={theme} color="#0d9488" />
             <ScoreBar label="情绪" value={scores.emotion} theme={theme} color="#0284c7" />
             <ScoreBar label="叙事" value={scores.narrative} theme={theme} color="#64748b" />
@@ -1326,10 +1344,8 @@ function buildMatchWorkflow(
   const shotTotal = statisticTotal(match.stats.teamA.shots, match.stats.teamB.shots) ?? 0;
   const onTargetTotal = statisticTotal(match.stats.teamA.shotsOnTarget, match.stats.teamB.shotsOnTarget) ?? 0;
   const scoreText = match.score === "vs" ? "当前赛程还没有比分" : `比分已经定格为 ${match.score}`;
-  const priority = scores.heat >= 90 && scores.narrative >= 88 ? "S" : scores.heat >= 78 ? "A" : "B";
 
   return {
-    priority,
     scores,
     conclusions: aiEnhancement?.sourceStatus === "live" && aiEnhancement.conclusions.length ? aiEnhancement.conclusions : [
       {
