@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
 import { Bot, MessageSquareText, Search, Sparkles, X } from "lucide-react";
 
 import { copyToClipboard } from "@/lib/download";
@@ -16,15 +15,12 @@ const quickActions = [
 ];
 
 export function FloatingKnowledgeAssistant() {
-  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("这场比赛有什么选题？");
   const [copied, setCopied] = useState(false);
   const theme = getSportTheme("football");
   const workflow = useMemo(() => (open ? readWorkflowState() : null), [open]);
   const answer = useMemo(() => answerQuestion(query, workflow), [query, workflow]);
-
-  if (pathname === "/demo") return null;
 
   async function insertAnswer() {
     await copyToClipboard(answer);

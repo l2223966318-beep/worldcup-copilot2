@@ -94,9 +94,6 @@ export default function DashboardPage() {
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <SectionTitle title="世界杯赛事内容机会池" />
-                <Link href="/demo" className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
-                  历史赛事回放 · 国赛演示 <ArrowRight className="h-4 w-4" />
-                </Link>
               </div>
               <SourceBadge
                 status={activeStatus}
@@ -162,17 +159,14 @@ export default function DashboardPage() {
                   </div>
                   <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
                     {loading
-                      ? "正在读取世界杯赛程，稍后会自动更新。也可直接进入历史案例。"
+                      ? "正在读取世界杯赛程，稍后会自动更新。"
                       : error
-                        ? `赛事数据暂不可用。你可以先用历史案例完成演示。`
+                        ? "赛事数据暂不可用，请检查数据源设置后重试。"
                         : isMockMode
-                          ? "当前处于示例数据模式，可进入历史案例查看完整内容生产流程。"
-                          : "当前赛程列表为空。你可以直接进入历史案例。"}
+                          ? "当前未取得可展示的真实赛程，请检查数据源设置。"
+                          : "当前赛程列表为空，请稍后刷新或检查数据源设置。"}
                   </p>
                   <div className="mt-5 flex flex-wrap gap-3">
-                    <Link href="/demo" className="inline-flex h-11 items-center justify-center rounded-full bg-emerald-600 px-5 text-sm font-semibold text-white transition hover:-translate-y-0.5">
-                      打开历史演示案例
-                    </Link>
                     <Link href="/settings" className="inline-flex h-11 items-center justify-center rounded-full border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 transition hover:-translate-y-0.5">
                       检查数据源设置
                     </Link>
@@ -180,7 +174,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="rounded-[30px] border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
-                  当前筛选条件下没有比赛。可清空搜索、日期、状态筛选，或继续使用经典样例完整演示。
+                  当前筛选条件下没有比赛。可清空搜索、日期和状态筛选。
                 </div>
               )}
             </div>
@@ -743,7 +737,7 @@ function providerSourceName(provider?: WorldCupMatch["source"]["provider"]) {
     "api-football": "API-Football",
     "worldcup26-free": "免费赛程源",
     "thestatsapi-fixtures": "TheStatsAPI",
-    mock: "经典样例"
+    mock: "示例数据"
   };
   return provider ? labels[provider] : undefined;
 }
@@ -806,11 +800,11 @@ function getOpsState(input: {
   if (input.error) {
     return {
       metrics: { priority: "-", watch: "-", low: "-" },
-      copy: `真实数据请求失败：${input.error}。建议直接进入经典样例完成完整演示。`,
+      copy: `真实数据请求失败：${input.error}。请检查数据源设置后重试。`,
       cards: {
         priority: { value: "请求失败", body: "当前不适合根据空接口强行给出优先场次。" },
-        watch: { value: "等待重试", body: "可稍后重试真实数据，或改用样例继续演示。" },
-        direction: { value: "经典样例", body: "当前最稳妥的演示路径是阿根廷 vs 法国经典样例。" },
+        watch: { value: "等待重试", body: "检查接口配置后重试，或等待数据源恢复。" },
+        direction: { value: "等待数据", body: "取得可核验的赛事数据后再判断制作方向。" },
         risk: { value: "中", body: "空数据时不要把平台建议和比赛判断写成确定结论。" }
       }
     };
@@ -819,12 +813,12 @@ function getOpsState(input: {
   if (input.filteredCount === 0 && input.status === "fallback") {
     return {
       metrics: { priority: 0, watch: 0, low: 0 },
-      copy: "当前处于示例 / fallback 数据模式，但比赛池没有可展示场次。建议切换到经典样例走完整链路。",
+      copy: "当前未取得可展示的真实比赛，请检查数据源配置。",
       cards: {
         priority: { value: "示例模式", body: "当前没有真实比赛可排优先级，不展示伪判断。" },
-        watch: { value: "无可展示场次", body: "当前比赛池为空，适合转入经典样例演示。" },
-        direction: { value: "样例演示", body: "用经典样例展示赛事分析、选题、文案和审稿全链路。" },
-        risk: { value: "低", body: "演示模式下需明确标注是样例，不冒充实时判断。" }
+        watch: { value: "无可展示场次", body: "当前比赛池为空，等待数据源返回场次。" },
+        direction: { value: "等待数据", body: "取得可核验的赛事数据后再进行分析与内容生成。" },
+        risk: { value: "待确认", body: "未取得真实数据时不输出实时赛事判断。" }
       }
     };
   }
@@ -832,7 +826,7 @@ function getOpsState(input: {
   if (input.filteredCount === 0) {
     return {
       metrics: { priority: 0, watch: 0, low: 0 },
-      copy: "当前暂未返回可分析的比赛数据，建议保留样例入口，不强行输出运营结论。",
+      copy: "当前暂未返回可分析的比赛数据，不输出缺少依据的运营结论。",
       cards: {
         priority: { value: "无数据", body: "没有比赛时不展示伪优先级。" },
         watch: { value: "无数据", body: "当前没有可观察比赛，等待接口更新。" },

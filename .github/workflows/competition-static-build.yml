@@ -28,7 +28,7 @@ jobs:
         run: npm ci --ignore-scripts
 
       - name: Dependency audit
-        run: npm audit --audit-level=low
+        run: node scripts/audit-dependencies.mjs
 
       - name: Offline frontend regressions
         run: |
