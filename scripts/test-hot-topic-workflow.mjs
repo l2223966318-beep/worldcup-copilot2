@@ -91,10 +91,11 @@ assert.match(pageSource, /label="风格类型"/);
 assert.doesNotMatch(pageSource, /label="内容类型"/);
 assert.match(pageSource, /function updateConfig[\s\S]*setDraft\(""\)[\s\S]*setAudit\(null\)/);
 assert.match(pageSource, /audit\.level !== "pass" \? \(/);
-assert.match(pageSource, /function FormattedDraftEditor/);
-assert.match(pageSource, /function isDraftTitleLine/);
-assert.match(pageSource, /font-bold text-slate-950/);
-assert.match(pageSource, /contentEditable/);
+assert.match(pageSource, /<GeneratedDraftEditor/);
+assert.match(pageSource, /formatGeneratedDraft\(payload\.draft\)/);
+assert.match(pageSource, /<ReviewVerdict/);
+assert.match(pageSource, /<ReviewSection title="修改建议"/);
+await import("./test-generated-draft.mjs");
 
 const routeSource = readFileSync(new URL("../app/api/ai/hot-topic-workflow/route.ts", import.meta.url), "utf8");
 assert.match(routeSource, /contentTypeInstruction\(config\)/);

@@ -76,3 +76,109 @@
     padding: 20px 16px;
   }
 }
+
+.detail-workspace .generated-document {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: #475569;
+  font-size: 14px;
+  line-height: 1.95;
+}
+
+.detail-workspace .draft-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 28px 0 16px;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 22px;
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.65;
+}
+
+.detail-workspace .draft-heading:first-child {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
+}
+
+.detail-workspace .draft-number {
+  flex: none;
+  min-width: 28px;
+  border-radius: 4px;
+  background: #f0fdfa;
+  padding: 2px 5px;
+  color: #0f766e;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.detail-workspace .draft-field {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.detail-workspace .draft-field dt {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 2.25;
+}
+
+.detail-workspace .draft-field dd,
+.detail-workspace .draft-paragraph {
+  white-space: pre-wrap;
+}
+
+.detail-workspace .draft-paragraph + .draft-paragraph {
+  margin-top: 16px;
+}
+
+.detail-workspace .draft-view-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  border-radius: 4px;
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.detail-workspace .draft-view-button:focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 2px;
+}
+
+.detail-workspace .draft-textarea {
+  min-height: 400px;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 20px;
+  font-size: 14px;
+  line-height: 2;
+  color: #334155;
+}
+
+.detail-workspace .draft-textarea:focus-visible {
+  outline: 2px solid #0d9488;
+  outline-offset: 2px;
+}
+
+.detail-workspace .review-section {
+  min-width: 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+@media (max-width: 639px) {
+  .detail-workspace .draft-field {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}
