@@ -106,7 +106,12 @@ export function splitDraftBlocks(text: string): DraftBlock[] {
       blocks.push({ kind: "heading", text: heading ?? numbered![2], number: numbered?.[1] });
       continue;
     }
-    const field = line.match(/^(?:\p{Extended_Pictographic}\uFE0F?\s*)?(角度标题|标题|主标题|封面标题|视频标题|怎么做|说明|正文|摘要|素材|依据|来源|风险提醒|风险提示|开场|前三秒|第一段|第二段|第三段|结尾互动|封面|第\d+页)[：:]\s*(.*)$/u);
+    const fieldLine = line
+      .replace(/^\*\*([^*\n]+)\*\*(?=[：:])/, "$1")
+      .replace(/^__([^_\n]+)__(?=[：:])/, "$1")
+      .replace(/^\*\*([^*\n]+[：:])\*\*/, "$1")
+      .replace(/^__([^_\n]+[：:])__/, "$1");
+    const field = fieldLine.match(/^(?:\p{Extended_Pictographic}\uFE0F?\s*)?(角度标题|标题|主标题|封面标题|视频标题|怎么做|说明|正文|摘要|素材|依据|来源|核心结论|结论|重点|关键信息|内容定位|建议表达|风险边界|风险提醒|风险提示|开场|前三秒|第一段|第二段|第三段|结尾互动|封面|第\d+页)[：:]\s*(.*)$/u);
     if (field) {
       flush();
       blocks.push({ kind: "field", label: field[1], text: field[2] });
