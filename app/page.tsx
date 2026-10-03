@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import type { CSSProperties, MouseEvent } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Palette, Pause, Play, Trophy, Volume2, VolumeX } from "lucide-react";
+import type { CSSProperties } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { ArrowRight, Palette } from "lucide-react";
 
 import { ScoreReasonPopover } from "@/components/ui/score-reason-popover";
 import { HotTopicRadarPanel } from "@/components/worldcup/hot-topic-radar-panel";
+import { EditorialWorldCupHero } from "@/components/worldcup/editorial-hero";
 import { localizeCompetitionName, localizeMatchStatus, localizeRoundName, localizeTeamName, localizeVenueText } from "@/lib/services/footballNames";
 import { filterMatchesByQuery, queryLooksLikeMatchSearch } from "@/lib/services/matchSearchService";
 import { getOpportunityProfile } from "@/lib/services/matchOpportunity";
@@ -87,11 +88,11 @@ export default function DashboardPage() {
   return (
     <div className="relative flex flex-col gap-8 pb-16">
       <ThemeSideSelector active={sportType} onChange={selectSportTheme} />
-      <ImmersiveWorldCupHero />
+      <EditorialWorldCupHero />
 
       <div className="mx-auto grid w-full max-w-[1600px] items-start gap-5 px-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(380px,0.95fr)] lg:px-6 xl:grid-cols-[minmax(0,1.72fr)_minmax(420px,0.9fr)]">
         <div className="min-w-0 space-y-8">
-          <section id="opportunity-pool">
+          <section id="opportunity-pool" className="scroll-mt-24">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <SectionTitle title="世界杯赛事内容机会池" />
@@ -223,113 +224,6 @@ function SectionTitle({ eyebrow, title, description }: { eyebrow?: string; title
   );
 }
 
-function ImmersiveWorldCupHero() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [videoPaused, setVideoPaused] = useState(false);
-  const [videoMuted, setVideoMuted] = useState(true);
-
-  function handlePointerMove(event: MouseEvent<HTMLElement>) {
-    const rect = event.currentTarget.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width - 0.5;
-    const y = (event.clientY - rect.top) / rect.height - 0.5;
-    event.currentTarget.style.setProperty("--hero-x", x.toFixed(3));
-    event.currentTarget.style.setProperty("--hero-y", y.toFixed(3));
-  }
-
-  function handlePointerLeave(event: MouseEvent<HTMLElement>) {
-    event.currentTarget.style.setProperty("--hero-x", "0");
-    event.currentTarget.style.setProperty("--hero-y", "0");
-  }
-
-  function scrollToSection(sectionId: string) {
-    const target = document.getElementById(sectionId);
-    if (!target) return;
-    window.scrollTo({
-      top: target.getBoundingClientRect().top + window.scrollY,
-      left: 0,
-      behavior: "smooth"
-    });
-  }
-
-  async function toggleVideoPlayback() {
-    const video = videoRef.current;
-    if (!video) return;
-    if (video.paused) {
-      await video.play();
-      setVideoPaused(false);
-      return;
-    }
-    video.pause();
-    setVideoPaused(true);
-  }
-
-  function toggleVideoMute() {
-    const video = videoRef.current;
-    if (!video) return;
-    const nextMuted = !video.muted;
-    video.muted = nextMuted;
-    setVideoMuted(nextMuted);
-  }
-
-  return (
-    <section
-      className="worldcup-immersive-hero -mx-4 -mt-5 min-h-[100svh] overflow-hidden text-white lg:-mx-8"
-      onMouseMove={handlePointerMove}
-      onMouseLeave={handlePointerLeave}
-      style={{ "--hero-x": 0, "--hero-y": 0 } as CSSProperties}
-      aria-label="WorldCup Copilot 世界杯沉浸开屏"
-    >
-      <video
-        ref={videoRef}
-        className="worldcup-hero-video"
-        autoPlay
-        loop
-        muted={videoMuted}
-        playsInline
-        preload="metadata"
-        onPause={() => setVideoPaused(true)}
-        onPlay={() => setVideoPaused(false)}
-      >
-        <source src="/videos/worldcup-hero.mp4" type="video/mp4" />
-      </video>
-      <div className="worldcup-hero-video-overlay" />
-
-      <div className="worldcup-hero-layout relative z-10 mx-auto flex min-h-[100svh] w-full max-w-7xl items-center px-4 py-12 md:py-14 lg:px-8">
-        <div className="worldcup-hero-copy">
-          <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-white/10 px-4 py-2 text-xs font-black tracking-[0.16em] text-emerald-100 shadow-[0_0_34px_rgba(34,197,94,0.2)] backdrop-blur">
-            <Trophy className="h-4 w-4 text-amber-300" />
-            WorldCup Copilot
-          </div>
-          <h1 className="mt-7 max-w-3xl text-4xl font-black leading-[0.94] tracking-tight text-white sm:text-5xl md:text-6xl lg:text-6xl xl:text-[4.75rem]">
-            <span className="block">把每一场比赛</span>
-            <span className="block">变成高光时刻</span>
-          </h1>
-          <p className="mt-6 max-w-2xl text-base leading-7 text-slate-200 md:text-lg">
-            WorldCup Copilot 将实时赛况、场上热点和比赛数据，转成可直接进入平台分发的选题与内容方案。
-          </p>
-          <div className="worldcup-hero-actions mt-8 flex flex-wrap gap-3">
-            <button type="button" onClick={() => scrollToSection("opportunity-pool")} className="worldcup-hero-cta worldcup-hero-cta-primary">
-              进入赛事中心
-              <ArrowRight className="h-4 w-4" />
-            </button>
-            <button type="button" onClick={() => scrollToSection("hot-moments")} className="worldcup-hero-cta worldcup-hero-cta-secondary">
-              查看热点时刻
-            </button>
-          </div>
-        </div>
-
-        <div className="worldcup-hero-media-controls" aria-label="开屏视频控制">
-          <button type="button" onClick={toggleVideoPlayback} className="worldcup-hero-control" aria-label={videoPaused ? "播放视频" : "暂停视频"}>
-            {videoPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-          </button>
-          <button type="button" onClick={toggleVideoMute} className="worldcup-hero-control" aria-label={videoMuted ? "打开声音" : "静音"}>
-            {videoMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-          </button>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 function ThemeSideSelector({
   active,

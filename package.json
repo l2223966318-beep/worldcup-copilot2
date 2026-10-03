@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "test:home-hero": "node scripts/test-home-hero.mjs",
     "test:match-opportunity": "node scripts/test-match-opportunity.mjs",
     "test:generated-draft": "node scripts/test-generated-draft.mjs",
     "test:hot-analysis-render": "node scripts/test-hot-analysis-render.mjs",
