@@ -35,13 +35,20 @@ try {
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   assert.ok(ready, `Production server must serve the homepage: ${logs}`);
-  for (const path of ["/", "/pitch", "/matches/example-final", "/hot-topics/example-topic", "/settings"]) {
+  for (const path of ["/", "/pitch", "/history", "/demo", "/matches/example-final", "/hot-topics/example-topic", "/settings"]) {
     const response = await fetch(`${origin}${path}`, { signal: AbortSignal.timeout(5000) });
     assert.equal(response.status, 200, path);
     assert.match(response.headers.get("content-type"), /text\/html/);
     const html = await response.text();
     assert.ok(html.length > 1000, `${path} must not be an empty shell`);
     assert.ok(html.includes("WorldCup Copilot"), `${path} must retain product identity`);
+    if (["/", "/pitch", "/history"].includes(path)) {
+      assert.doesNotMatch(html, /href="\/demo(?:[/?#]|"|$)/, `${path} must not link to the retired demo`);
+    }
+    if (path === "/demo") {
+      assert.match(html, /<noscript>[\s\S]*http-equiv="refresh"[\s\S]*content="0;url=\/"[\s\S]*<\/noscript>/, "retired demo HTML must redirect to the workbench");
+      assert.doesNotMatch(html, /\u5386\u53f2\u8d5b\u4e8b\u56de\u653e|\u6f14\u793a\u6848\u4f8b\u5305|demoEvidence/u, "retired demo HTML must contain no historical case");
+    }
   }
   const manifest = JSON.parse(readFileSync(new URL("../.next/app-build-manifest.json", import.meta.url), "utf8"));
   const assets = [...new Set(Object.values(manifest.pages).flat())];
@@ -73,7 +80,7 @@ try {
     });
     assert.equal(invalid.status, 400, `${route} must ignore legacy access headers and validate input`);
   }
-  console.log(JSON.stringify({ pages: 5, bundles: assets.length, images: 4, videoRange: true,
+  console.log(JSON.stringify({ pages: 7, retiredDemoRedirect: true, bundles: assets.length, images: 4, videoRange: true,
     requestedBusinessEndpoints: 10, anonymousInputRejections: 5, legacyHeaderInputRejections: 5,
     browserInteractionsTested: false }));
 } finally {

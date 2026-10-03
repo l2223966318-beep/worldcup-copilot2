@@ -59,7 +59,7 @@ jobs:
           npm run test:fact-integrity
           npm run test:ai-protection
           npm run test:query-recovery
-          npm run test:demo
+          npm run test:product-entrypoints
           npm run test:sportradar-today
           npm run test:match-search
           npm run test:match-detail
