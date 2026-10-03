@@ -31,7 +31,7 @@
     "test:query-recovery": "node scripts/test-query-recovery.mjs",
     "test:ai-protection": "node scripts/test-ai-protection.mjs",
     "test:pitch": "node scripts/test-pitch-page.mjs",
-    "test:demo": "node scripts/test-demo-session.mjs",
+    "test:product-entrypoints": "node scripts/test-product-entrypoints.mjs",
     "test:pitch:browser": "node scripts/qa-pitch.cjs"
   },
   "dependencies": {
