@@ -108,11 +108,11 @@ export function HotTopicRadarPanel({
 
   return (
     <aside className="lg:sticky lg:top-24">
-      <div className="flex rounded-[28px] border bg-white p-4 shadow-[0_20px_70px_rgba(15,23,42,0.07)] lg:h-[calc(100vh-6.5rem)] lg:flex-col lg:overflow-hidden xl:p-5" style={{ borderColor: theme.border }}>
-        <div className="flex items-start justify-between gap-3">
+      <div className="flex rounded-[28px] border bg-white p-4 shadow-[0_20px_70px_rgba(15,23,42,0.07)] max-lg:min-w-0 max-lg:flex-col lg:h-[calc(100vh-6.5rem)] lg:flex-col lg:overflow-hidden xl:p-5" style={{ borderColor: theme.border }}>
+        <div className="flex items-start justify-between gap-3 max-sm:flex-wrap">
           <div>
             <div className="text-xs font-black tracking-[0.18em] text-slate-400">热点雷达</div>
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950">今日热点雷达</h2>
+            <h2 className="mt-2 text-2xl font-black tracking-tight text-slate-950 max-sm:text-xl">今日热点雷达</h2>
           </div>
           <button
             type="button"
@@ -138,13 +138,13 @@ export function HotTopicRadarPanel({
           </div>
         ) : null}
 
-        <div className="hot-topic-tabs mt-4 flex gap-2 overflow-x-auto pb-2 pr-3">
+        <div className="hot-topic-tabs mt-4 flex gap-2 overflow-x-auto pb-2 pr-3 max-lg:min-w-0 max-lg:shrink-0">
           {tabs.map((tab) => (
             <button
               key={tab}
               type="button"
               onClick={() => setActiveTab(tab)}
-              className={`whitespace-nowrap rounded-full px-3 py-2 text-xs font-semibold ring-1 transition ${
+              className={`whitespace-nowrap rounded-full px-3 py-2 text-xs font-semibold ring-1 transition max-lg:min-h-11 max-lg:shrink-0 ${
                 activeTab === tab ? "text-white shadow-sm" : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
               }`}
               style={activeTab === tab ? { backgroundColor: theme.primary, boxShadow: `0 10px 24px ${theme.heroGlow}` } : undefined}
@@ -154,7 +154,7 @@ export function HotTopicRadarPanel({
           ))}
         </div>
 
-        <div className="hot-topic-scroll mt-3 space-y-3 border-t border-slate-100 pt-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
+        <div className="hot-topic-scroll mt-3 space-y-3 border-t border-slate-100 pt-3 max-lg:min-w-0 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
           {filteredTopics.length ? (
             filteredTopics.slice(0, 12).map((topic, index) => {
               const isFeaturedAll = activeTab === "全部" && index < 3;
@@ -216,7 +216,7 @@ export function HotTopicRadarPanel({
                             event.stopPropagation();
                             openTopic(topic);
                           }}
-                          className={`inline-flex h-8 items-center rounded-full px-3.5 text-xs font-semibold ring-1 transition hover:-translate-y-0.5 ${
+                          className={`inline-flex h-8 items-center rounded-full px-3.5 text-xs font-semibold ring-1 transition hover:-translate-y-0.5 max-lg:min-h-11 ${
                             isFeaturedAll ? "bg-white/75 text-slate-800 ring-slate-200/70 backdrop-blur hover:bg-white" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
                           }`}
                         >
@@ -228,7 +228,7 @@ export function HotTopicRadarPanel({
                             event.stopPropagation();
                             openTopic(topic, "generate");
                           }}
-                          className={`inline-flex h-8 items-center rounded-full px-3.5 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-0.5 ${
+                          className={`inline-flex h-8 items-center rounded-full px-3.5 text-xs font-semibold text-white shadow-sm transition hover:-translate-y-0.5 max-lg:min-h-11 ${
                             isFeaturedAll ? `hot-topic-feature-action hot-topic-feature-action-${featureRank}` : ""
                           }`}
                           style={isFeaturedAll ? undefined : { backgroundColor: theme.primary }}

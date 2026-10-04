@@ -90,7 +90,7 @@ export default function DashboardPage() {
       <ThemeSideSelector active={sportType} onChange={selectSportTheme} />
       <EditorialWorldCupHero />
 
-      <div className="mx-auto grid w-full max-w-[1600px] items-start gap-5 px-4 lg:grid-cols-[minmax(0,1.65fr)_minmax(380px,0.95fr)] lg:px-6 xl:grid-cols-[minmax(0,1.72fr)_minmax(420px,0.9fr)]">
+      <div className="mx-auto grid w-full max-w-[1600px] items-start gap-5 px-4 max-sm:px-0 max-lg:grid-cols-1 lg:grid-cols-[minmax(0,1.65fr)_minmax(380px,0.95fr)] lg:px-6 xl:grid-cols-[minmax(0,1.72fr)_minmax(420px,0.9fr)]">
         <div className="min-w-0 space-y-8">
           <section id="opportunity-pool" className="scroll-mt-24">
             <div className="flex flex-wrap items-end justify-between gap-4">
@@ -106,7 +106,7 @@ export default function DashboardPage() {
               />
             </div>
             <div className="mt-5 grid gap-3 rounded-[22px] border border-slate-200 bg-white p-3.5 md:grid-cols-4">
-              <label className="block">
+              <label className="block max-lg:min-w-0">
                 <span className="text-xs font-semibold text-slate-500">搜索比赛 / 球队</span>
                 <input
                   value={matchSearchQuery}
@@ -115,14 +115,14 @@ export default function DashboardPage() {
                   className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none"
                 />
               </label>
-              <label className="block">
+              <label className="block max-lg:min-w-0">
                 <span className="text-xs font-semibold text-slate-500">赛事</span>
                 <select value={competitionFilter} onChange={(event) => setCompetitionFilter(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none">
                   <option value="all">全部赛事</option>
                   {competitions.map((item) => <option key={item} value={item}>{localizeCompetitionName(item)}</option>)}
                 </select>
               </label>
-              <label className="block">
+              <label className="block max-lg:min-w-0">
                 <span className="text-xs font-semibold text-slate-500">日期</span>
                 <div className="relative mt-2">
                   {!dateFilter ? (
@@ -135,11 +135,11 @@ export default function DashboardPage() {
                     lang="zh-CN"
                     value={dateFilter}
                     onChange={(event) => setDateFilter(event.target.value)}
-                    className={`h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none ${dateFilter ? "text-slate-700" : "text-transparent"}`}
+                    className={`h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none max-lg:min-w-0 max-lg:max-w-full max-lg:appearance-none ${dateFilter ? "text-slate-700" : "text-transparent"}`}
                   />
                 </div>
               </label>
-              <label className="block">
+              <label className="block max-lg:min-w-0">
                 <span className="text-xs font-semibold text-slate-500">状态</span>
                 <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm outline-none">
                   <option value="all">全部状态</option>
@@ -184,7 +184,7 @@ export default function DashboardPage() {
 
         </div>
 
-        <div id="hot-moments" className="scroll-mt-24">
+        <div id="hot-moments" className="scroll-mt-24 max-lg:min-w-0">
           <HotTopicRadarPanel theme={theme} matches={matches} />
         </div>
       </div>
