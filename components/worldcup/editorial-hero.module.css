@@ -9,8 +9,7 @@
   letter-spacing: 0;
 }
 
-.artwork,
-.video {
+.artwork {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -25,11 +24,44 @@
   object-position: center 65%;
 }
 
+.artwork::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgb(6 15 16 / 22%);
+}
+
+.videoDialog {
+  width: min(1280px, calc(100vw - 32px));
+  max-height: 92svh;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 8px;
+  background: #10191b;
+  color: #fff;
+}
+
+.videoDialog::backdrop {
+  background: rgb(4 10 9 / 84%);
+}
+
+.videoHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .video {
-  z-index: 1;
+  display: block;
+  width: 100%;
+  max-height: calc(92svh - 58px);
   object-fit: contain;
   object-position: center;
-  background: #10191b url("/images/worldcup-video-stadium-fill-v1.webp") center / cover no-repeat;
+  background: #000;
 }
 
 .layout {
