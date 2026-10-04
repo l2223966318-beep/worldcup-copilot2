@@ -9,7 +9,8 @@
   letter-spacing: 0;
 }
 
-.artwork {
+.artwork,
+.video {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -24,42 +25,17 @@
   object-position: center 65%;
 }
 
-.artwork::after {
+.hero::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: rgb(6 15 16 / 22%);
-}
-
-.videoDialog {
-  width: min(1280px, calc(100vw - 32px));
-  max-height: 92svh;
-  padding: 0;
-  border: 1px solid rgb(255 255 255 / 20%);
-  border-radius: 8px;
-  background: #10191b;
-  color: #fff;
-}
-
-.videoDialog::backdrop {
-  background: rgb(4 10 9 / 84%);
-}
-
-.videoHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 14px;
-  font-size: 14px;
-  font-weight: 600;
+  z-index: 1;
+  pointer-events: none;
+  background: rgb(4 12 11 / 38%);
 }
 
 .video {
-  display: block;
-  width: 100%;
-  max-height: calc(92svh - 58px);
-  object-fit: contain;
+  object-fit: cover;
   object-position: center;
   background: #000;
 }
@@ -69,24 +45,25 @@
   z-index: 2;
   display: flex;
   align-items: center;
-  min-height: min(580px, 74svh);
+  min-height: min(660px, 78svh);
   max-width: 1440px;
   margin: 0 auto;
-  padding: 44px 7% 76px;
+  padding: 40px 7% 80px;
 }
 
 .copy {
-  width: 55%;
+  width: 76%;
+  max-width: 800px;
   min-width: 0;
-  text-shadow: 0 2px 12px rgb(0 0 0 / 22%);
+  text-shadow: 0 3px 24px rgb(0 0 0 / 42%);
 }
 
 .title {
   margin: 0;
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 80px;
+  font-size: 96px;
   font-weight: 900;
-  line-height: 0.98;
+  line-height: 0.94;
   letter-spacing: 0;
 }
 
@@ -95,22 +72,26 @@
 }
 
 .statement {
-  margin: 24px 0 0;
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1.4;
+  margin: 26px 0 0;
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1.28;
+  text-wrap: balance;
 }
 
 .statement strong {
+  display: inline-block;
+  padding-bottom: 3px;
+  border-bottom: 2px solid var(--hero-accent);
   color: var(--hero-accent);
   font-weight: inherit;
 }
 
 .description {
-  max-width: 450px;
-  margin: 14px 0 0;
+  max-width: 480px;
+  margin: 16px 0 0;
   color: #e1e6e3;
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.75;
 }
 
@@ -128,8 +109,8 @@
   align-items: center;
   justify-content: center;
   gap: 14px;
-  min-height: 48px;
-  font-size: 14px;
+  min-height: 52px;
+  font-size: 16px;
   font-weight: 700;
   line-height: 1.3;
   text-decoration: none;
@@ -138,7 +119,7 @@
 }
 
 .primary {
-  min-width: 174px;
+  min-width: 190px;
   padding: 12px 20px;
   border: 1px solid var(--hero-accent);
   border-radius: 4px;
@@ -207,8 +188,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border: 1px solid rgb(255 255 255 / 65%);
   border-radius: 4px;
   background: rgb(10 18 14 / 40%);
@@ -238,8 +219,8 @@
 
 @media (max-width: 1100px) {
   .layout { padding-right: 5%; padding-left: 5%; }
-  .title { font-size: 66px; }
-  .statement { font-size: 24px; }
+  .title { font-size: 80px; }
+  .statement { font-size: 38px; }
   .footer { right: 5%; left: 5%; }
 }
 
@@ -247,47 +228,57 @@
   .layout { min-height: min(520px, 72svh); padding: 30px 24px 68px; }
   .copy { width: 100%; }
   .artwork img { object-position: center bottom; }
-  .title { font-size: 56px; }
-  .statement { margin-top: 18px; font-size: 22px; }
-  .description { max-width: 260px; margin-top: 12px; font-size: 14px; }
+  .title { font-size: 60px; }
+  .statement { margin-top: 22px; font-size: 32px; }
+  .description { max-width: 320px; margin-top: 14px; font-size: 15px; }
   .actions { flex-direction: column; align-items: flex-start; gap: 2px; margin-top: 18px; }
-  .primary, .secondary { min-height: 44px; font-size: 13px; }
+  .primary, .secondary { min-height: 48px; font-size: 14px; }
   .primary { min-width: 166px; padding: 10px 18px; }
   .footer { right: 24px; bottom: 18px; left: 24px; gap: 16px; }
-  .control { width: 32px; height: 32px; }
+  .control { width: 36px; height: 36px; }
   .mediaError { right: 24px; bottom: 56px; }
 }
 
 @media (max-width: 380px) {
   .layout { padding-right: 20px; padding-left: 20px; }
-  .title { font-size: 48px; }
-  .statement { font-size: 21px; }
+  .title { font-size: 50px; }
+  .statement { font-size: 28px; }
   .footer { right: 20px; left: 20px; }
 }
 
 @media (max-height: 740px) and (min-width: 701px) {
-  .layout { padding-top: 28px; padding-bottom: 64px; }
-  .title { font-size: 60px; }
-  .statement { margin-top: 16px; font-size: 22px; }
-  .description { margin-top: 10px; font-size: 14px; line-height: 1.6; }
+  .layout { padding-top: 28px; padding-bottom: 70px; }
+  .title { font-size: 80px; }
+  .statement { margin-top: 18px; font-size: 32px; }
+  .description { margin-top: 12px; font-size: 14px; line-height: 1.6; }
   .actions { margin-top: 18px; }
+  .primary, .secondary { min-height: 48px; font-size: 15px; }
+}
+
+@media (max-height: 620px) and (min-width: 701px) {
+  .layout { padding-top: 24px; padding-bottom: 62px; }
+  .title { font-size: 64px; }
+  .statement { margin-top: 16px; font-size: 28px; }
+  .description { margin-top: 10px; font-size: 13px; }
+  .actions { margin-top: 14px; }
+  .primary, .secondary { min-height: 46px; font-size: 14px; }
 }
 
 @media (max-height: 620px) and (max-width: 700px) {
   .layout { padding-top: 22px; padding-bottom: 60px; }
-  .title { font-size: 36px; }
-  .statement { margin-top: 12px; font-size: 18px; }
+  .title { font-size: 44px; }
+  .statement { margin-top: 14px; font-size: 26px; }
   .description { max-width: 240px; margin-top: 8px; font-size: 13px; line-height: 1.6; }
   .actions { margin-top: 14px; }
 }
 
 @media (max-height: 520px) and (min-width: 701px) {
   .layout { min-height: min(340px, 65svh); padding-top: 18px; padding-bottom: 46px; }
-  .copy { width: 60%; }
-  .title { font-size: 36px; }
+  .copy { width: 85%; }
+  .title { font-size: 44px; }
   .title span { display: inline; }
   .title span + span { margin-left: 10px; }
-  .statement { margin-top: 10px; font-size: 16px; }
+  .statement { margin-top: 10px; font-size: 22px; }
   .description { margin-top: 8px; font-size: 12px; line-height: 1.6; }
   .actions { margin-top: 12px; }
   .primary, .secondary { min-height: 40px; font-size: 12px; }
