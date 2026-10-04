@@ -163,6 +163,7 @@ const editor = () => find(tree, node => node.props?.label === "待审稿件");
 editor().props.onChange("稿件 A");
 tree = matches.render(MatchPage, matchProps);
 const oldReview = find(tree, node => node.props?.onClick?.name === "handleAiReview").props.onClick();
+assert.equal(matches.storage.getItem("worldcup.workflow.draftForReview"), "稿件 A", "manual audits keep their submitted body even without a generated draft");
 editor().props.onChange("稿件 B");
 editor().props.onChange("稿件 A");
 matches.requests.shift().resolve({ sourceStatus: "live", result: { level: "低", score: 0, findings: [], advice: "old verdict" } });

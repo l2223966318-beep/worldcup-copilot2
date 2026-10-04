@@ -424,13 +424,13 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
     if (!activeWorkflowDraft) {
       showWorkflowNotice("请先生成平台内容，或手动输入待审稿件。");
     }
-    writeReviewDraft(draftSnapshot);
     writeWorkflowState({
       currentMatch: evidenceContext,
       selectedTopic: workflowTopic,
       selectedPlatform: activeWorkflowDraft?.platform ?? toWorkflowPlatform(activePlatform),
       generatedContent: activeWorkflowDraft ? { ...activeWorkflowDraft, body: draftSnapshot } : undefined
     });
+    writeReviewDraft(draftSnapshot);
 
     setReviewedDraft("");
     setAiReviewFlow(null);
