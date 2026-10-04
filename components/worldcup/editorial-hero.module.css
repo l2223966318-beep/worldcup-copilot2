@@ -29,7 +29,7 @@
   z-index: 1;
   object-fit: contain;
   object-position: center;
-  background: #10191b;
+  background: #10191b url("/images/worldcup-video-stadium-fill-v1.webp") center / cover no-repeat;
 }
 
 .layout {
