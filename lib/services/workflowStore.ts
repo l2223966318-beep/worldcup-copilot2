@@ -31,11 +31,19 @@ export function readWorkflowState(): WorkflowState {
 export function writeWorkflowState(patch: Partial<WorkflowState>) {
   if (typeof window === "undefined") return;
   const current = readWorkflowState();
+  const matchChanged = Boolean(patch.currentMatch && patch.currentMatch.id !== current.currentMatch?.id);
+  const draftChanged = "generatedContent" in patch && patch.generatedContent?.body !== current.generatedContent?.body;
+  const platformChanged = patch.selectedPlatform !== undefined && patch.selectedPlatform !== current.selectedPlatform;
   const next: WorkflowState = {
-    ...current,
+    ...(matchChanged ? { knowledgeContext: current.knowledgeContext } : current),
+    ...(platformChanged ? { generatedContent: undefined } : {}),
+    ...(matchChanged || draftChanged || platformChanged ? { reviewResult: undefined } : {}),
     ...patch,
     updatedAt: new Date().toISOString()
   };
+  if (matchChanged || platformChanged || ("generatedContent" in patch && !patch.generatedContent)) {
+    window.localStorage.removeItem(REVIEW_DRAFT_STORAGE_KEY);
+  }
   window.localStorage.setItem(WORKFLOW_STORAGE_KEY, JSON.stringify(next));
 }
 
