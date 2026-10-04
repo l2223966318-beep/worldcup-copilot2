@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "test:workflow-consistency": "node scripts/test-workflow-consistency.mjs",
     "test:home-hero": "node scripts/test-home-hero.mjs",
     "test:match-opportunity": "node scripts/test-match-opportunity.mjs",
     "test:generated-draft": "node scripts/test-generated-draft.mjs",

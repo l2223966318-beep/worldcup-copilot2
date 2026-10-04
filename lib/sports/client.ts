@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import type { WorldCupPayload } from "@/lib/sports/types";
 
 type QueryState<T> = {
+  queryKey: string;
   payload?: WorldCupPayload<T>;
   loading: boolean;
   error?: string;
@@ -28,10 +29,11 @@ export function useWorldCupQuery<T>(
   const staleMs = options.staleMs ?? 120_000;
   const maxStaleMs = options.maxStaleMs ?? Math.max(staleMs, 6 * 60 * 60_000);
   const revalidateOnMount = options.revalidateOnMount ?? true;
+  const queryKey = JSON.stringify([url, cacheKey]);
   const [state, setState] = useState<QueryState<T>>(() => {
-    if (!enabled) return { loading: false };
+    if (!enabled) return { queryKey, loading: false };
     const cached = readCachedPayload<T>(cacheKey, maxStaleMs);
-    return cached ? { payload: cached, loading: false } : { loading: true };
+    return cached ? { queryKey, payload: cached, loading: false } : { queryKey, loading: true };
   });
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export function useWorldCupQuery<T>(
     let failures = 0;
 
     if (!enabled) {
-      setState({ loading: false });
+      setState({ queryKey, loading: false });
       return () => {
         active = false;
       };
@@ -48,9 +50,11 @@ export function useWorldCupQuery<T>(
 
     const cached = readCachedPayload<T>(cacheKey, maxStaleMs);
     if (cached) {
-      setState({ payload: cached, loading: false });
+      setState({ queryKey, payload: cached, loading: false });
     } else {
-      setState((current) => ({ ...current, loading: !current.payload }));
+      setState((current) => current.queryKey === queryKey
+        ? { ...current, loading: !current.payload }
+        : { queryKey, loading: true });
     }
 
     async function load() {
@@ -59,7 +63,7 @@ export function useWorldCupQuery<T>(
         if (!active) return;
         failures = 0;
         writeCachedPayload(cacheKey, payload);
-        setState({ payload, loading: false });
+        setState({ queryKey, payload, loading: false });
         const nextRefreshMs = typeof refreshMs === "function" ? refreshMs(payload) : refreshMs;
         if (active && nextRefreshMs && nextRefreshMs > 0) {
           timer = window.setTimeout(() => void load(), nextRefreshMs);
@@ -67,7 +71,7 @@ export function useWorldCupQuery<T>(
       } catch (error) {
         if (!active) return;
         setState((current) => ({
-          ...current,
+          ...(current.queryKey === queryKey ? current : { queryKey }),
           loading: false,
           error: error instanceof Error ? error.message : "\u8bf7\u6c42\u5931\u8d25"
         }));
@@ -91,9 +95,12 @@ export function useWorldCupQuery<T>(
       active = false;
       if (timer) window.clearTimeout(timer);
     };
-  }, [cacheKey, enabled, maxStaleMs, refreshMs, revalidateOnMount, staleMs, url]);
+  }, [cacheKey, enabled, maxStaleMs, queryKey, refreshMs, revalidateOnMount, staleMs, url]);
 
-  return state;
+  if (!enabled) return { queryKey, loading: false };
+  if (state.queryKey === queryKey) return state;
+  const cached = readCachedPayload<T>(cacheKey, maxStaleMs);
+  return { queryKey, payload: cached, loading: !cached };
 }
 
 function readCachedPayload<T>(cacheKey: string, staleMs: number): WorldCupPayload<T> | undefined {

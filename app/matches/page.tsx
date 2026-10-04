@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   BarChart3,
@@ -106,22 +106,24 @@ const platformMeta: Record<PlatformKey, { title: string; positioning: string; ac
 };
 
 export default function MatchAnalysisPage() {
-  const [fixtureId, setFixtureId] = useState("argentina-france-2022-final");
-  const [routeReady, setRouteReady] = useState(false);
+  const [fixtureId, setFixtureId] = useState<string | null>(null);
   useEffect(() => {
     setFixtureId(new URLSearchParams(window.location.search).get("id") || "argentina-france-2022-final");
-    setRouteReady(true);
   }, []);
+  if (fixtureId === null) return <div role="status" className="py-10 text-center text-sm text-slate-500">正在读取比赛信息...</div>;
+  return <MatchAnalysisRoute key={fixtureId} fixtureId={fixtureId} />;
+}
+
+function MatchAnalysisRoute({ fixtureId }: { fixtureId: string }) {
   const { payload, loading, error } = useWorldCupQuery<WorldCupMatch>(
     `/api/worldcup/matches/${fixtureId}`,
     matchRefreshPolicy,
     {
-      enabled: routeReady,
       cacheKey: `worldcup.match.${fixtureId}`,
       staleMs: 120_000
     }
   );
-  const sourceMatch = payload?.data;
+  const sourceMatch = payload?.data?.id === fixtureId ? payload.data : undefined;
   const { payload: fixturesPayload } = useWorldCupQuery<WorldCupMatch[]>("/api/worldcup/fixtures", 120_000, {
     cacheKey: "worldcup.fixtures.season",
     staleMs: 300_000,
@@ -130,6 +132,26 @@ export default function MatchAnalysisPage() {
   const opportunity = getFixtureOpportunityProfile(fixturesPayload?.data, fixtureId);
   const fallbackMatch = getMatchDetail(fixtureId);
   const match = useMemo(() => (sourceMatch ? worldCupMatchToMatchData(sourceMatch) : fallbackMatch), [fallbackMatch, sourceMatch]);
+  if (!match) {
+    return (
+      <section className="workspace-section mx-auto max-w-5xl py-10">
+        <h1 className="text-xl font-semibold text-slate-950">{loading ? "正在加载本场比赛" : "本场比赛数据暂不可用"}</h1>
+        <p className="mt-3 text-sm text-slate-500" role="status">{loading ? "请稍候。" : "请返回赛事列表重试，不会使用其他比赛替代当前比赛。"}</p>
+        <Link href="/" className="mt-6 inline-flex items-center gap-2 text-sm font-semibold text-teal-700"><ArrowLeft className="h-4 w-4" />返回赛事列表</Link>
+      </section>
+    );
+  }
+  return <MatchAnalysisWorkspace key={match.id} match={match} sourceMatch={sourceMatch} payload={payload} opportunity={opportunity} loading={loading} error={error} />;
+}
+
+function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, loading, error }: {
+  match: MatchData;
+  sourceMatch?: WorldCupMatch;
+  payload?: WorldCupPayload<WorldCupMatch>;
+  opportunity?: MatchOpportunityProfile;
+  loading: boolean;
+  error?: string;
+}) {
   const baseTheme = getSportTheme(getMatchSportType(match.id));
   const theme = baseTheme.sportType === "football"
     ? { ...baseTheme, primary: "#0f766e", secondary: "#0f766e", accent: "#0369a1" }
@@ -159,6 +181,13 @@ export default function MatchAnalysisPage() {
   const [reviewedDraft, setReviewedDraft] = useState("");
   const [selectedHotspotId, setSelectedHotspotId] = useState("");
   const [activeHotspotKind, setActiveHotspotKind] = useState<"onField" | "offField">("onField");
+  const generationRequestId = useRef(0);
+  const reviewRequestId = useRef(0);
+
+  useEffect(() => () => {
+    generationRequestId.current += 1;
+    reviewRequestId.current += 1;
+  }, []);
 
   const localContent = useMemo(() => generatePlatformContent(match, selectedTopic), [match, selectedTopic]);
   const content = useMemo(() => {
@@ -197,7 +226,6 @@ export default function MatchAnalysisPage() {
   const markdown = useMemo(() => buildMarkdown(match.name, selectedTopic, content, reviewFlow?.result.advice ?? "待审核"), [content, match.name, reviewFlow?.result.advice, selectedTopic]);
 
   useEffect(() => {
-    if (!routeReady) return;
     if (loading && !payload) return;
 
     const controller = new AbortController();
@@ -243,7 +271,7 @@ export default function MatchAnalysisPage() {
     void loadAiWorkflow();
 
     return () => controller.abort();
-  }, [baselineTopics, loading, match, payload, routeReady]);
+  }, [baselineTopics, loading, match, payload]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -331,6 +359,14 @@ export default function MatchAnalysisPage() {
     showWorkflowNotice("选题已生成，可继续生成平台文案。");
   }
 
+  function invalidatePendingRequests() {
+    generationRequestId.current += 1;
+    reviewRequestId.current += 1;
+    setDraftLoading(false);
+    setReviewLoading(false);
+    writeWorkflowState({ generatedContent: undefined, reviewResult: undefined });
+  }
+
   async function handleGeneratePlatformDraft() {
     if (!selectedHotspot) {
       showWorkflowNotice("请先选择一个热点。");
@@ -338,6 +374,12 @@ export default function MatchAnalysisPage() {
     }
     const analysisSnapshot = manualAnalysis ?? createRuleBasedAnalysis(evidenceContext);
     const fallbackDraft = createPlatformDraft(toWorkflowPlatform(activePlatform), evidenceContext, workflowTopic, analysisSnapshot, { contentType: activeContentType, topicMode: activeTopicMode });
+    const requestId = ++generationRequestId.current;
+    reviewRequestId.current += 1;
+    setReviewLoading(false);
+    setReviewedDraft("");
+    setAiReviewFlow(null);
+    writeWorkflowState({ reviewResult: undefined });
     setDraftLoading(true);
     let draft = fallbackDraft;
 
@@ -356,11 +398,12 @@ export default function MatchAnalysisPage() {
         })
       });
       const payload = (await response.json()) as { sourceStatus: "live" | "fallback" | "error"; draft?: PlatformDraft; message?: string };
-      if (payload.sourceStatus === "live" && payload.draft) draft = normalizePlatformDraft(payload.draft);
+      if (response.ok && payload.sourceStatus === "live" && payload.draft?.platform === fallbackDraft.platform) draft = normalizePlatformDraft(payload.draft);
     } catch {
       draft = fallbackDraft;
     }
 
+    if (generationRequestId.current !== requestId) return;
     setManualAnalysis(analysisSnapshot);
     setManualDraft(draft);
     setAiReviewFlow(null);
@@ -380,18 +423,21 @@ export default function MatchAnalysisPage() {
       return;
     }
     const draftSnapshot = reviewSourceText;
+    const requestId = ++reviewRequestId.current;
     if (!activeWorkflowDraft) {
       showWorkflowNotice("请先生成平台内容，或手动输入待审稿件。");
     }
-    writeReviewDraft(draftSnapshot);
     writeWorkflowState({
       currentMatch: evidenceContext,
       selectedTopic: workflowTopic,
       selectedPlatform: activeWorkflowDraft?.platform ?? toWorkflowPlatform(activePlatform),
       generatedContent: activeWorkflowDraft ? { ...activeWorkflowDraft, body: draftSnapshot } : undefined
     });
+    writeReviewDraft(draftSnapshot);
 
     setReviewedDraft("");
+    setAiReviewFlow(null);
+    writeWorkflowState({ reviewResult: undefined });
     setReviewLoading(true);
     try {
       const response = await fetch("/api/ai/review-draft", {
@@ -411,6 +457,7 @@ export default function MatchAnalysisPage() {
         rewriteSuggestion?: string;
         checklist?: string[];
       };
+      if (reviewRequestId.current !== requestId) return;
       if ((payload.sourceStatus === "live" || payload.sourceStatus === "fallback") && payload.result) {
         const nextReviewFlow: DraftReviewFlow = {
           draft: draftSnapshot,
@@ -425,14 +472,17 @@ export default function MatchAnalysisPage() {
         setAiReviewFlow(null);
       }
     } catch {
-      setAiReviewFlow(null);
+      if (reviewRequestId.current === requestId) setAiReviewFlow(null);
     } finally {
-      setReviewedDraft(draftSnapshot);
-      setReviewLoading(false);
+      if (reviewRequestId.current === requestId) {
+        setReviewedDraft(draftSnapshot);
+        setReviewLoading(false);
+      }
     }
   }
 
   function openHotspotWorkflow(hotspot: ReturnType<typeof buildMatchHotspotShortlist>[number]) {
+    invalidatePendingRequests();
     setSelectedHotspotId(hotspot.id);
     setManualDraft(null);
     setDraftForReview("");
@@ -449,7 +499,8 @@ export default function MatchAnalysisPage() {
       analysis: analysisSnapshot,
       selectedTopic: workflowTopic,
       platformDraft: activeWorkflowDraft,
-      reviewResult: reviewFlow?.result ?? createPendingReviewResult(evidence)
+      reviewResult: reviewFlow && reviewSourceText === getPublishableDraftText(activeWorkflowDraft).trim()
+        ? reviewFlow.result : createPendingReviewResult(evidence)
     });
   }
 
@@ -543,6 +594,7 @@ export default function MatchAnalysisPage() {
               decision={platformDecisions[platform]}
               theme={theme}
               onClick={() => {
+                invalidatePendingRequests();
                 setActivePlatform(platform);
                 setManualDraft(null);
                 setDraftForReview("");
@@ -562,6 +614,7 @@ export default function MatchAnalysisPage() {
           topicMode={activeTopicMode}
           draftLoading={draftLoading}
           onHotspotChange={(hotspotId) => {
+            invalidatePendingRequests();
             setSelectedHotspotId(hotspotId);
             setManualDraft(null);
             setDraftForReview("");
@@ -569,6 +622,7 @@ export default function MatchAnalysisPage() {
             setAiReviewFlow(null);
           }}
           onContentTypeChange={(type) => {
+            invalidatePendingRequests();
             setActiveContentType(type);
             setManualDraft(null);
             setDraftForReview("");
@@ -576,6 +630,7 @@ export default function MatchAnalysisPage() {
             setAiReviewFlow(null);
           }}
           onTopicModeChange={(mode) => {
+            invalidatePendingRequests();
             setActiveTopicMode(mode);
             setManualDraft(null);
             setDraftForReview("");
@@ -624,6 +679,11 @@ export default function MatchAnalysisPage() {
             <GeneratedDraftEditor
               value={draftForReview}
               onChange={(value) => {
+                generationRequestId.current += 1;
+                setDraftLoading(false);
+                reviewRequestId.current += 1;
+                setReviewLoading(false);
+                writeWorkflowState({ reviewResult: undefined });
                 setDraftForReview(value);
                 setReviewedDraft("");
                 setAiReviewFlow(null);
@@ -636,6 +696,9 @@ export default function MatchAnalysisPage() {
                   showWorkflowNotice("请先生成平台内容。");
                   return;
                 }
+                reviewRequestId.current += 1;
+                setReviewLoading(false);
+                writeWorkflowState({ reviewResult: undefined });
                 setDraftForReview(getPublishableDraftText(activeWorkflowDraft));
                 setReviewedDraft("");
                 setAiReviewFlow(null);
@@ -644,6 +707,9 @@ export default function MatchAnalysisPage() {
               </ActionButton>
               <ActionButton onClick={() => {
                 if (!reviewFlow) return;
+                reviewRequestId.current += 1;
+                setReviewLoading(false);
+                writeWorkflowState({ reviewResult: undefined });
                 setDraftForReview(reviewFlow.rewriteSuggestion);
                 setReviewedDraft("");
                 setAiReviewFlow(null);
