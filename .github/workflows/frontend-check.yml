@@ -50,6 +50,7 @@ jobs:
           npm run test:hot
           npm run test:hot-topic
           npm run test:workflow
+          npm run test:workflow-consistency
           npm run test:platform-draft
           npm run test:platform-controls
           npm run test:match-ai-cache

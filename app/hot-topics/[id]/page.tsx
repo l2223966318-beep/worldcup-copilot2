@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
-import { ArrowLeft, CheckCircle2, ChevronDown, Clipboard, ExternalLink, FileText, RefreshCcw, Save, ShieldCheck, SlidersHorizontal, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useParams } from "next/navigation";
+import { ArrowLeft, CheckCircle2, ChevronDown, Clipboard, ExternalLink, FileText, History, RefreshCcw, Save, ShieldCheck, SlidersHorizontal, Sparkles } from "lucide-react";
 
 import { AuditPlaceholder, WorkspaceHeading, WorkspaceStatus, type WorkspaceStep } from "@/components/layout/detail-workspace";
 import "@/app/detail-workspace.css";
@@ -24,6 +24,7 @@ import {
   type HotRadarCache
 } from "@/lib/hot/hotTopicWorkflow";
 import { readHotTopicAiCache, writeHotTopicAiCache } from "@/lib/services/hotTopicAiCache";
+import { readSavedHotDraft, saveHotDraft } from "@/lib/services/hotDraftStore";
 import { normalizeHotAnalysis } from "@/lib/hot/normalizeHotAnalysis";
 import { formatGeneratedDraft } from "@/lib/ai/generated-draft";
 import { GeneratedDocument, GeneratedDraftEditor, ReviewSection, ReviewVerdict } from "@/components/ui/generated-content";
@@ -46,20 +47,22 @@ const SETTINGS_STORAGE_KEY = "worldcup.datasource.settings";
 
 export default function HotTopicDetailPage() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const rawId = Array.isArray(params.id) ? params.id[0] : params.id;
   const topicId = rawId ? decodeURIComponent(rawId) : "";
-  const [topic, setTopic] = useState<HotTopic | null>(() => readHotTopicSnapshot(topicId).topic);
-  const [cacheMeta, setCacheMeta] = useState<{ lastUpdatedAt?: string; message?: string }>(() => readHotTopicSnapshot(topicId).cacheMeta);
-  const [loaded, setLoaded] = useState(true);
-  const [config, setConfig] = useState<HotGenerationConfig>(() => ({
-    ...defaultConfig,
-    contentType: searchParams.get("mode") === "generate" ? "选题" : "选题"
-  }));
+  return <HotTopicWorkspace key={topicId} topicId={topicId} />;
+}
+
+function HotTopicWorkspace({ topicId }: { topicId: string }) {
+  const [topic, setTopic] = useState<HotTopic | null>(null);
+  const [cacheMeta, setCacheMeta] = useState<{ lastUpdatedAt?: string; message?: string }>({});
+  const [loaded, setLoaded] = useState(false);
+  const [config, setConfig] = useState<HotGenerationConfig>(defaultConfig);
   const [draft, setDraft] = useState("");
   const [audit, setAudit] = useState<HotAuditResult | null>(null);
   const [copied, setCopied] = useState("");
   const [saved, setSaved] = useState(false);
+  const [hasSavedDraft, setHasSavedDraft] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
   const [analysis, setAnalysis] = useState<HotAnalysisResult | null>(null);
   const [topicIntro, setTopicIntro] = useState("");
   const [analysisStatus, setAnalysisStatus] = useState<"idle" | "loading" | "live" | "fallback" | "cache" | "error">("idle");
@@ -69,9 +72,23 @@ export default function HotTopicDetailPage() {
   const [auditStatus, setAuditStatus] = useState<"idle" | "loading" | "live" | "fallback" | "error">("idle");
   const [auditMessage, setAuditMessage] = useState("");
   const [deepseekKey, setDeepseekKey] = useState("");
+  const generationRequestId = useRef(0);
+  const auditRequestId = useRef(0);
+
+  useEffect(() => () => {
+    generationRequestId.current += 1;
+    auditRequestId.current += 1;
+  }, []);
 
   useEffect(() => {
     const snapshot = readHotTopicSnapshot(topicId);
+    const stored = readSavedHotDraft(topicId);
+    if (stored) {
+      setConfig(stored.config);
+      setDraft(stored.draft);
+      setSaved(true);
+      setHasSavedDraft(true);
+    }
     setTopic((current) => (JSON.stringify(current) === JSON.stringify(snapshot.topic) ? current : snapshot.topic));
     setCacheMeta(snapshot.cacheMeta);
     setLoaded(true);
@@ -170,18 +187,28 @@ export default function HotTopicDetailPage() {
     };
   }, [topic, fallbackAnalysis, fallbackIntro]);
 
-  function updateConfig<Key extends keyof HotGenerationConfig>(key: Key, value: HotGenerationConfig[Key]) {
-    setConfig((current) => ({ ...current, [key]: value }));
-    setDraft("");
+  function invalidatePendingRequests() {
+    generationRequestId.current += 1;
+    auditRequestId.current += 1;
     setContentStatus("idle");
     setContentMessage("");
     setAudit(null);
     setAuditStatus("idle");
     setAuditMessage("");
+    setSaved(false);
+    setSaveMessage("");
+  }
+
+  function updateConfig<Key extends keyof HotGenerationConfig>(key: Key, value: HotGenerationConfig[Key]) {
+    invalidatePendingRequests();
+    setConfig((current) => ({ ...current, [key]: value }));
+    setDraft("");
   }
 
   async function generateDraft() {
     if (!topic) return;
+    const requestId = ++generationRequestId.current;
+    auditRequestId.current += 1;
     const currentDeepseekKey = getStoredDeepseekKey();
     setDeepseekKey(currentDeepseekKey);
     setContentStatus("loading");
@@ -189,8 +216,8 @@ export default function HotTopicDetailPage() {
     setAudit(null);
     setAuditStatus("idle");
     setAuditMessage("");
-    setAudit(null);
     setSaved(false);
+    setSaveMessage("");
     try {
       const response = await fetch("/api/ai/hot-topic-workflow", {
         method: "POST",
@@ -207,10 +234,12 @@ export default function HotTopicDetailPage() {
         draft?: string;
         message?: string;
       };
+      if (generationRequestId.current !== requestId) return;
       setDraft(formatGeneratedDraft(payload.draft) || generateHotDraft(topic, config));
       setContentStatus(payload.sourceStatus === "live" ? "live" : payload.sourceStatus === "fallback" ? "fallback" : "error");
       setContentMessage(payload.message || "");
     } catch (error) {
+      if (generationRequestId.current !== requestId) return;
       setDraft(generateHotDraft(topic, config));
       setContentStatus("error");
       setContentMessage(error instanceof Error ? error.message : "内容生成失败。");
@@ -219,6 +248,7 @@ export default function HotTopicDetailPage() {
 
   async function reviewDraft() {
     if (!topic || !draft.trim()) return;
+    const requestId = ++auditRequestId.current;
     const currentDeepseekKey = getStoredDeepseekKey();
     setDeepseekKey(currentDeepseekKey);
     setAuditStatus("loading");
@@ -241,10 +271,12 @@ export default function HotTopicDetailPage() {
         audit?: HotAuditResult;
         message?: string;
       };
+      if (auditRequestId.current !== requestId) return;
       setAudit(normalizeHotAudit(payload.audit, draft, auditHotDraft(draft, topic, config.platform, config.contentType)));
       setAuditStatus(payload.sourceStatus === "live" ? "live" : payload.sourceStatus === "fallback" ? "fallback" : "error");
       setAuditMessage(payload.message || "");
     } catch (error) {
+      if (auditRequestId.current !== requestId) return;
       setAudit(auditHotDraft(draft, topic, config.platform, config.contentType));
       setAuditStatus("error");
       setAuditMessage(error instanceof Error ? error.message : "内容审核失败。");
@@ -259,19 +291,30 @@ export default function HotTopicDetailPage() {
 
   function saveDraft() {
     if (!topic || !draft.trim()) return;
-    const key = "worldcup.hot-topic-drafts.v1";
-    const raw = window.localStorage.getItem(key);
-    const list = raw ? JSON.parse(raw) : [];
-    list.unshift({
+    const success = saveHotDraft({
       topicId: topic.id,
       title: topic.title,
       config,
       draft,
       savedAt: new Date().toISOString()
     });
-    window.localStorage.setItem(key, JSON.stringify(list.slice(0, 20)));
+    setSaved(success);
+    if (success) setHasSavedDraft(true);
+    setSaveMessage(success ? "" : "草稿未保存：浏览器存储不可用，请先复制正文。");
+  }
+
+  function restoreDraft() {
+    const stored = readSavedHotDraft(topicId);
+    if (!stored) {
+      setHasSavedDraft(false);
+      setSaveMessage("未找到本热点的已保存草稿。");
+      return;
+    }
+    invalidatePendingRequests();
+    setConfig(stored.config);
+    setDraft(stored.draft);
     setSaved(true);
-    window.setTimeout(() => setSaved(false), 1500);
+    setContentMessage("已恢复本地保存的草稿。");
   }
 
   if (!loaded) {
@@ -408,6 +451,7 @@ export default function HotTopicDetailPage() {
             <div className="flex items-center gap-1">
               <ActionButton onClick={() => draft && copyText(draft, "draft")} icon={<Clipboard className="h-4 w-4" />} disabled={!draft} compact>{copied === "draft" ? "已复制" : "复制"}</ActionButton>
               <ActionButton onClick={saveDraft} icon={<Save className="h-4 w-4" />} disabled={!draft} compact>{saved ? "已保存" : "保存草稿"}</ActionButton>
+              <ActionButton onClick={restoreDraft} icon={<History className="h-4 w-4" />} disabled={!hasSavedDraft} compact>恢复草稿</ActionButton>
               <ActionButton onClick={generateDraft} icon={<RefreshCcw className="h-4 w-4" />} disabled={contentStatus === "loading"} compact>重新生成</ActionButton>
             </div>
             <ActionButton onClick={reviewDraft} icon={<ShieldCheck className="h-4 w-4" />} disabled={!draft || auditStatus === "loading"} primary>{auditStatus === "loading" ? "审核中..." : "一键审核"}</ActionButton>
@@ -417,6 +461,7 @@ export default function HotTopicDetailPage() {
             value={draft}
             loading={contentStatus === "loading"}
             onChange={(value) => {
+              invalidatePendingRequests();
               setDraft(value);
               setSaved(false);
               setAudit(null);
@@ -424,6 +469,7 @@ export default function HotTopicDetailPage() {
               setAuditMessage("");
             }}
           />
+          {saveMessage ? <p role="status" className="mt-3 text-xs leading-5 text-amber-700">{saveMessage}</p> : null}
           {contentMessage && contentStatus !== "error" ? <p className="mt-3 text-xs leading-5 text-slate-500">{contentMessage}</p> : null}
         </Panel>
 
@@ -452,6 +498,7 @@ export default function HotTopicDetailPage() {
                   <button
                     type="button"
                     onClick={() => {
+                      invalidatePendingRequests();
                       setDraft(formatGeneratedDraft(audit.rewriteSuggestion));
                       setSaved(false);
                       setAudit(null);

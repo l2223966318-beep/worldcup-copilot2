@@ -76,7 +76,7 @@ export function getMatchesByProject(projectId: string) {
 }
 
 export function getMatchDetail(matchId: string) {
-  return matchTasks.find((item) => item.match.id === matchId)?.match ?? exampleMatches[0];
+  return matchTasks.find((item) => item.match.id === matchId)?.match;
 }
 
 export function getMatchTask(matchId: string) {
