@@ -31,8 +31,7 @@ assert.match(html, /<h1[^>]*>.*WorldCup.*Copilot.*<\/h1>/);
 assert.match(html, /href="#opportunity-pool"/);
 assert.match(html, /href="#hot-moments"/);
 assert.match(html, /fetchPriority="high"/);
-assert.match(html, /worldcup-hero-editorial-v2\.webp/);
-assert.match(html, /worldcup-hero-editorial-mobile-v2\.webp/);
+assert.match(html, /worldcup-video-stadium-fill-v1\.webp/);
 assert.doesNotMatch(html, /<video/, "default view must not download or autoplay the old video");
 
 const state = [];
@@ -40,8 +39,9 @@ let hookIndex = 0;
 let scrollOptions;
 let prevented = false;
 const target = { scrollIntoView: options => { scrollOptions = options; } };
+const dialog = { open: false, showModal() { this.open = true; }, close() { this.open = false; } };
 const HarnessHero = load({
-  react: { useState: initial => {
+  react: { useRef: () => ({ current: dialog }), useState: initial => {
     const index = hookIndex++;
     if (!(index in state)) state[index] = initial;
     return [state[index], value => { state[index] = typeof value === "function" ? value(state[index]) : value; }];
@@ -70,23 +70,31 @@ find(tree, node => node.props?.href === "#hot-moments").props.onClick({
 });
 assert.equal(prevented, false, "missing anchor must retain native link behavior");
 
-find(tree, node => node.props?.["aria-label"] === "播放背景视频").props.onClick();
+find(tree, node => node.props?.["aria-label"] === "播放赛事短片").props.onClick();
+assert.equal(dialog.open, true);
 tree = renderHarness();
 const video = find(tree, node => node.type === "video");
 assert.ok(video);
 assert.equal(video.props.muted, true);
 assert.equal(video.props.playsInline, true);
+assert.equal(video.props.controls, true);
+assert.equal(find(find(tree, node => node.type === "dialog"), node => node.type === "video"), video,
+  "video playback belongs inside the viewer, not across the homepage artwork");
 assert.match(renderToStaticMarkup(video), /\/videos\/worldcup-hero\.mp4/);
-find(tree, node => node.props?.["aria-label"] === "打开声音").props.onClick();
-assert.equal(find(renderHarness(), node => node.type === "video").props.muted, false);
-find(renderHarness(), node => node.props?.["aria-label"] === "暂停背景视频").props.onClick();
+find(tree, node => node.props?.["aria-label"] === "关闭视频").props.onClick();
+assert.equal(dialog.open, false);
 assert.equal(find(renderHarness(), node => node.type === "video"), null);
-find(renderHarness(), node => node.props?.["aria-label"] === "播放背景视频").props.onClick();
+find(renderHarness(), node => node.props?.["aria-label"] === "播放赛事短片").props.onClick();
+dialog.close();
+find(renderHarness(), node => node.type === "dialog").props.onClose();
+assert.equal(find(renderHarness(), node => node.type === "video"), null, "native dialog close must stop playback");
+find(renderHarness(), node => node.props?.["aria-label"] === "播放赛事短片").props.onClick();
 find(renderHarness(), node => node.type === "video").props.onError();
+assert.equal(dialog.open, false);
 assert.equal(find(renderHarness(), node => node.type === "video"), null, "failed playback returns to the image");
 assert.ok(find(renderHarness(), node => node.props?.role === "status"));
 
-for (const file of ["worldcup-hero-editorial-v2.webp", "worldcup-hero-editorial-mobile-v2.webp"]) {
+for (const file of ["worldcup-video-stadium-fill-v1.webp"]) {
   const path = new URL(`../public/images/${file}`, import.meta.url);
   const bytes = readFileSync(path);
   assert.equal(bytes.toString("ascii", 0, 4), "RIFF");

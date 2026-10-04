@@ -1,14 +1,14 @@
 "use client";
 
 import type { MouseEvent } from "react";
-import { useState } from "react";
-import { ArrowRight, ArrowUpRight, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { useRef, useState } from "react";
+import { ArrowRight, ArrowUpRight, Play, X } from "lucide-react";
 import styles from "./editorial-hero.module.css";
 
 export function EditorialWorldCupHero() {
   const [videoActive, setVideoActive] = useState(false);
-  const [videoMuted, setVideoMuted] = useState(true);
   const [videoError, setVideoError] = useState("");
+  const videoDialog = useRef<HTMLDialogElement>(null);
 
   function navigateToSection(event: MouseEvent<HTMLAnchorElement>) {
     const target = document.getElementById(event.currentTarget.hash.slice(1));
@@ -20,25 +20,24 @@ export function EditorialWorldCupHero() {
     });
   }
 
-  function toggleVideo() {
+  function openVideo() {
     setVideoError("");
-    setVideoActive(active => !active);
+    videoDialog.current?.showModal();
+    setVideoActive(true);
+  }
+
+  function closeVideo() {
+    videoDialog.current?.close();
+    setVideoActive(false);
   }
 
   return (
     <section className={styles.hero} aria-labelledby="worldcup-hero-title">
       <picture className={styles.artwork}>
-        <source media="(max-width: 700px)" srcSet="/images/worldcup-hero-editorial-mobile-v2.webp" />
         {/* The hero is the first meaningful image; do not wait for lazy loading. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/images/worldcup-hero-editorial-v2.webp" alt="" width={1774} height={887} fetchPriority="high" loading="eager" decoding="async" />
+        <img src="/images/worldcup-video-stadium-fill-v1.webp" alt="" width={2172} height={724} fetchPriority="high" loading="eager" decoding="async" />
       </picture>
-      {videoActive ? (
-        <video className={styles.video} autoPlay loop muted={videoMuted} playsInline preload="none" aria-hidden="true"
-          onError={() => { setVideoActive(false); setVideoError("视频暂不可用，已切回主视觉。"); }}>
-          <source src="/videos/worldcup-hero.mp4" type="video/mp4" />
-        </video>
-      ) : null}
       <div className={styles.layout}>
         <div className={styles.copy}>
           <h1 id="worldcup-hero-title" className={styles.title} aria-label="WorldCup Copilot">
@@ -61,21 +60,31 @@ export function EditorialWorldCupHero() {
         </div>
         <div className={styles.footer}>
           <div className={styles.rule} aria-hidden="true" />
-          <div className={styles.mediaControls} aria-label="背景视频控制">
-            {videoActive ? (
-              <button type="button" className={styles.control} onClick={() => setVideoMuted(muted => !muted)}
-                aria-label={videoMuted ? "打开声音" : "静音"} title={videoMuted ? "打开声音" : "静音"}>
-                {videoMuted ? <VolumeX size={17} aria-hidden="true" /> : <Volume2 size={17} aria-hidden="true" />}
-              </button>
-            ) : null}
-            <button type="button" className={styles.control} onClick={toggleVideo} aria-pressed={videoActive}
-              aria-label={videoActive ? "暂停背景视频" : "播放背景视频"} title={videoActive ? "暂停背景视频" : "播放背景视频"}>
-              {videoActive ? <Pause size={17} aria-hidden="true" /> : <Play size={17} aria-hidden="true" />}
+          <div className={styles.mediaControls}>
+            <button type="button" className={styles.control} onClick={openVideo}
+              aria-label="播放赛事短片" title="播放赛事短片" aria-haspopup="dialog">
+              <Play size={17} aria-hidden="true" />
             </button>
           </div>
         </div>
         {videoError ? <p className={styles.mediaError} role="status">{videoError}</p> : null}
       </div>
+      <dialog ref={videoDialog} className={styles.videoDialog} aria-labelledby="worldcup-video-title"
+        onClose={() => setVideoActive(false)}
+        onClick={event => { if (event.target === event.currentTarget) closeVideo(); }}>
+        <div className={styles.videoHeader}>
+          <span id="worldcup-video-title">WorldCup Copilot</span>
+          <button type="button" className={styles.control} onClick={closeVideo} aria-label="关闭视频" title="关闭视频" autoFocus>
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+        {videoActive ? (
+          <video className={styles.video} autoPlay controls muted playsInline preload="none"
+            onError={() => { closeVideo(); setVideoError("视频暂不可用，请稍后重试。"); }}>
+            <source src="/videos/worldcup-hero.mp4" type="video/mp4" />
+          </video>
+        ) : null}
+      </dialog>
     </section>
   );
 }
