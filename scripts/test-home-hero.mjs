@@ -3,6 +3,7 @@ import { readFileSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import vm from "node:vm";
 import ts from "typescript";
+import postcss from "postcss";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
@@ -93,6 +94,18 @@ for (const file of ["worldcup-hero-editorial-v2.webp", "worldcup-hero-editorial-
   assert.ok(statSync(path).size < 650_000, "hero asset should stay lightweight");
 }
 const css = readFileSync(new URL("../components/worldcup/editorial-hero.module.css", import.meta.url), "utf8");
+const videoStyles = {};
+postcss.parse(css).walkRules(rule => {
+  if (rule.parent.type !== "root" || !rule.selector.split(",").some(selector => selector.trim() === ".video")) return;
+  rule.walkDecls(declaration => { videoStyles[declaration.prop] = declaration.value; });
+});
+for (const [width, height] of [[1916, 544], [1440, 580], [390, 520]]) {
+  const scale = videoStyles["object-fit"] === "cover"
+    ? Math.max(width / 3840, height / 2160)
+    : videoStyles["object-fit"] === "contain" ? Math.min(width / 3840, height / 2160) : NaN;
+  assert.ok(3840 * scale <= width + 0.01 && 2160 * scale <= height + 0.01,
+    `the complete video frame must fit inside the ${width}x${height} hero without cropping`);
+}
 assert.doesNotMatch(css, /100(?:s|d)?vh|font-size:[^;]*vw|radial-gradient/);
 assert.match(css, /letter-spacing:\s*0/);
 assert.match(css, /max-width:\s*700px/);
