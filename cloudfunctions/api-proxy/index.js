@@ -1138,7 +1138,7 @@ async function handleAiPlatformDraft(req, res) {
         "evidence 是具体比分、时间、事件、技术统计的事实边界。",
         "verifiedStats=false 时，不得引用 stats 数字。",
         "不得编造伤病、采访、内部矛盾、裁判动机或未给出的比赛事实。",
-        buildCreativeBrief({ chain: "match", platform: platformDisplayName(platform), contentType: contentTypeLabel, tone: topicModeLabel }),
+        buildCreativeBrief({ chain: "match", platform: platformDisplayName(platform), contentType: contentTypeLabel, tone: topicModeLabel, matchContext }),
         isTopic
           ? "当前任务是生成正好5个不同的作品选题角度，不是完整稿件。"
           : "当前任务是生成一个可直接发布的内容产物，并同时给出编辑参考和风险提示。"
@@ -1408,7 +1408,7 @@ async function handleRequest(req, res) {
         configured,
         accessMode: "public",
         model,
-        generationVersion: "creative-v2",
+        generationVersion: "creative-v3",
         note: configured
           ? "DeepSeek API key is available to the CloudBase function."
           : "DEEPSEEK_API_KEY is not available to this CloudBase function."

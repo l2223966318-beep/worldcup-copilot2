@@ -35,6 +35,7 @@ function buildCreativeBrief(input) {
         "开头钩子必须兑现：提出的问题要在内容中回答，不能凭空承诺逆转、绝杀、秘密或内幕。标题不要‘这场球别只看比分’‘三个瞬间看懂’‘为什么值得复盘’等无具体信息的万能句。",
         "表达可以鲜明、幽默；事实与观点分开。标题里的疑问句不能暗示未经证实的事实；不能把标题中的说法直接当官方结论。类比不是事实，不编心理活动、采访、历史纪录和比赛节点。",
         "热度、排名、价值分是运营信号，不是比赛证据，也不是观众必须阅读的正文；除非用户明确在制作热榜分析，否则不要复述这些内部指标。",
+        "不要凭空比较传播效果，材料没有对照就不能说‘比进球更出圈’‘一句话盖过一场比赛’。专业判断也要有边界：单项角球、犯规和黄牌不能证明具体战术、裁判尺度或门将表现；可提出讨论，不当成已确认原因。",
         input.chain === "hot"
             ? "热点链路：从标题与摘要中提取具体事件或已有观点，不把‘话题上榜’当整篇内容。仅有标题时，可设计围绕标题讨论的观点问答、规则科普或二创方案，不能补造事发过程和结果。"
             : "赛事链路：选题围绕当前比赛的已确认事件和数据；baselineTopics、analysis 只作角度参考，不是新增事实来源。数据不足就换成已知赛果、规则或观点角度，不强行凑战术结论。",
@@ -45,8 +46,31 @@ function buildCreativeBrief(input) {
             ? "字数要求不能截断必要结构：选题/标题必须保留5项，选题每项约60至100字；其他短内容删铺垫，不删事实支撑。"
             : "保留必要结构，短段落，每段只讲一个重点；不重复同一事实凑长度。",
         "表达示例仅解释方法，不能挪用为当前事实：若证据确实显示低控球方赢球，可从‘球权占有，不等于机会兑现’切入；若标题仅讨论球员首发，可把‘名气还是适配’做成阵容选择题，不宣称他已经被弃用。",
+        buildMatchFactChecks(input.matchContext),
         "输出前自检：标题是否具体、开头是否兑现、角度是否不同、做法是否可执行、事实是否来自当前材料。不合格的候选在本次回答内重写，不增加额外模型调用。最终直接返回作品，不复述检查清单和‘当前材料缺失’的长篇说明。"
     ].filter(Boolean).join("\n");
+}
+function buildMatchFactChecks(context) {
+    if (!context?.matchInfo)
+        return "";
+    const { teamA, teamB, score } = context.matchInfo;
+    const goals = String(score).match(/^(\d+)\s*[-:]\s*(\d+)/);
+    const checks = [`事实方向校验（仅用于内部自检）：${teamA}在比分左侧，${teamB}在右侧，比分${score}；不要交换主语。`];
+    if (context.verifiedStats === true) {
+        const metrics = [["射门", "shots"], ["射正", "shotsOnTarget"], ["控球率", "possession"], ["角球", "corners"], ["犯规", "fouls"], ["黄牌", "yellowCards"]];
+        for (const [label, key] of metrics) {
+            const a = context.stats?.teamA?.[key], b = context.stats?.teamB?.[key];
+            if (typeof a !== "number" || typeof b !== "number" || !Number.isFinite(a) || !Number.isFinite(b))
+                continue;
+            checks.push(`${teamA}${label}${a}${a === b ? "等于" : a > b ? "多于" : "少于"}${teamB}${label}${b}。`);
+        }
+        const a = context.stats?.teamA?.shotsOnTarget, b = context.stats?.teamB?.shotsOnTarget;
+        if (goals && typeof a === "number" && typeof b === "number" && a > 0 && b > 0 && Number(goals[1]) * b === Number(goals[2]) * a) {
+            checks.push("两队的进球数/射正次数比值相同，不能以此制造‘射正转化效率差’；这个简单数学比值也不等同于专业效率统计。可讨论射正数量，不颠倒谁射正更多。 ");
+        }
+    }
+    checks.push("只有真实反差才写反差；如果数字并不矛盾，就用具体场景、类比或问题吸引观众，不强行制造数字悖论。");
+    return checks.join("\n");
 }
 function comparisonKey(text) {
     return text.replace(/[\s\p{P}\p{S}]/gu, "").toLowerCase();
