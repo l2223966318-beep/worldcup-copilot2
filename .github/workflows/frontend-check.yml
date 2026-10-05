@@ -61,6 +61,7 @@ jobs:
           npm run test:fact-integrity
           npm run test:ai-protection
           npm run test:query-recovery
+          node scripts/test-client-request.mjs
           npm run test:product-entrypoints
           npm run test:dependency-audit
           npm run test:sportradar-today

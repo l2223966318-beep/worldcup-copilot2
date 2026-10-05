@@ -64,9 +64,9 @@ function runtime(storage = memoryStorage()) {
     } }).outputText;
     vm.runInNewContext(code, { exports, window, URLSearchParams, AbortController, Date, console,
       document: { addEventListener() {}, removeEventListener() {}, getElementById: () => null },
-      fetch(url) {
+      fetch(url, init) {
         if (!url.startsWith("/api/ai/")) return Promise.resolve({ ok: true, json: async () => ({ sourceStatus: "live", data: [] }) });
-        return new Promise((resolve, reject) => requests.push({ url, resolve: payload => resolve({ ok: true, json: async () => payload }), reject }));
+        return new Promise((resolve, reject) => requests.push({ url, signal: init?.signal, resolve: payload => resolve({ ok: true, json: async () => payload }), reject }));
       },
       require(name) {
         if (name.endsWith(".css")) return {};
@@ -118,8 +118,9 @@ assert.equal(store.readWorkflowState().generatedContent, undefined, "platform ch
 const query = runtime();
 const useQuery = query.load("lib/sports/client.ts").useWorldCupQuery;
 query.storage.setItem("A", JSON.stringify({ savedAt: Date.now(), payload: { data: { id: "A" }, sourceStatus: "live" } }));
-assert.equal(query.render(() => useQuery("/A", undefined, { cacheKey: "A", revalidateOnMount: false })).payload.data.id, "A");
+assert.equal(query.render(() => useQuery("/A", undefined, { cacheKey: "A", revalidateOnMount: false })).payload, undefined, "first client render must match SSR even with cached data");
 query.flush();
+assert.equal(query.render(() => useQuery("/A", undefined, { cacheKey: "A", revalidateOnMount: false })).payload.data.id, "A", "cache is restored after hydration");
 assert.equal(query.render(() => useQuery("/B", undefined, { cacheKey: "B" })).payload, undefined, "changing URL must hide the previous payload before effects run");
 query.flush();
 assert.equal(query.render(() => useQuery("/B", undefined, { cacheKey: "B" })).payload, undefined);
@@ -155,7 +156,9 @@ tree = matches.render(MatchPage, matchProps);
 const oldGeneration = byName(tree, "PlatformPreview").props.onRegenerate();
 find(tree, node => node.props?.platform === "weibo" && typeof node.props.onClick === "function").props.onClick();
 tree = matches.render(MatchPage, matchProps);
-matches.requests.shift().resolve({ sourceStatus: "live", draft: { id: "old", platform: "bilibili", title: "old", body: "B station draft", sections: [], createdAt: "now" } });
+const cancelledMatchGeneration = matches.requests.shift();
+assert.equal(cancelledMatchGeneration.signal?.aborted, true, "switching platform aborts the obsolete generation");
+cancelledMatchGeneration.resolve({ sourceStatus: "live", draft: { id: "old", platform: "bilibili", title: "old", body: "B station draft", sections: [], createdAt: "now" } });
 await oldGeneration;
 tree = matches.render(MatchPage, matchProps);
 assert.equal(byName(tree, "PlatformPreview").props.draft, null, "late generation must not repopulate a different platform");
@@ -166,7 +169,9 @@ const oldReview = find(tree, node => node.props?.onClick?.name === "handleAiRevi
 assert.equal(matches.storage.getItem("worldcup.workflow.draftForReview"), "稿件 A", "manual audits keep their submitted body even without a generated draft");
 editor().props.onChange("稿件 B");
 editor().props.onChange("稿件 A");
-matches.requests.shift().resolve({ sourceStatus: "live", result: { level: "低", score: 0, findings: [], advice: "old verdict" } });
+const cancelledMatchReview = matches.requests.shift();
+assert.equal(cancelledMatchReview.signal?.aborted, true, "editing aborts the obsolete audit");
+cancelledMatchReview.resolve({ sourceStatus: "live", result: { level: "低", score: 0, findings: [], advice: "old verdict" } });
 await oldReview;
 tree = matches.render(MatchPage, matchProps);
 assert.equal(byName(tree, "MatchReviewResult"), null, "editing and reverting still invalidates an in-flight audit");
@@ -184,6 +189,16 @@ tree = matches.render(MatchPage, matchProps);
 assert.ok(byName(tree, "MatchReviewResult"), "current match audit remains usable");
 await action(tree, "导出 Word 报告").props.onClick();
 assert.notEqual(exportedPackage.reviewResult.advice, "仅适用于编辑后的正文", "an audit of edited text must not approve the original generated body in an export");
+const failedGeneration = byName(tree, "PlatformPreview").props.onRegenerate();
+matches.requests.shift().reject(new Error("offline"));
+await failedGeneration;
+tree = matches.render(MatchPage, matchProps);
+assert.ok(find(tree, node => node.props?.role === "status" && /本地备用稿/.test(node.props.children)), "fallback drafts must never silently pretend to be live AI output");
+const failedReview = find(tree, node => node.props?.onClick?.name === "handleAiReview").props.onClick();
+matches.requests.shift().reject(new Error("offline"));
+await failedReview;
+tree = matches.render(MatchPage, matchProps);
+assert.ok(find(tree, node => node.props?.role === "status" && /本地规则检查/.test(node.props.children)), "local rule checks must not pretend to be a complete AI audit");
 matches.unmount();
 
 const hot = runtime();
@@ -197,7 +212,9 @@ hot.flush();
 tree = hot.render(HotPage, hotProps);
 const oldHotGeneration = action(tree, "生成内容").props.onClick();
 find(tree, node => node.props?.label === "平台" && typeof node.props.onChange === "function").props.onChange("微博");
-hot.requests.shift().resolve({ sourceStatus: "live", draft: "B station draft" });
+const cancelledHotGeneration = hot.requests.shift();
+assert.equal(cancelledHotGeneration.signal?.aborted, true, "hot platform changes abort generation");
+cancelledHotGeneration.resolve({ sourceStatus: "live", draft: "B station draft" });
 await oldHotGeneration;
 tree = hot.render(HotPage, hotProps);
 assert.equal(find(tree, node => node.props?.label === "生成结果编辑区").props.value, "");
@@ -207,7 +224,9 @@ tree = hot.render(HotPage, hotProps);
 const oldHotReview = action(tree, "一键审核").props.onClick();
 hotEditor().props.onChange("微博稿件 B");
 hotEditor().props.onChange("微博稿件 A");
-hot.requests.shift().resolve({ sourceStatus: "live", audit: { level: "pass", authenticity: [], risk: [], ethics: [], platformFit: [], suggestions: [], rewriteSuggestion: "old" } });
+const cancelledHotReview = hot.requests.shift();
+assert.equal(cancelledHotReview.signal?.aborted, true, "hot text changes abort its audit");
+cancelledHotReview.resolve({ sourceStatus: "live", audit: { level: "pass", authenticity: [], risk: [], ethics: [], platformFit: [], suggestions: [], rewriteSuggestion: "old" } });
 await oldHotReview;
 tree = hot.render(HotPage, hotProps);
 assert.equal(byName(tree, "ReviewVerdict"), null);
@@ -241,7 +260,9 @@ assert.equal(find(tree, node => node.props?.label === "生成结果编辑区").p
 assert.equal(byName(tree, "ReviewVerdict"), null, "restoring a draft never restores an unrelated audit");
 const pendingUnmount = action(tree, "生成内容").props.onClick();
 restored.unmount();
-restored.requests.shift().resolve({ sourceStatus: "live", draft: "unmounted result" });
+const cancelledUnmount = restored.requests.shift();
+assert.equal(cancelledUnmount.signal?.aborted, true, "leaving the page aborts pending requests");
+cancelledUnmount.resolve({ sourceStatus: "live", draft: "unmounted result" });
 await pendingUnmount;
 tree = restored.render(RestoredPage, hotProps);
 assert.equal(find(tree, node => node.props?.label === "生成结果编辑区").props.value, "微博稿件 A");
