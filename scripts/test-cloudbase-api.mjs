@@ -41,7 +41,7 @@ vm.runInNewContext(readFileSync(new URL("../cloudfunctions/api-proxy/sportradar.
 });
 const sportsService = createSportsService({ client: clientModule.exports, env });
 const context = vm.createContext({
-  require: name => ["./evidence", "./ai-guard", "./hot-ai-cache", "./hot-analysis", "./risk", "./hot-workflow", "./review-policy"].includes(name) ? localRequire(`../cloudfunctions/api-proxy/${name}.js`) : name === "./sports-service" ? { createSportsService: () => sportsService } : name === "./hot-sources" ? { createSources: () => createSources({ env, fetchImpl: fakeFetch }) } : { createServer: fn => { handler = fn; return { listen() {} }; } },
+  require: name => ["./evidence", "./ai-guard", "./hot-ai-cache", "./hot-analysis", "./risk", "./hot-workflow", "./review-policy", "./creative"].includes(name) ? localRequire(`../cloudfunctions/api-proxy/${name}.js`) : name === "./sports-service" ? { createSportsService: () => sportsService } : name === "./hot-sources" ? { createSources: () => createSources({ env, fetchImpl: fakeFetch }) } : { createServer: fn => { handler = fn; return { listen() {} }; } },
   process: { env }, fetch: fakeFetch, URL, AbortController, Buffer, setTimeout, clearTimeout, console,
 });
 vm.runInContext(readFileSync(new URL("../cloudfunctions/api-proxy/index.js", import.meta.url), "utf8"), context);
@@ -196,6 +196,30 @@ try {
     assert.ok(structuredAnalysis[field].every(item => item && [item.label, item.value, item.note].every(value => typeof value === "string")),
       `${field} must reject null entries and normalize nested model objects`);
   }
+  const angles = Array.from({ length: 5 }, (_, i) => ({ title: `具体角度${i}`, approach: `用独立结构${i}推进`, reason: `当前事实${i}` }));
+  const hotConfig = { platform: "B站", contentType: "选题", tone: "轻松整活", length: "短" };
+  modelResult = { draft: angles.map((a, i) => `${i + 1}. ${a.title}\n怎么做：${a.approach}\n说明：${a.reason}`).join("\n\n") };
+  response = await fetch(`${origin}/api/ai/hot-topic-workflow`, { method: "POST", body: JSON.stringify({ action: "generate", topic: { title: "Creative hot contract" }, config: hotConfig }) });
+  assert.equal((await response.json()).sourceStatus, "live");
+  const hotPrompt = JSON.parse(calls.findLast(c => c.host === "api.deepseek.com").init.body).messages;
+  assert.match(hotPrompt[0].content, /开头钩子/);
+  assert.match(hotPrompt[0].content, /B站/);
+  assert.match(hotPrompt[0].content, /字数要求不能截断/);
+  modelResult = { draft: "1. 完成一个选题\n怎么做：随便写\n说明：材料" };
+  response = await fetch(`${origin}/api/ai/hot-topic-workflow`, { method: "POST", body: JSON.stringify({ action: "generate", topic: { title: "Incomplete creative hot contract" }, config: hotConfig }) });
+  assert.equal((await response.json()).sourceStatus, "fallback", "incomplete topics must not masquerade as live AI output");
+  const matchPayload = { platform: "bilibili", contentType: "topic", topicMode: "playful", matchContext: { id: "creative", matchInfo: { name: "Argentina vs France", score: "1-0" }, verifiedStats: false, evidence: [] }, topic: { id: "creative", title: "Current selected event" }, analysis: {} };
+  modelResult = { topics: angles };
+  response = await fetch(`${origin}/api/ai/platform-draft`, { method: "POST", body: JSON.stringify(matchPayload) });
+  const creativeMatch = await response.json();
+  assert.equal(creativeMatch.sourceStatus, "live");
+  assert.match(creativeMatch.draft.body, /怎么做：/);
+  const matchPrompt = JSON.parse(calls.findLast(c => c.host === "api.deepseek.com").init.body).messages;
+  assert.match(matchPrompt[0].content, /类比不是事实/);
+  assert.match(matchPrompt[0].content, /换一个热点后仍能原封不动/);
+  modelResult = { topics: [...angles.slice(0, 4), angles[0]] };
+  response = await fetch(`${origin}/api/ai/platform-draft`, { method: "POST", body: JSON.stringify({ ...matchPayload, topic: { ...matchPayload.topic, id: "duplicate" } }) });
+  assert.equal((await response.json()).sourceStatus, "fallback", "duplicate angle titles must not pass the five-angle contract");
   console.log("CloudBase HTTP: Sportradar routes, five AI fallback handlers, multi-source search, safe errors and cached quota protection passed.");
 } finally {
   server.closeAllConnections();

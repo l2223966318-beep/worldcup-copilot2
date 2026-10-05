@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { generateDeepSeekJson, getDeepSeekFallbackMessage } from "@/lib/ai/deepseek";
 import { qualityControl } from "@/lib/ai/quality";
 import { formatGeneratedDraft } from "@/lib/ai/generated-draft";
+import { buildCreativeBrief, isCompleteHotTopicDraft } from "@/lib/ai/creative";
 import {
   addHotDraftVisualAnchors,
   auditHotDraft,
@@ -104,6 +105,7 @@ async function handleGenerate(topic: HotTopic, config: HotGenerationConfig, apiK
           contentTypeInstruction(config),
           styleInstruction(config),
           lengthInstruction(config),
+          buildCreativeBrief({ chain: "hot", platform: config.platform, contentType: config.contentType, tone: config.tone, length: config.length }),
           "最终只返回 {\"draft\":\"...\"}。"
         ].join("\n")
       },
@@ -120,7 +122,7 @@ async function handleGenerate(topic: HotTopic, config: HotGenerationConfig, apiK
         })
       }
     ],
-    { timeoutMs: HOT_WORKFLOW_GENERATE_TIMEOUT_MS, apiKey, quality: "fast", maxTokens: 1_800 }
+    { timeoutMs: HOT_WORKFLOW_GENERATE_TIMEOUT_MS, apiKey, quality: "fast", maxTokens: 2_600 }
   );
 
   if (!result.ok) {
@@ -132,6 +134,9 @@ async function handleGenerate(topic: HotTopic, config: HotGenerationConfig, apiK
   }
 
   const normalizedDraft = normalizeGeneratedDraft(result.data.draft, fallbackDraft, config);
+  if (typeof result.data.draft !== "string" || !result.data.draft.trim() || (config.contentType === "选题" && !isCompleteHotTopicDraft(normalizeDraft(result.data.draft, "")))) {
+    return NextResponse.json({ sourceStatus: "fallback", draft: fallbackDraft, message: "AI 选题角度不完整或重复，已使用本地兜底。" });
+  }
   const draft = addHotDraftVisualAnchors(normalizedDraft, config);
   const payload = {
     sourceStatus: "live",
@@ -200,13 +205,13 @@ async function handleAudit(topic: HotTopic, config: HotGenerationConfig, draft: 
 function platformInstruction(config: HotGenerationConfig) {
   switch (config.platform) {
     case "B站":
-      return "B站写法：标题要有观点和信息密度；正文包含开头钩子、视频结构、弹幕互动点、评论区问题；适合深度复盘和观点解释。";
+      return "B站写法：有具体判断和信息密度；仅在生成视频脚本时写视频结构，选题和标题不展开成正文。";
     case "微博":
-      return "微博写法：先给 1 句短评，再给话题标签、讨论钩子和降风险表述；适合热点承接，不写长篇铺垫。";
+      return "微博写法：短句、鲜明但有依据的表达；话题标签按需使用，不机械追加免责声明，不写长篇铺垫。";
     case "小红书":
-      return "小红书写法：输出首图标题、3-5 页卡片结构、新手能懂的解释、收藏理由；语气清楚但不过度标题党。";
+      return "小红书写法：新手能懂，有具体收获；仅在生成图文卡片时展开逐页结构。";
     case "抖音":
-      return "抖音写法：必须有前三秒钩子、分镜、口播节奏和画面素材建议；先抓注意力，再回到事实核验。";
+      return "抖音写法：快速进入具体抓手、短句口播；仅在生成视频脚本时输出分镜和画面建议。";
     default:
       return "通用写法：稳妥概述热点、说明可用角度、标注需核验信息和发布风险。";
   }
@@ -242,13 +247,14 @@ function styleInstruction(config: HotGenerationConfig) {
     case "人物故事":
       return "风格规则：围绕热点中已出现的人物行动组织内容，不编造心理、采访或私生活。";
     case "数据解读":
-      return "风格规则：只使用输入中已有的热度、价值分和分类信号，并解释数字代表什么。";
+      return "风格规则：只解释标题或摘要中已有、与事件有关的数字；热度和价值分不当作比赛数据，没有事件数字时改为待采集数据的作品方案，不编数字。";
     case "稳妥表达":
       return "风格规则：区分事实、观点和讨论，不使用绝对化定性，也不机械堆叠风险提醒。";
   }
 }
 
 function lengthInstruction(config: HotGenerationConfig) {
+  if (config.contentType === "选题") return "长度：保留5项完整结构，每项约60至100字，避免重复铺垫。";
   if (config.length === "短") return "长度：短，控制在 120-220 字或等量结构。";
   if (config.length === "长") return "长度：长，给出完整结构和可直接展开的段落。";
   return "长度：中，信息完整但避免冗长。";
@@ -266,6 +272,6 @@ function normalizeGeneratedDraft(value: string | undefined, fallback: string, co
   const topicNumbers = draft.match(/^\d+\./gm) ?? [];
   const approaches = draft.match(/^怎么做：/gm) ?? [];
   const reasons = draft.match(/^说明：/gm) ?? [];
-  if (topicNumbers.length !== 5 || approaches.length !== 5 || reasons.length !== 5) return fallback;
+  if (topicNumbers.length !== 5 || approaches.length !== 5 || reasons.length !== 5 || !isCompleteHotTopicDraft(draft)) return fallback;
   return draft;
 }
