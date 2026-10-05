@@ -22,6 +22,6 @@ const outputShapeEnd = workflowSource.indexOf("match,", outputShapeStart);
 assert.ok(outputShapeStart > -1 && outputShapeEnd > outputShapeStart);
 assert.doesNotMatch(workflowSource.slice(outputShapeStart, outputShapeEnd), /platformContent:/);
 assert.match(workflowSource, /baselineTopicHints\b/);
-assert.match(workflowSource, /maxTokens: 1_800/);
+assert.match(workflowSource, /maxTokens: 2_600/);
 
 console.log("platform draft source contract ok");

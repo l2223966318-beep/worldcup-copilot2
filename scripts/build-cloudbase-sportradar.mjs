@@ -7,6 +7,7 @@ const files = [
   ["lib/time/beijingTime.ts", "beijing-time.js"],
   ["lib/sports/sportradarClient.ts", "sportradar.js"],
   ["lib/ai/quality.ts", "quality.js"],
+  ["lib/ai/creative.ts", "creative.js"],
   ["lib/ai/review-policy.ts", "review-policy.js"],
   ["lib/ai/risk.ts", "risk.js"],
   ["lib/hot/hotTopicWorkflow.ts", "hot-workflow.js"],

@@ -23,7 +23,7 @@ function createRuntime({ fail = false, empty = false } = {}) {
       ] }) };
     };
   const context = vm.createContext({
-    require: name => ["./evidence", "./ai-guard", "./hot-ai-cache", "./hot-analysis", "./risk", "./hot-workflow", "./review-policy"].includes(name) ? localRequire(`../cloudfunctions/api-proxy/${name}.js`) : name === "./sports-service" ? { createSportsService: () => createSportsService({ env: {} }) } : name === "./hot-sources" ? { createSources: () => createSources({ env: {}, fetchImpl: fakeFetch }) } : ({ createServer: callback => { handler = callback; return { listen() {} }; } }),
+    require: name => ["./evidence", "./ai-guard", "./hot-ai-cache", "./hot-analysis", "./risk", "./hot-workflow", "./review-policy", "./creative"].includes(name) ? localRequire(`../cloudfunctions/api-proxy/${name}.js`) : name === "./sports-service" ? { createSportsService: () => createSportsService({ env: {} }) } : name === "./hot-sources" ? { createSources: () => createSources({ env: {}, fetchImpl: fakeFetch }) } : ({ createServer: callback => { handler = callback; return { listen() {} }; } }),
     process: { env: {} }, console, URL, AbortController, setTimeout, clearTimeout, Buffer,
     fetch: fakeFetch,
   });

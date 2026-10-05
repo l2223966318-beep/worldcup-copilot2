@@ -1,5 +1,6 @@
 import { generateDeepSeekJson, getDeepSeekFallbackMessage } from "@/lib/ai/deepseek";
 import { cleanText, ensurePublishable } from "@/lib/ai/quality";
+import { buildCreativeBrief, hasDistinctTopicAngles } from "@/lib/ai/creative";
 import { contentTypeOptions, platformLabel, topicModeOptions, type ContentTypeKey, type TopicModeKey } from "@/lib/services/contentService";
 import type { AnalysisResult, MatchContext, PlatformDraft, PlatformKey, WorkflowTopic } from "@/types/workflow";
 
@@ -47,18 +48,7 @@ export async function generatePlatformDraftWithAi(input: {
             reason: "一句话说明它与当前热点或比赛事实的关系"
           }]
         },
-        fewShotStyleOnly: [
-          {
-            title: "把关键球员做成动漫角色关系图",
-            approach: "用角色定位解释球员关系，再用真实事件收束。",
-            reason: "人物关系与当前比赛转折能够互相对应。"
-          },
-          {
-            title: "用足球游戏任务重做关键回合",
-            approach: "把比赛节点改写成游戏任务和回合复盘。",
-            reason: "游戏二创能放大事件过程，但不改变事实。"
-          }
-        ]
+        editorialBrief: buildCreativeBrief({ chain: "match", platform: platformLabel(platform), contentType: "选题", tone: optionLabel(topicModeOptions, topicMode) })
       }
     : {
         task: "生成当前赛事详情页的一个平台内容产物。direct 是可直接发布版，必须排最前；reference 是编辑参考；risk 是风险提示。",
@@ -75,12 +65,7 @@ export async function generatePlatformDraftWithAi(input: {
           reference: "编辑参考版",
           risk: "风险提示版"
         },
-        fewShotStyleOnly: {
-          bilibili: ["这球没进，反而更值得复盘", "别只看比分，这段才是转折"],
-          weibo: ["这次机会真有点可惜", "这场的讨论点来了"],
-          xiaohongshu: ["这场球最值得记的3个瞬间", "新手也能看懂这次转折"],
-          article: ["比分之外，这场比赛真正能写什么"]
-        }
+        editorialBrief: buildCreativeBrief({ chain: "match", platform: platformLabel(platform), contentType: optionLabel(contentTypeOptions, contentType), tone: optionLabel(topicModeOptions, topicMode) })
       };
   const result = await generateDeepSeekJson<AiPlatformDraft>(
     [
@@ -115,7 +100,7 @@ export async function generatePlatformDraftWithAi(input: {
         })
       }
     ],
-    { timeoutMs: 30_000, apiKey, quality: "fast", maxTokens: 2_000 }
+    { timeoutMs: 30_000, apiKey, quality: "fast", maxTokens: 2_600 }
   );
 
   if (!result.ok) {
@@ -132,7 +117,7 @@ export async function generatePlatformDraftWithAi(input: {
       reason: ensurePublishable(angle.reason || "")
     })).filter((angle) => angle.title && angle.approach && angle.reason);
 
-    if (topics.length !== 5) {
+    if (topics.length !== 5 || !hasDistinctTopicAngles(topics)) {
       return { sourceStatus: "error", model: result.model, message: "AI topic angles must contain exactly five complete items." };
     }
 

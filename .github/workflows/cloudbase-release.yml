@@ -42,6 +42,7 @@ jobs:
       - name: Offline regression and startup tests
         run: |
           npm run test:fact-integrity
+          node scripts/test-creative-generation.mjs
           npm run test:ai-protection
           npm run test:query-recovery
           npm run test:hot-ai-cache

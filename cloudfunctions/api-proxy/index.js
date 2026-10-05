@@ -7,7 +7,8 @@ const STATS_FIXTURES = "https://www.thestatsapi.com/world-cup/data/fixtures.json
 const { createSportsService } = require("./sports-service");
 const { auditDraftEvidence, calculateEvidenceRiskScore, hasCompleteReview, finalizeReviewRiskScore } = require("./evidence");
 const { reviewRisk } = require("./risk");
-const { auditHotDraft, normalizeHotAudit } = require("./hot-workflow");
+const { auditHotDraft, normalizeHotAudit, addHotDraftVisualAnchors } = require("./hot-workflow");
+const { buildCreativeBrief, hasDistinctTopicAngles, isCompleteHotTopicDraft } = require("./creative");
 const { isConcreteAiRisk } = require("./review-policy");
 const { createAiRequestGuard, buildAiRequestKey } = require("./ai-guard");
 const { buildHotTopicAiFingerprint } = require("./hot-ai-cache");
@@ -814,16 +815,23 @@ async function handleAiHotWorkflow(req, res) {
           "你是体育赛事内容运营编辑，只输出严格 JSON，不要 Markdown。",
           "基于输入热点和配置生成中文内容，不得编造比分、伤病、采访、判罚或官方结论。",
           "不同平台按平台习惯写。若 contentType=选题，必须正好 5 个角度，每个包含“角度标题、怎么做、说明”。",
+          "选题严格使用‘1. 标题\\n怎么做：...\\n说明：...’的三行结构，每项之间空一行。",
+          "不能编造热搜、球员发言或心理活动；不使用 xG 或未提供的技术统计。",
+          buildCreativeBrief({ chain: "hot", platform: config.platform, contentType: config.contentType, tone: config.tone, length: config.length }),
           "若为其他类型，只生成对应成品。最终只返回 {\"draft\":\"...\"}。"
         ].join("\n")
       },
       { role: "user", content: JSON.stringify({ topic, config }) }
-    ], { apiKey: body?.apiKey, timeoutMs: 26000, maxTokens: 1800 });
+    ], { apiKey: body?.apiKey, timeoutMs: 26000, maxTokens: 2600 });
 
     if (!result.ok) {
       return json(res, 200, { sourceStatus: "fallback", draft: fallback, message: `AI 暂不可用，已使用本地生成：${result.message}` });
     }
-    const generated = typeof result.data?.draft === "string" && result.data.draft.trim() ? result.data.draft.trim() : fallback;
+    const raw = typeof result.data?.draft === "string" ? result.data.draft.trim() : "";
+    if (!raw || (config.contentType === "选题" && !isCompleteHotTopicDraft(raw))) {
+      return json(res, 200, { sourceStatus: "fallback", draft: fallback, message: "AI 选题角度不完整或重复，已使用本地兜底。" });
+    }
+    const generated = addHotDraftVisualAnchors(raw, config);
     return json(res, 200, { sourceStatus: "live", draft: generated, model: result.model });
   }
 
@@ -944,7 +952,8 @@ async function handleAiMatchWorkflow(req, res) {
         "如果 verifiedStats=false，不得引用 stats 中的数字作为真实比赛事实。",
         "输出 conclusions 3 条、topics 6 条。内容必须短、准、可执行。",
         "topics 要覆盖客观资讯、专业复盘、人物/情绪、数据或轻松二创等不同方法。",
-        "所有文本字段必须是字符串，不能返回嵌套对象作为文本。"
+        "所有文本字段必须是字符串，不能返回嵌套对象作为文本。",
+        buildCreativeBrief({ chain: "match" })
       ].join("\n")
     },
     {
@@ -986,12 +995,12 @@ async function handleAiMatchWorkflow(req, res) {
           }
         },
         match,
-        baselineTopics: fallbackTopics
+        baselineTopicHints: fallbackTopics.map(t => ({ coreAngle: t.coreAngle, category: t.category, reason: t.reason }))
       })
     }
   ], { apiKey: body?.apiKey, timeoutMs: 30000, maxTokens: 4096,
     cacheTtlMs: match.status === "live" ? 60000 : 10 * 60000,
-    cacheKey: JSON.stringify({ kind: "match-workflow-v2", match, baselineTopics }) });
+    cacheKey: JSON.stringify({ kind: "match-workflow-creative-v3", match, baselineTopics }) });
 
   if (!result.ok) {
     return json(res, 200, {
@@ -1119,6 +1128,7 @@ async function handleAiPlatformDraft(req, res) {
   }[topicMode] || topicMode;
 
   const isTopic = contentType === "topic";
+  const contentTypeLabel = { topic: "选题", title: "标题", shortCopy: "短文案", videoScript: "视频脚本", commentPrompt: "评论区互动", cardStructure: "图文卡片" }[contentType] || contentType;
   const result = await callDeepSeekJson([
     {
       role: "system",
@@ -1128,6 +1138,7 @@ async function handleAiPlatformDraft(req, res) {
         "evidence 是具体比分、时间、事件、技术统计的事实边界。",
         "verifiedStats=false 时，不得引用 stats 数字。",
         "不得编造伤病、采访、内部矛盾、裁判动机或未给出的比赛事实。",
+        buildCreativeBrief({ chain: "match", platform: platformDisplayName(platform), contentType: contentTypeLabel, tone: topicModeLabel }),
         isTopic
           ? "当前任务是生成正好5个不同的作品选题角度，不是完整稿件。"
           : "当前任务是生成一个可直接发布的内容产物，并同时给出编辑参考和风险提示。"
@@ -1162,10 +1173,10 @@ async function handleAiPlatformDraft(req, res) {
           title: matchAiText(item?.title),
           approach: matchAiText(item?.approach),
           reason: matchAiText(item?.reason)
-        })).filter((item) => item.title && item.approach && item.reason).slice(0, 5)
+        })).filter((item) => item.title && item.approach && item.reason)
       : [];
 
-    if (angles.length !== 5) {
+    if (angles.length !== 5 || !hasDistinctTopicAngles(angles)) {
       return json(res, 200, { sourceStatus: "fallback", draft: fallback, message: "AI 选题角度结构不完整，已使用本地兜底。" });
     }
 
@@ -1397,6 +1408,7 @@ async function handleRequest(req, res) {
         configured,
         accessMode: "public",
         model,
+        generationVersion: "creative-v1",
         note: configured
           ? "DeepSeek API key is available to the CloudBase function."
           : "DEEPSEEK_API_KEY is not available to this CloudBase function."

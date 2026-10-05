@@ -3,6 +3,7 @@ import type { PlatformContent } from "@/lib/ai/content";
 import { generateDeepSeekJson, getDeepSeekFallbackMessage } from "@/lib/ai/deepseek";
 import { cleanList, cleanTitle, ensurePublishable, qualityControl } from "@/lib/ai/quality";
 import { buildSignalContext } from "@/lib/ai/signals";
+import { buildCreativeBrief } from "@/lib/ai/creative";
 import type { TopicCategory, TopicIdea, TopicRecommendation } from "@/lib/ai/topics";
 
 type DeepSeekTopic = Partial<Omit<TopicIdea, "id">>;
@@ -49,11 +50,6 @@ const PLATFORM_COPY_RULES = [
   "不得编造伤病、冲突、内部矛盾、裁判争议；无来源只能写“需核验”。",
   "mock/demo内容必须明确是演示口径，不要伪装成真实新闻。"
 ].join("\n");
-const PLATFORM_FEW_SHOTS = {
-  bilibili: ["这场球别只看比分", "真正的转折在这段时间线里", "一次调整，改变了比赛节奏"],
-  weibo: ["这场比赛后劲很大", "这个转折，值得再看一遍", "比分之外，还有这些细节"],
-  xiaohongshu: ["用三个瞬间看懂这场比赛", "新手也能看懂的战术变化", "一张数据卡，复盘比赛转折"]
-};
 const CATEGORY_ALIASES: Record<string, TopicCategory> = {
   战术复盘: "战术复盘",
   球员叙事: "球员叙事",
@@ -79,12 +75,10 @@ export async function enhanceMatchWorkflowWithDeepSeek(input: {
   const { match, baselineTopics, apiKey } = input;
   const signalContext = buildSignalContext(match);
   const baselineTopicHints = baselineTopics.map((topic) => ({
-    title: topic.title,
     coreAngle: topic.coreAngle,
     category: topic.category,
     recommendation: topic.recommendation,
-    reason: topic.reason,
-    sampleTitles: topic.sampleTitles
+    reason: topic.reason
   }));
   const result = await generateDeepSeekJson<DeepSeekWorkflowResponse>(
     [
@@ -124,13 +118,13 @@ export async function enhanceMatchWorkflowWithDeepSeek(input: {
           matchSignalSummary: signalContext.summary,
           baselineTopicHints,
           styleRules: PLATFORM_COPY_RULES,
-          fewShotTitles: PLATFORM_FEW_SHOTS
+          editorialBrief: buildCreativeBrief({ chain: "match" })
         })
       }
     ],
-    { timeoutMs: 30_000, apiKey, quality: "fast", maxTokens: 1_800,
+    { timeoutMs: 30_000, apiKey, quality: "fast", maxTokens: 2_600,
       cacheTtlMs: match.status === "live" ? 60_000 : 10 * 60_000,
-      cacheKey: JSON.stringify({ kind: "match-workflow-v2", match, baselineTopics }) }
+      cacheKey: JSON.stringify({ kind: "match-workflow-creative-v3", match, baselineTopics }) }
   );
 
   if (!result.ok) {
