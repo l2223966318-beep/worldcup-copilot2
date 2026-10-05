@@ -30,6 +30,7 @@ import { ScoreReasonPopover } from "@/components/ui/score-reason-popover";
 import type { MatchData } from "@/data/matches";
 import { generatePlatformContent, type PlatformContent } from "@/lib/ai/content";
 import { getAiRequestHeaders } from "@/lib/ai/client-access";
+import { requestJson } from "@/lib/client-request";
 import { reviewRisk } from "@/lib/ai/risk";
 import { extractMatchSignals, type MatchSignal } from "@/lib/ai/signals";
 import { generateTopics, type TopicIdea } from "@/lib/ai/topics";
@@ -183,10 +184,16 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
   const [activeHotspotKind, setActiveHotspotKind] = useState<"onField" | "offField">("onField");
   const generationRequestId = useRef(0);
   const reviewRequestId = useRef(0);
+  const generationController = useRef<AbortController | null>(null);
+  const reviewController = useRef<AbortController | null>(null);
+  const [draftMessage, setDraftMessage] = useState("");
+  const [reviewMessage, setReviewMessage] = useState("");
 
   useEffect(() => () => {
     generationRequestId.current += 1;
     reviewRequestId.current += 1;
+    generationController.current?.abort();
+    reviewController.current?.abort();
   }, []);
 
   const localContent = useMemo(() => generatePlatformContent(match, selectedTopic), [match, selectedTopic]);
@@ -244,13 +251,12 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
     async function loadAiWorkflow() {
       const requestBody = JSON.stringify({ match, baselineTopics, apiKey: getStoredDeepseekKey() || undefined });
       try {
-        const response = await fetch("/api/ai/match-workflow", {
+        const { response, payload } = await requestJson<AiWorkflowEnhancement>("/api/ai/match-workflow", {
           method: "POST",
           headers: getAiRequestHeaders(),
           body: requestBody,
           signal: controller.signal
         });
-        const payload = (await response.json()) as AiWorkflowEnhancement;
         if (!response.ok) throw new Error(payload.message || `AI workflow request failed with ${response.status}.`);
         if (controller.signal.aborted) return;
         setAiEnhancement(payload);
@@ -362,6 +368,10 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
   function invalidatePendingRequests() {
     generationRequestId.current += 1;
     reviewRequestId.current += 1;
+    generationController.current?.abort();
+    reviewController.current?.abort();
+    setDraftMessage("");
+    setReviewMessage("");
     setDraftLoading(false);
     setReviewLoading(false);
     writeWorkflowState({ generatedContent: undefined, reviewResult: undefined });
@@ -376,16 +386,24 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
     const fallbackDraft = createPlatformDraft(toWorkflowPlatform(activePlatform), evidenceContext, workflowTopic, analysisSnapshot, { contentType: activeContentType, topicMode: activeTopicMode });
     const requestId = ++generationRequestId.current;
     reviewRequestId.current += 1;
+    generationController.current?.abort();
+    reviewController.current?.abort();
+    const controller = new AbortController();
+    generationController.current = controller;
+    setDraftMessage("");
+    setReviewMessage("");
     setReviewLoading(false);
     setReviewedDraft("");
     setAiReviewFlow(null);
     writeWorkflowState({ reviewResult: undefined });
     setDraftLoading(true);
     let draft = fallbackDraft;
+    let message = "AI 暂不可用，当前为本地备用稿，请检查后再使用。";
 
     try {
-      const response = await fetch("/api/ai/platform-draft", {
+      const { response, payload } = await requestJson<{ sourceStatus: "live" | "fallback" | "error"; draft?: PlatformDraft; message?: string }>("/api/ai/platform-draft", {
         method: "POST",
+        signal: controller.signal,
         headers: getAiRequestHeaders(),
         body: JSON.stringify({
           platform: toWorkflowPlatform(activePlatform),
@@ -397,15 +415,19 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
           apiKey: getStoredDeepseekKey() || undefined
         })
       });
-      const payload = (await response.json()) as { sourceStatus: "live" | "fallback" | "error"; draft?: PlatformDraft; message?: string };
-      if (response.ok && payload.sourceStatus === "live" && payload.draft?.platform === fallbackDraft.platform) draft = normalizePlatformDraft(payload.draft);
-    } catch {
+      if (response.ok && payload.sourceStatus === "live" && payload.draft?.platform === fallbackDraft.platform) {
+        draft = normalizePlatformDraft(payload.draft);
+        message = "";
+      }
+    } catch (error) {
       draft = fallbackDraft;
+      message = `${error instanceof Error ? error.message : "AI 请求失败。"} 当前为本地备用稿，请检查后再使用。`;
     }
 
     if (generationRequestId.current !== requestId) return;
     setManualAnalysis(analysisSnapshot);
     setManualDraft(draft);
+    setDraftMessage(message);
     setAiReviewFlow(null);
     writeWorkflowState({
       currentMatch: evidenceContext,
@@ -424,6 +446,10 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
     }
     const draftSnapshot = reviewSourceText;
     const requestId = ++reviewRequestId.current;
+    reviewController.current?.abort();
+    const controller = new AbortController();
+    reviewController.current = controller;
+    setReviewMessage("");
     if (!activeWorkflowDraft) {
       showWorkflowNotice("请先生成平台内容，或手动输入待审稿件。");
     }
@@ -440,8 +466,15 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
     writeWorkflowState({ reviewResult: undefined });
     setReviewLoading(true);
     try {
-      const response = await fetch("/api/ai/review-draft", {
+      const { response, payload } = await requestJson<{
+        sourceStatus: "live" | "fallback" | "error";
+        result?: DraftReviewFlow["result"];
+        riskPoints?: string[];
+        rewriteSuggestion?: string;
+        checklist?: string[];
+      }>("/api/ai/review-draft", {
         method: "POST",
+        signal: controller.signal,
         headers: getAiRequestHeaders(),
         body: JSON.stringify({
           draft: draftSnapshot,
@@ -450,15 +483,9 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
           apiKey: getStoredDeepseekKey() || undefined
         })
       });
-      const payload = (await response.json()) as {
-        sourceStatus: "live" | "fallback" | "error";
-        result?: DraftReviewFlow["result"];
-        riskPoints?: string[];
-        rewriteSuggestion?: string;
-        checklist?: string[];
-      };
       if (reviewRequestId.current !== requestId) return;
-      if ((payload.sourceStatus === "live" || payload.sourceStatus === "fallback") && payload.result) {
+      if (response.ok && (payload.sourceStatus === "live" || payload.sourceStatus === "fallback") && payload.result) {
+        if (payload.sourceStatus !== "live") setReviewMessage("AI 暂不可用，当前仅为本地规则检查，不代表完整 AI 审核。");
         const nextReviewFlow: DraftReviewFlow = {
           draft: draftSnapshot,
           result: payload.result,
@@ -470,9 +497,13 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
         writeWorkflowState({ currentMatch: evidenceContext, reviewResult: payload.result });
       } else {
         setAiReviewFlow(null);
+        setReviewMessage("AI 暂不可用，当前仅为本地规则检查，不代表完整 AI 审核。");
       }
-    } catch {
-      if (reviewRequestId.current === requestId) setAiReviewFlow(null);
+    } catch (error) {
+      if (reviewRequestId.current === requestId) {
+        setAiReviewFlow(null);
+        setReviewMessage(`${error instanceof Error ? error.message : "AI 请求失败。"} 当前仅为本地规则检查，不代表完整 AI 审核。`);
+      }
     } finally {
       if (reviewRequestId.current === requestId) {
         setReviewedDraft(draftSnapshot);
@@ -661,6 +692,7 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
           }}
           onRegenerate={handleGeneratePlatformDraft}
         />
+        {draftMessage ? <p role="status" className="mt-3 text-sm text-amber-700">{draftMessage}</p> : null}
       </section>
 
       <section className="workspace-section">
@@ -680,6 +712,9 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
               value={draftForReview}
               onChange={(value) => {
                 generationRequestId.current += 1;
+                generationController.current?.abort();
+                reviewController.current?.abort();
+                setReviewMessage("");
                 setDraftLoading(false);
                 reviewRequestId.current += 1;
                 setReviewLoading(false);
@@ -700,6 +735,8 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
                 setReviewLoading(false);
                 writeWorkflowState({ reviewResult: undefined });
                 setDraftForReview(getPublishableDraftText(activeWorkflowDraft));
+                reviewController.current?.abort();
+                setReviewMessage("");
                 setReviewedDraft("");
                 setAiReviewFlow(null);
               }} theme={theme} variant="secondary">
@@ -711,6 +748,8 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
                 setReviewLoading(false);
                 writeWorkflowState({ reviewResult: undefined });
                 setDraftForReview(reviewFlow.rewriteSuggestion);
+                reviewController.current?.abort();
+                setReviewMessage("");
                 setReviewedDraft("");
                 setAiReviewFlow(null);
               }} theme={theme}>
@@ -723,6 +762,7 @@ function MatchAnalysisWorkspace({ match, sourceMatch, payload, opportunity, load
             </div>
           </div>
           <div className="min-w-0 space-y-5 border-t border-slate-200 pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+            {reviewMessage ? <p role="status" className="text-sm text-amber-700">{reviewMessage}</p> : null}
             {!reviewFlow ? <AuditPlaceholder loading={reviewLoading} /> : null}
             {reviewFlow ? <MatchReviewResult result={reviewFlow.result} rewriteSuggestion={reviewFlow.rewriteSuggestion} /> : null}
           </div>
