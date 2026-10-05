@@ -48,7 +48,7 @@ export async function generatePlatformDraftWithAi(input: {
             reason: "一句话说明它与当前热点或比赛事实的关系"
           }]
         },
-        editorialBrief: buildCreativeBrief({ chain: "match", platform: platformLabel(platform), contentType: "选题", tone: optionLabel(topicModeOptions, topicMode) })
+        editorialBrief: buildCreativeBrief({ chain: "match", platform: platformLabel(platform), contentType: "选题", tone: optionLabel(topicModeOptions, topicMode), matchContext })
       }
     : {
         task: "生成当前赛事详情页的一个平台内容产物。direct 是可直接发布版，必须排最前；reference 是编辑参考；risk 是风险提示。",
@@ -65,7 +65,7 @@ export async function generatePlatformDraftWithAi(input: {
           reference: "编辑参考版",
           risk: "风险提示版"
         },
-        editorialBrief: buildCreativeBrief({ chain: "match", platform: platformLabel(platform), contentType: optionLabel(contentTypeOptions, contentType), tone: optionLabel(topicModeOptions, topicMode) })
+        editorialBrief: buildCreativeBrief({ chain: "match", platform: platformLabel(platform), contentType: optionLabel(contentTypeOptions, contentType), tone: optionLabel(topicModeOptions, topicMode), matchContext })
       };
   const result = await generateDeepSeekJson<AiPlatformDraft>(
     [

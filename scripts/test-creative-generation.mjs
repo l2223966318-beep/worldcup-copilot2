@@ -14,6 +14,13 @@ vm.runInNewContext(ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
 }).outputText, { exports: module.exports });
 const { buildCreativeBrief, hasDistinctTopicAngles, isCompleteHotTopicDraft } = module.exports;
+const factBrief = buildCreativeBrief({ chain: "match", platform: "B站", contentType: "选题", matchContext: {
+  matchInfo: { score: "1-2", teamA: "英格兰", teamB: "阿根廷" }, verifiedStats: true,
+  stats: { teamA: { shotsOnTarget: 3, shots: 6 }, teamB: { shotsOnTarget: 6, shots: 14 } }
+} });
+assert.match(factBrief, /英格兰射正3.*少于.*阿根廷射正6/);
+assert.match(factBrief, /进球数\/射正次数.*相同/);
+assert.doesNotMatch(buildCreativeBrief({ chain: "match", matchContext: { matchInfo: { score: "1-2", teamA: "甲", teamB: "乙" }, verifiedStats: false, stats: { teamA: { shots: 100 }, teamB: { shots: 200 } } } }), /甲射门100/);
 
 for (const chain of ["match", "hot"]) {
   for (const platform of ["B站", "微博", "小红书", "抖音", "公众号"]) {
