@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { requestJson } from "@/lib/client-request";
 
 import type { WorldCupPayload } from "@/lib/sports/types";
 
@@ -30,16 +31,13 @@ export function useWorldCupQuery<T>(
   const maxStaleMs = options.maxStaleMs ?? Math.max(staleMs, 6 * 60 * 60_000);
   const revalidateOnMount = options.revalidateOnMount ?? true;
   const queryKey = JSON.stringify([url, cacheKey]);
-  const [state, setState] = useState<QueryState<T>>(() => {
-    if (!enabled) return { queryKey, loading: false };
-    const cached = readCachedPayload<T>(cacheKey, maxStaleMs);
-    return cached ? { queryKey, payload: cached, loading: false } : { queryKey, loading: true };
-  });
+  const [state, setState] = useState<QueryState<T>>(() => ({ queryKey, loading: enabled }));
 
   useEffect(() => {
     let active = true;
     let timer: number | undefined;
     let failures = 0;
+    const controller = new AbortController();
 
     if (!enabled) {
       setState({ queryKey, loading: false });
@@ -59,7 +57,7 @@ export function useWorldCupQuery<T>(
 
     async function load() {
       try {
-        const payload = await fetchPayloadWithRetry<T>(url);
+        const payload = await fetchPayloadWithRetry<T>(url, controller.signal);
         if (!active) return;
         failures = 0;
         writeCachedPayload(cacheKey, payload);
@@ -93,14 +91,14 @@ export function useWorldCupQuery<T>(
 
     return () => {
       active = false;
+      controller.abort();
       if (timer) window.clearTimeout(timer);
     };
   }, [cacheKey, enabled, maxStaleMs, queryKey, refreshMs, revalidateOnMount, staleMs, url]);
 
   if (!enabled) return { queryKey, loading: false };
   if (state.queryKey === queryKey) return state;
-  const cached = readCachedPayload<T>(cacheKey, maxStaleMs);
-  return { queryKey, payload: cached, loading: !cached };
+  return { queryKey, loading: true };
 }
 
 function readCachedPayload<T>(cacheKey: string, staleMs: number): WorldCupPayload<T> | undefined {
@@ -128,24 +126,40 @@ function writeCachedPayload<T>(cacheKey: string, payload: WorldCupPayload<T>) {
   }
 }
 
-async function fetchPayloadWithRetry<T>(url: string): Promise<WorldCupPayload<T>> {
+async function fetchPayloadWithRetry<T>(url: string, signal: AbortSignal): Promise<WorldCupPayload<T>> {
   let lastError: unknown;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const response = await fetch(url, { cache: "no-store" });
-      const payload = (await response.json()) as WorldCupPayload<T>;
+      const { response, payload } = await requestJson<WorldCupPayload<T>>(url, { cache: "no-store", signal }, 15_000);
       if (!response.ok || payload.sourceStatus === "error") {
         throw new Error(payload.message || `Request failed: ${response.status}`);
       }
       return payload;
     } catch (error) {
       lastError = error;
-      if (attempt === 0) await new Promise((resolve) => window.setTimeout(resolve, 350));
+      if (signal.aborted) throw error;
+      if (attempt === 0) await waitForRetry(signal);
     }
   }
 
   throw lastError instanceof Error ? lastError : new Error("请求失败");
+}
+
+function waitForRetry(signal: AbortSignal) {
+  return new Promise<void>((resolve, reject) => {
+    const cancel = () => {
+      window.clearTimeout(timer);
+      signal.removeEventListener("abort", cancel);
+      reject(signal.reason);
+    };
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", cancel);
+      resolve();
+    }, 350);
+    signal.addEventListener("abort", cancel, { once: true });
+    if (signal.aborted) cancel();
+  });
 }
 
 function isFreshCache(cacheKey: string, staleMs: number) {

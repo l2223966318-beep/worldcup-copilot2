@@ -32,6 +32,7 @@ jobs:
 
       - name: Offline frontend regressions
         run: |
+          node scripts/test-client-request.mjs
           node --input-type=module -e 'import {readFileSync} from "node:fs"; import {execFileSync} from "node:child_process"; for (const [name, command] of Object.entries(JSON.parse(readFileSync("package.json", "utf8")).scripts)) { if (name.startsWith("test:") && !/browser|static-output/.test(name)) { console.log(name); execFileSync(process.execPath, command.split(" ").slice(1), {stdio:"inherit"}); } }'
 
       - name: Build static export
