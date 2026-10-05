@@ -11,6 +11,7 @@ import "@/app/detail-workspace.css";
 
 import type { HotTopic } from "@/lib/hot/types";
 import { getAiRequestHeaders } from "@/lib/ai/client-access";
+import { requestJson } from "@/lib/client-request";
 import {
   auditHotDraft,
   normalizeHotAudit,
@@ -74,10 +75,14 @@ function HotTopicWorkspace({ topicId }: { topicId: string }) {
   const [deepseekKey, setDeepseekKey] = useState("");
   const generationRequestId = useRef(0);
   const auditRequestId = useRef(0);
+  const generationController = useRef<AbortController | null>(null);
+  const auditController = useRef<AbortController | null>(null);
 
   useEffect(() => () => {
     generationRequestId.current += 1;
     auditRequestId.current += 1;
+    generationController.current?.abort();
+    auditController.current?.abort();
   }, []);
 
   useEffect(() => {
@@ -117,6 +122,7 @@ function HotTopicWorkspace({ topicId }: { topicId: string }) {
 
   useEffect(() => {
     let active = true;
+    const controller = new AbortController();
     if (!topic) {
       setAnalysis(null);
       setTopicIntro("");
@@ -147,18 +153,14 @@ function HotTopicWorkspace({ topicId }: { topicId: string }) {
     setAnalysisMessage("");
     const currentDeepseekKey = getStoredDeepseekKey();
 
-    void fetch("/api/ai/hot-topic", {
+    void requestJson<{ sourceStatus?: "live" | "fallback" | "error"; intro?: string; analysis?: HotAnalysisResult; message?: string }>("/api/ai/hot-topic", {
       method: "POST",
       headers: getAiRequestHeaders(),
-      body: JSON.stringify({ topic, apiKey: currentDeepseekKey || undefined })
+      body: JSON.stringify({ topic, apiKey: currentDeepseekKey || undefined }),
+      signal: controller.signal
     })
-      .then(async (response) => {
-        const payload = (await response.json()) as {
-          sourceStatus?: "live" | "fallback" | "error";
-          intro?: string;
-          analysis?: HotAnalysisResult;
-          message?: string;
-        };
+      .then(({ response, payload }) => {
+        if (!response.ok) throw new Error(payload.message || "热点分析请求失败。");
         if (!active) return;
         const nextIntro = typeof payload.intro === "string" && payload.intro.trim() ? payload.intro : fallbackIntro;
         const nextAnalysis = normalizeHotAnalysis(payload.analysis, fallbackAnalysisSnapshot);
@@ -184,12 +186,15 @@ function HotTopicWorkspace({ topicId }: { topicId: string }) {
 
     return () => {
       active = false;
+      controller.abort();
     };
   }, [topic, fallbackAnalysis, fallbackIntro]);
 
   function invalidatePendingRequests() {
     generationRequestId.current += 1;
     auditRequestId.current += 1;
+    generationController.current?.abort();
+    auditController.current?.abort();
     setContentStatus("idle");
     setContentMessage("");
     setAudit(null);
@@ -209,6 +214,10 @@ function HotTopicWorkspace({ topicId }: { topicId: string }) {
     if (!topic) return;
     const requestId = ++generationRequestId.current;
     auditRequestId.current += 1;
+    generationController.current?.abort();
+    auditController.current?.abort();
+    const controller = new AbortController();
+    generationController.current = controller;
     const currentDeepseekKey = getStoredDeepseekKey();
     setDeepseekKey(currentDeepseekKey);
     setContentStatus("loading");
@@ -219,8 +228,9 @@ function HotTopicWorkspace({ topicId }: { topicId: string }) {
     setSaved(false);
     setSaveMessage("");
     try {
-      const response = await fetch("/api/ai/hot-topic-workflow", {
+      const { response, payload } = await requestJson<{ sourceStatus?: "live" | "fallback" | "error"; draft?: string; message?: string }>("/api/ai/hot-topic-workflow", {
         method: "POST",
+        signal: controller.signal,
         headers: getAiRequestHeaders(),
         body: JSON.stringify({
           action: "generate",
@@ -229,11 +239,7 @@ function HotTopicWorkspace({ topicId }: { topicId: string }) {
           apiKey: currentDeepseekKey || undefined
         })
       });
-      const payload = (await response.json()) as {
-        sourceStatus?: "live" | "fallback" | "error";
-        draft?: string;
-        message?: string;
-      };
+      if (!response.ok) throw new Error(payload.message || "内容生成请求失败。");
       if (generationRequestId.current !== requestId) return;
       setDraft(formatGeneratedDraft(payload.draft) || generateHotDraft(topic, config));
       setContentStatus(payload.sourceStatus === "live" ? "live" : payload.sourceStatus === "fallback" ? "fallback" : "error");
@@ -249,14 +255,18 @@ function HotTopicWorkspace({ topicId }: { topicId: string }) {
   async function reviewDraft() {
     if (!topic || !draft.trim()) return;
     const requestId = ++auditRequestId.current;
+    auditController.current?.abort();
+    const controller = new AbortController();
+    auditController.current = controller;
     const currentDeepseekKey = getStoredDeepseekKey();
     setDeepseekKey(currentDeepseekKey);
     setAuditStatus("loading");
     setAuditMessage("");
     setAudit(null);
     try {
-      const response = await fetch("/api/ai/hot-topic-workflow", {
+      const { response, payload } = await requestJson<{ sourceStatus?: "live" | "fallback" | "error"; audit?: HotAuditResult; message?: string }>("/api/ai/hot-topic-workflow", {
         method: "POST",
+        signal: controller.signal,
         headers: getAiRequestHeaders(),
         body: JSON.stringify({
           action: "audit",
@@ -266,11 +276,7 @@ function HotTopicWorkspace({ topicId }: { topicId: string }) {
           apiKey: currentDeepseekKey || undefined
         })
       });
-      const payload = (await response.json()) as {
-        sourceStatus?: "live" | "fallback" | "error";
-        audit?: HotAuditResult;
-        message?: string;
-      };
+      if (!response.ok) throw new Error(payload.message || "内容审核请求失败。");
       if (auditRequestId.current !== requestId) return;
       setAudit(normalizeHotAudit(payload.audit, draft, auditHotDraft(draft, topic, config.platform, config.contentType)));
       setAuditStatus(payload.sourceStatus === "live" ? "live" : payload.sourceStatus === "fallback" ? "fallback" : "error");
