@@ -1408,7 +1408,7 @@ async function handleRequest(req, res) {
         configured,
         accessMode: "public",
         model,
-        generationVersion: "creative-v1",
+        generationVersion: "creative-v2",
         note: configured
           ? "DeepSeek API key is available to the CloudBase function."
           : "DEEPSEEK_API_KEY is not available to this CloudBase function."

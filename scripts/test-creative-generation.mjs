@@ -21,6 +21,9 @@ for (const chain of ["match", "hot"]) {
     assert.match(brief, /开头钩子/);
     assert.match(brief, /换一个热点后仍能原封不动/);
     assert.match(brief, /角度标题、怎么做、说明/);
+    assert.match(brief, /五个统计指标.*不算/);
+    assert.match(brief, /80至120字/);
+    assert.match(brief, /引号.*原句/);
     assert.match(brief, /不同/);
     assert.match(brief, /类比不是事实/);
     assert.match(brief, /字数.*不能.*截断/);
