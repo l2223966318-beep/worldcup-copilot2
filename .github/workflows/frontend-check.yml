@@ -8,6 +8,7 @@ on:
       - 'lib/**'
       - 'types/**'
       - 'scripts/test-*.mjs'
+      - 'scripts/competition-readiness.mjs'
       - 'scripts/*audit*.mjs'
       - 'scripts/release-cloudbase-static.mjs'
       - 'scripts/cloudbase-hosting/**'
@@ -33,6 +34,7 @@ jobs:
     timeout-minutes: 15
     env:
       NEXT_TELEMETRY_DISABLED: '1'
+      CLOUDBASE_PUBLIC_ORIGIN: 'https://scti-test-2026-d6g3udtld9f8e08f5-1455712258.ap-shanghai.app.tcloudbase.com'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -73,3 +75,6 @@ jobs:
           npm run test:worldcup-route
           npm run test:pitch
           npm run test:cloudbase-static-release
+          npm run test:cloudbase
+          npm run test:competition-readiness-contract
+          npm run test:competition-readiness

@@ -49,7 +49,9 @@
     "test:cloudbase-static-release": "node scripts/test-cloudbase-static-release.mjs",
     "preview:cloudbase-release": "node scripts/release-cloudbase.mjs",
     "build:cloudbase-sports": "node scripts/build-cloudbase-sportradar.mjs",
-    "test:pitch:browser": "node scripts/qa-pitch.cjs"
+    "test:pitch:browser": "node scripts/qa-pitch.cjs",
+    "test:competition-readiness-contract": "node scripts/test-competition-readiness.mjs",
+    "test:competition-readiness": "node scripts/competition-readiness.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.0",

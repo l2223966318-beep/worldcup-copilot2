@@ -43,7 +43,7 @@ export async function checkDeployment(origin, { fetchImpl = fetch, includeData =
     throw new Error("Use an HTTP(S) origin without credentials, path or query.");
   }
   const paths = ["/api/health", "/api/hot/health", "/api/worldcup/health", "/api/ai/health"];
-  if (includeData) paths.push("/api/hot", "/api/hot/search?q=" + encodeURIComponent("Argentina France World Cup"));
+  if (includeData) paths.push("/api/worldcup/fixtures", "/api/hot", "/api/hot/search?q=" + encodeURIComponent("Argentina France World Cup"));
   const checks = [];
   for (const path of paths) {
     try {
